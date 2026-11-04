@@ -16,7 +16,8 @@ app.get('/health', (c) => c.json({ ok: true }));
 //     -d '{"kind":"user","body":"How much to mow half an acre?"}'
 app.route('/agents/lawn-desk', createAgentRouter(LawnDesk));
 
-// /api/config and /api/calendar/:visitorId[/reset], one VisitorStore per visitor.
-app.route('/', storeRoutes((visitorId) => env.VISITOR_STORE.getByName(visitorId)));
+// /api/config and /api/calendar/:visitorId[/reset], one VisitorStore per visitor,
+// named `visitor-<visitorId>` (build-plan §6). Renaming it after deploy orphans data.
+app.route('/', storeRoutes((visitorId) => env.VISITOR_STORE.getByName(`visitor-${visitorId}`)));
 
 export default app;

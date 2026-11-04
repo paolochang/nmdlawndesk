@@ -1,5 +1,6 @@
-import { type Preset, pickPreset, presetBookings } from '../domain/presets.ts';
-import { RULES, type Town } from '../domain/rules.ts';
+import { bookingBasis, type Preset, pickPreset, presetBookings } from '../domain/presets.ts';
+import { quote } from '../domain/quote.ts';
+import { resolveTown, type Town } from '../domain/rules.ts';
 import { checkSlot, type SlotCheck } from '../domain/slots.ts';
 import type { Booking } from '../domain/types.ts';
 
@@ -20,19 +21,26 @@ export interface VisitorSnapshot {
 	bookings: Booking[];
 }
 
+/** What a caller books. The store prices the job itself from `acres` with `quote`. */
 export interface BookingRequest {
 	name: string;
 	address: string;
 	town: Town;
 	start: string;
-	durationMinutes: number;
-	priceCents: number;
-	basis: string;
+	acres: number | 'unknown';
 }
 
 export type AddResult =
 	| { ok: true; booking: Booking }
-	| { ok: false; reason: Extract<SlotCheck, { ok: false }>['reason'] | 'missing-name' };
+	| {
+			ok: false;
+			reason:
+				| Extract<SlotCheck, { ok: false }>['reason']
+				| 'missing-name'
+				| 'handoff'
+				/** Malformed input: wrong types, unknown town, bad date-time or size. */
+				| 'invalid-request';
+	  };
 
 interface StoredState extends VisitorSnapshot {
 	/** Next booking number in this generation. */
@@ -60,22 +68,39 @@ export class VisitorLedger {
 		return snapshot(this.#load());
 	}
 
-	/** Books a job if the rules allow it and it overlaps nothing in the calendar. */
+	/**
+	 * Books a job if the rules allow it and it overlaps nothing in the calendar.
+	 * Only the request's known fields are read: RPC callers can send anything.
+	 */
 	add(request: BookingRequest): AddResult {
+		const { name, address, start, acres } = request;
+		const town = typeof request.town === 'string' ? resolveTown(request.town) : undefined;
+		if (typeof name !== 'string' || typeof address !== 'string' || typeof start !== 'string' || !town) {
+			return { ok: false, reason: 'invalid-request' };
+		}
+		if (!name.trim()) return { ok: false, reason: 'missing-name' };
 		const state = this.#load();
-		if (!request.name.trim()) return { ok: false, reason: 'missing-name' };
-		const check = checkSlot({
-			town: request.town,
-			start: request.start,
-			durationMinutes: request.durationMinutes,
-			from: RULES.demoDate,
-			bookings: state.bookings,
-		});
+		let q: ReturnType<typeof quote>;
+		let check: SlotCheck;
+		try {
+			q = quote(acres);
+			if (q.kind === 'handoff') return { ok: false, reason: 'handoff' };
+			check = checkSlot({ town, start, durationMinutes: q.durationMinutes, bookings: state.bookings });
+		} catch (error) {
+			if (error instanceof RangeError) return { ok: false, reason: 'invalid-request' };
+			throw error;
+		}
 		if (!check.ok) return check;
 		const booking: Booking = {
 			id: `g${state.generation}-${state.nextBookingNo}`,
-			...request,
+			name,
+			address,
+			town,
+			start,
 			end: check.slot.end,
+			durationMinutes: q.durationMinutes,
+			priceCents: q.priceCents,
+			basis: bookingBasis(name, address, town, q.basis),
 		};
 		this.#save({ ...state, bookings: [...state.bookings, booking], nextBookingNo: state.nextBookingNo + 1 });
 		return { ok: true, booking };

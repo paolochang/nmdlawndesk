@@ -19,9 +19,7 @@ const request: BookingRequest = {
 	address: '45 Oak Rd',
 	town: 'Birchwood',
 	start: '2026-11-17T10:00',
-	durationMinutes: 60,
-	priceCents: 4500,
-	basis: 'Sarah Lee · 45 Oak Rd, Birchwood · 0.5 acre → 1 h × $45 = $45',
+	acres: 0.5,
 };
 
 describe('VisitorLedger', () => {
@@ -42,11 +40,46 @@ describe('VisitorLedger', () => {
 		expect(new VisitorLedger(kv, sequence(0)).list()).toEqual(first.list());
 	});
 
-	it('adds a valid booking with an id and end time', () => {
+	it('adds a valid booking priced from the yard size', () => {
 		const ledger = new VisitorLedger(memoryKv(), sequence(0));
-		const result = ledger.add(request);
-		expect(result).toMatchObject({ ok: true, booking: { ...request, end: '2026-11-17T11:00' } });
+		const result = ledger.add({ ...request, acres: 1 });
+		expect(result).toEqual({
+			ok: true,
+			booking: {
+				id: 'g1-1',
+				name: 'Sarah Lee',
+				address: '45 Oak Rd',
+				town: 'Birchwood',
+				start: '2026-11-17T10:00',
+				end: '2026-11-17T11:30',
+				durationMinutes: 90,
+				priceCents: 6750,
+				basis: 'Sarah Lee · 45 Oak Rd, Birchwood · 1 acre → 1.5 h × $45 = $67.50',
+			},
+		});
 		expect(ledger.list().bookings).toContainEqual(result.ok && result.booking);
+	});
+
+	it('ignores a caller-supplied id, price, or other extra fields', () => {
+		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const forged = { ...request, id: 'seed-A-1', priceCents: 1, durationMinutes: 5, note: 'x' } as BookingRequest;
+		const result = ledger.add(forged);
+		expect(result.ok && result.booking).toEqual({
+			id: 'g1-1',
+			name: 'Sarah Lee',
+			address: '45 Oak Rd',
+			town: 'Birchwood',
+			start: '2026-11-17T10:00',
+			end: '2026-11-17T11:00',
+			durationMinutes: 60,
+			priceCents: 4500,
+			basis: 'Sarah Lee · 45 Oak Rd, Birchwood · 0.5 acre → 1 h × $45 = $45',
+		});
+	});
+
+	it('hands off a yard over 1 acre instead of booking it', () => {
+		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		expect(ledger.add({ ...request, acres: 2 })).toEqual({ ok: false, reason: 'handoff' });
 	});
 
 	it('rejects a double booking against the preset and against an earlier booking', () => {
@@ -62,7 +95,7 @@ describe('VisitorLedger', () => {
 
 	it('rejects a booking the rules do not allow', () => {
 		const ledger = new VisitorLedger(memoryKv(), sequence(0));
-		expect(ledger.add({ ...request, start: '2026-11-17T12:00', durationMinutes: 90 })).toEqual({
+		expect(ledger.add({ ...request, start: '2026-11-17T12:00', acres: 1 })).toEqual({
 			ok: false,
 			reason: 'outside-hours',
 		});
@@ -71,6 +104,17 @@ describe('VisitorLedger', () => {
 	it('rejects a booking without a customer name', () => {
 		const ledger = new VisitorLedger(memoryKv(), sequence(0));
 		expect(ledger.add({ ...request, name: '  ' })).toEqual({ ok: false, reason: 'missing-name' });
+	});
+
+	it.each([
+		['no name', { name: undefined }],
+		['an unknown town', { town: 'Riverside' }],
+		['a malformed start', { start: 'Tuesday 10am' }],
+		['a non-positive size', { acres: -1 }],
+	])('rejects a request with %s as invalid', (_case, patch) => {
+		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		expect(ledger.add({ ...request, ...patch } as BookingRequest)).toEqual({ ok: false, reason: 'invalid-request' });
+		expect(ledger.list().bookings).toEqual(presetBookings(PRESETS[0]));
 	});
 
 	it('gives every booking a distinct id', () => {

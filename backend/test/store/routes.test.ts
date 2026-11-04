@@ -42,9 +42,14 @@ describe('store routes', () => {
 		expect(await (await app.request('/calendar/bob')).json()).toMatchObject({ generation: 1 });
 	});
 
-	it.each(['a.b', 'a%20b', 'x'.repeat(65)])('rejects visitor id %s without touching a store', async (id) => {
+	it.each([
+		['GET', '/calendar/a.b'],
+		['GET', '/calendar/a%20b'],
+		['GET', `/calendar/${'x'.repeat(65)}`],
+		['POST', '/calendar/a.b/reset'],
+	])('rejects %s %s without touching a store', async (method, path) => {
 		const { app, requested } = fakeNamespace();
-		const res = await app.request(`/calendar/${id}`);
+		const res = await app.request(path, { method });
 		expect(res.status).toBe(400);
 		expect(requested).toEqual([]);
 	});
