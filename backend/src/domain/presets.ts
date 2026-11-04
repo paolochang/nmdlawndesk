@@ -101,5 +101,7 @@ export function presetBookings(preset: Preset, demoDate: string = RULES.demoDate
  */
 export function pickPreset(currentId: string | undefined, random: () => number): Preset {
 	const choices = PRESETS.filter((p) => p.id !== currentId);
-	return choices[Math.min(Math.floor(random() * choices.length), choices.length - 1)];
+	const i = Math.floor(random() * choices.length);
+	// Clamp out-of-range values from an injected source; NaN falls back to the first.
+	return choices[Math.min(Math.max(i, 0), choices.length - 1)] ?? choices[0];
 }

@@ -58,6 +58,15 @@ describe('findSlots', () => {
 		expect(slots[0].start).toBe('2026-11-19T08:00');
 	});
 
+	it('never offers a slot before today, and every offer passes checkSlot', () => {
+		const bookings: TimeRange[] = [{ start: '2026-11-16T08:00', end: '2026-11-16T12:00' }];
+		const slots = findSlots({ town: 'Ashford', durationMinutes: 60, from: '2026-11-04', bookings, limit: 99 });
+		expect(slots[0].start).toBe('2026-11-16T12:00');
+		for (const slot of slots) {
+			expect(checkSlot({ town: 'Ashford', start: slot.start, durationMinutes: 60, bookings })).toEqual({ ok: true, slot });
+		}
+	});
+
 	it('returns no slots when the town days in range are full', () => {
 		const bookings: TimeRange[] = [{ start: '2026-11-16T08:00', end: '2026-11-16T13:00' }];
 		expect(findSlots({ town: 'Ashford', durationMinutes: 60, from: '2026-11-16', days: 1, bookings })).toEqual([]);
@@ -65,7 +74,7 @@ describe('findSlots', () => {
 });
 
 describe('checkSlot', () => {
-	const ok = { town: 'Ashford', from, bookings: [] } as const;
+	const ok = { town: 'Ashford', bookings: [] } as const;
 
 	it('accepts an open slot on a town day and returns its end', () => {
 		expect(checkSlot({ ...ok, start: '2026-11-16T11:30', durationMinutes: 90 })).toEqual({
@@ -78,9 +87,17 @@ describe('checkSlot', () => {
 		['wrong-weekday', '2026-11-17T08:00', 60],
 		['outside-hours', '2026-11-16T12:00', 90],
 		['outside-hours', '2026-11-16T07:30', 60],
+		['off-grid', '2026-11-16T08:10', 60],
 		['past', '2026-11-09T08:00', 60],
 	] as const)('rejects %s: %s for %s min', (reason, start, durationMinutes) => {
 		expect(checkSlot({ ...ok, start, durationMinutes })).toEqual({ ok: false, reason });
+	});
+
+	it('treats days before an explicit today as past', () => {
+		expect(checkSlot({ ...ok, today: '2026-11-17', start: '2026-11-16T08:00', durationMinutes: 60 })).toEqual({
+			ok: false,
+			reason: 'past',
+		});
 	});
 
 	it('rejects an overlap but not a back-to-back booking', () => {

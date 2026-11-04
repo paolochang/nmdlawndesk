@@ -25,7 +25,7 @@ describe('seed presets', () => {
 		it('only holds bookings the rules allow, within two weeks', () => {
 			for (const b of bookings) {
 				const others = bookings.filter((o) => o !== b);
-				const check = checkSlot({ town: b.town, start: b.start, durationMinutes: b.durationMinutes, from, bookings: others });
+				const check = checkSlot({ town: b.town, start: b.start, durationMinutes: b.durationMinutes, bookings: others });
 				expect(check, `${b.id} ${b.start}`).toEqual({ ok: true, slot: { start: b.start, end: b.end } });
 				expect(twoWeeks).toContain(b.start.slice(0, 10));
 			}
@@ -70,6 +70,13 @@ describe('pickPreset', () => {
 			const picked = new Set(randoms.map((r) => pickPreset(current.id, () => r).id));
 			expect(picked).not.toContain(current.id);
 			expect(picked.size).toBe(PRESETS.length - 1);
+		}
+	});
+
+	it('stays in range for out-of-range random values', () => {
+		for (const r of [-0.1, 1, Number.NaN]) {
+			expect(PRESETS).toContain(pickPreset('A', () => r));
+			expect(pickPreset('A', () => r).id).not.toBe('A');
 		}
 	});
 
