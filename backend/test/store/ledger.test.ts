@@ -154,6 +154,35 @@ describe('VisitorLedger', () => {
 		}
 	});
 
+	it('records a customer name and keeps it when the phone is added again without one', () => {
+		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		ledger.addCustomer('+15550101');
+		expect(ledger.addCustomer('+15550101', 'Sarah Lee')).toEqual([{ phone: '+15550101', name: 'Sarah Lee' }]);
+		expect(ledger.addCustomer('+15550101')).toEqual([{ phone: '+15550101', name: 'Sarah Lee' }]);
+		expect(ledger.addCustomer('+15550101', '  ')).toEqual([{ phone: '+15550101', name: 'Sarah Lee' }]);
+		expect(ledger.list().customers).toEqual([{ phone: '+15550101', name: 'Sarah Lee' }]);
+	});
+
+	it('refuses a booking made for an older generation', () => {
+		const ledger = new VisitorLedger(memoryKv(), sequence(0, 0));
+		ledger.reset();
+		expect(ledger.add({ ...request, start: '2026-11-24T10:00', generation: 1 })).toEqual({
+			ok: false,
+			reason: 'stale-generation',
+		});
+		expect(ledger.add({ ...request, start: '2026-11-24T10:00', generation: 2 }).ok).toBe(true);
+	});
+
+	it('resets to a new generation when the stored state has another schema version', () => {
+		const kv = memoryKv();
+		// Shape written before the schema version existed (Day 5).
+		kv.put('state', { generation: 4, presetId: 'A', customers: [], bookings: [], nextBookingNo: 1 });
+		const after = new VisitorLedger(kv, sequence(0)).list();
+		expect(after.generation).toBe(5);
+		expect(after.presetId).not.toBe('A');
+		expect(after.bookings).toEqual(presetBookings(PRESETS.find((p) => p.id === after.presetId)!));
+	});
+
 	it('starts ids for a new generation without reusing old ones', () => {
 		const ledger = new VisitorLedger(memoryKv(), sequence(0));
 		const first = ledger.add(request);

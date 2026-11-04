@@ -1,9 +1,12 @@
 import { createAgentRouter } from '@flue/runtime/routing';
 import { env } from 'cloudflare:workers';
 import { Hono } from 'hono';
+import { DavePhone } from './agents/dave-phone.ts';
 import { LawnDesk } from './agents/lawn-desk.ts';
 import { mountAuth, WRITE_RATE_LIMIT } from './auth/middleware.ts';
+import { conversationGuard } from './desk/conversation-guard.ts';
 import { storeRoutes } from './store/routes.ts';
+import { visitorStore } from './store/stub.ts';
 
 // Every route lives under /api. The frontend Worker forwards /api/* unchanged
 // through its service binding, so URLs the runtime builds from the request
@@ -11,10 +14,6 @@ import { storeRoutes } from './store/routes.ts';
 const app = new Hono().basePath('/api');
 
 app.get('/health', (c) => c.json({ ok: true }));
-
-// One VisitorStore per visitor, named `visitor-<visitorId>` (build-plan §6).
-// Renaming it after deploy orphans data.
-const visitorStore = (visitorId: string) => env.VISITOR_STORE.getByName(`visitor-${visitorId}`);
 
 // POST /api/auth, plus the 401/403/429 guard on /api/agents/* and /api/calendar/*
 // (build-plan §8). Mounted before those routes, or the guard never runs.
@@ -24,10 +23,19 @@ mountAuth(app, {
 	limit: (visitorId) => visitorStore(visitorId).hit(WRITE_RATE_LIMIT.limit, WRITE_RATE_LIMIT.windowMs),
 });
 
-//   curl -X POST "http://localhost:8787/api/agents/lawn-desk/$VISITOR_ID:1:dave" \
+// After auth: 400 for an id of the wrong kind, 409 for a message to an old generation.
+const generation = async (visitorId: string) => (await visitorStore(visitorId).list()).generation;
+
+// Customer conversations, `<visitorId>:<generation>:<customerPhone>` (build-plan §3):
+//   curl -X POST "http://localhost:8787/api/agents/lawn-desk/$VISITOR_ID:1:+15550101" \
 //     -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
 //     -d '{"kind":"user","body":"How much to mow half an acre?"}'
+app.use('/agents/lawn-desk/:id/*', conversationGuard('customer', generation));
 app.route('/agents/lawn-desk', createAgentRouter(LawnDesk));
+
+// Dave's phone, `<visitorId>:<generation>:dave`: handoff alerts land here.
+app.use('/agents/dave-phone/:id/*', conversationGuard('dave', generation));
+app.route('/agents/dave-phone', createAgentRouter(DavePhone));
 
 // /api/config and /api/calendar/:visitorId[/reset].
 app.route('/', storeRoutes(visitorStore));

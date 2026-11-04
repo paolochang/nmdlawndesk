@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import { VISITOR_ID } from '../domain/conversation.ts';
 import { RULES } from '../domain/rules.ts';
 import type { VisitorSnapshot } from './ledger.ts';
 
@@ -7,9 +8,6 @@ export interface VisitorStoreApi {
 	list(): VisitorSnapshot | Promise<VisitorSnapshot>;
 	reset(): VisitorSnapshot | Promise<VisitorSnapshot>;
 }
-
-// visitorId is a truncated base64url HMAC (build-plan §8); it also names the Durable Object.
-const VISITOR_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 /**
  * `/config` (Dave's rules for the UI) and `/calendar/:visitorId` (that visitor's

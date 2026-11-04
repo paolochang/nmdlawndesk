@@ -27,6 +27,7 @@
 	// never rewrite a deployed entry.
 	"migrations": [
 		{ "tag": "v1", "new_sqlite_classes": ["FlueLawnDeskAgent"] },
-		{ "tag": "v2", "new_sqlite_classes": ["VisitorStore"] }
+		{ "tag": "v2", "new_sqlite_classes": ["VisitorStore"] },
+		{ "tag": "v3", "new_sqlite_classes": ["FlueDavePhoneAgent"] }
 	]
 }

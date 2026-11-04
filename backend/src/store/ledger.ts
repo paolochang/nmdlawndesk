@@ -12,6 +12,8 @@ export interface KvStorage {
 
 export interface Customer {
 	phone: string;
+	/** Set once the customer gives a name (on booking). */
+	name?: string;
 }
 
 export interface VisitorSnapshot {
@@ -28,6 +30,8 @@ export interface BookingRequest {
 	town: Town;
 	start: string;
 	acres: number | 'unknown';
+	/** The caller's conversation generation; a booking for an older one is refused. */
+	generation?: number;
 }
 
 export type AddResult =
@@ -37,17 +41,28 @@ export type AddResult =
 			reason:
 				| Extract<SlotCheck, { ok: false }>['reason']
 				| 'missing-name'
+				/** The conversation belongs to a generation before the last reset. */
+				| 'stale-generation'
 				| 'handoff'
 				/** Malformed input: wrong types, unknown town, bad date-time or size. */
 				| 'invalid-request';
 	  };
 
 interface StoredState extends VisitorSnapshot {
+	/** Shape of this value; see STATE_VERSION. */
+	schemaVersion: number;
 	/** Next booking number in this generation. */
 	nextBookingNo: number;
 }
 
 const KEY = 'state';
+/**
+ * Bump on any change a stored state of the old shape cannot satisfy. A state with
+ * another version (or none, as written before Day 7) is replaced by a reset to the
+ * next generation: generations stay monotonic, so an old conversation id never
+ * points into the new state.
+ */
+export const STATE_VERSION = 1;
 const RATE_KEY = 'rate';
 
 interface RateWindow {
@@ -79,13 +94,14 @@ export class VisitorLedger {
 	 * Only the request's known fields are read: RPC callers can send anything.
 	 */
 	add(request: BookingRequest): AddResult {
-		const { name, address, start, acres } = request;
+		const { name, address, start, acres, generation } = request;
 		const town = typeof request.town === 'string' ? resolveTown(request.town) : undefined;
 		if (typeof name !== 'string' || typeof address !== 'string' || typeof start !== 'string' || !town) {
 			return { ok: false, reason: 'invalid-request' };
 		}
 		if (!name.trim()) return { ok: false, reason: 'missing-name' };
 		const state = this.#load();
+		if (generation !== undefined && generation !== state.generation) return { ok: false, reason: 'stale-generation' };
 		let q: ReturnType<typeof quote>;
 		let check: SlotCheck;
 		try {
@@ -112,11 +128,19 @@ export class VisitorLedger {
 		return { ok: true, booking };
 	}
 
-	/** Records a customer phone this visitor created; adding the same phone again changes nothing. */
-	addCustomer(phone: string): Customer[] {
+	/**
+	 * Records a customer phone this visitor created, with the customer's name once
+	 * known. Adding a known phone again only sets a new non-blank name.
+	 */
+	addCustomer(phone: string, name?: string): Customer[] {
 		const state = this.#load();
-		if (state.customers.some((c) => c.phone === phone)) return state.customers;
-		const customers = [...state.customers, { phone }];
+		const known = typeof name === 'string' && name.trim() ? name.trim() : undefined;
+		const existing = state.customers.find((c) => c.phone === phone);
+		if (existing && (!known || existing.name === known)) return state.customers;
+		const customer: Customer = known ? { phone, name: known } : { phone };
+		const customers = existing
+			? state.customers.map((c) => (c.phone === phone ? customer : c))
+			: [...state.customers, customer];
 		this.#save({ ...state, customers });
 		return customers;
 	}
@@ -143,8 +167,10 @@ export class VisitorLedger {
 
 	#load(): StoredState {
 		const stored = this.#kv.get<StoredState>(KEY);
-		if (stored) return stored;
-		const first = fresh(1, pickPreset(undefined, this.#random));
+		if (stored?.schemaVersion === STATE_VERSION) return stored;
+		const first = stored
+			? fresh(stored.generation + 1, pickPreset(stored.presetId, this.#random))
+			: fresh(1, pickPreset(undefined, this.#random));
 		this.#save(first);
 		return first;
 	}
@@ -155,9 +181,16 @@ export class VisitorLedger {
 }
 
 function fresh(generation: number, preset: Preset): StoredState {
-	return { generation, presetId: preset.id, customers: [], bookings: presetBookings(preset), nextBookingNo: 1 };
+	return {
+		schemaVersion: STATE_VERSION,
+		generation,
+		presetId: preset.id,
+		customers: [],
+		bookings: presetBookings(preset),
+		nextBookingNo: 1,
+	};
 }
 
-function snapshot({ nextBookingNo: _, ...state }: StoredState): VisitorSnapshot {
+function snapshot({ nextBookingNo: _, schemaVersion: __, ...state }: StoredState): VisitorSnapshot {
 	return state;
 }
