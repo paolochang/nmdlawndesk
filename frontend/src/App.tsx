@@ -16,7 +16,12 @@ export default function App() {
     const text = draft.trim();
     if (!text) return;
     setDraft('');
-    await sendMessage(text);
+    try {
+      await sendMessage(text);
+    } catch {
+      // The hook already marks the send as failed; keep the text so it can be resent.
+      setDraft(text);
+    }
   }
 
   return (

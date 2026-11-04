@@ -12,11 +12,11 @@ function call(request: Request, env: Env): Promise<Response> {
 }
 
 describe('frontend worker /api proxy', () => {
-	it('forwards /api/* to the backend binding with the original URL, method, and body', async () => {
+	it('forwards /api/* to the backend binding with the original URL, method, headers, and body', async () => {
 		const apiFetch: FetchMock = vi.fn(async () => Response.json({ streamUrl: 'x' }, { status: 202 }));
 		const request = new Request('https://web.example/api/agents/lawn-desk/c1', {
 			method: 'POST',
-			headers: { 'content-type': 'application/json' },
+			headers: { 'content-type': 'application/json', authorization: 'Bearer visitor-token' },
 			body: JSON.stringify({ kind: 'user', body: 'hi' }),
 		});
 
@@ -27,6 +27,9 @@ describe('frontend worker /api proxy', () => {
 		const forwarded = apiFetch.mock.calls[0][0];
 		expect(forwarded.url).toBe('https://web.example/api/agents/lawn-desk/c1');
 		expect(forwarded.method).toBe('POST');
+		// The auth middleware (build-plan §8) reads the Bearer token on the backend.
+		expect(forwarded.headers.get('authorization')).toBe('Bearer visitor-token');
+		expect(forwarded.headers.get('content-type')).toBe('application/json');
 		expect(await forwarded.json()).toEqual({ kind: 'user', body: 'hi' });
 	});
 
