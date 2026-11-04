@@ -11,7 +11,7 @@ This is a [Flue](https://flueframework.com) project: agents are TypeScript funct
 
 ## Commands
 
-- `npx flue run src/agents/hello.ts --message "Hi"` — run an agent locally, no server.
+- `npx flue run src/agents/lawn-desk.ts --message "Hi"` — run an agent locally, no server.
 - `npm run dev` — start the dev server.
 - `npm run deploy` — build and deploy the Worker.
 - `npm run check:types` — typecheck.
