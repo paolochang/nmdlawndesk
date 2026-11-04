@@ -33,12 +33,13 @@ function rosterEntry(customer: Customer, generation: number, status: BookingStat
   return { customer, generation, status: status.kind };
 }
 
+// Open sides are drawn white (outlined), veiled sides filled.
 function SwitchIcon({ focus }: { focus: Focus }) {
   const [left, right] = focus === 'customer' ? [15, 7] : focus === 'dave' ? [7, 15] : [11, 11];
   return (
     <svg viewBox="0 0 26 18" aria-hidden="true">
-      <rect x="1" y="1" width={left} height="16" rx="2" className={focus === 'dave' ? 'outline' : ''} />
-      <rect x={3 + left} y="1" width={right} height="16" rx="2" className={focus === 'customer' ? 'outline' : ''} />
+      <rect x="1" y="1" width={left} height="16" rx="2" className={focus === 'dave' ? 'veiled' : 'open'} />
+      <rect x={3 + left} y="1" width={right} height="16" rx="2" className={focus === 'customer' ? 'veiled' : 'open'} />
     </svg>
   );
 }

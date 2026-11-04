@@ -84,8 +84,9 @@ input, select { font: inherit; color: inherit; padding: 8px 10px; border-radius:
   border-radius: 11px; font-size: 0.7rem; color: var(--muted);
 }
 .switcher svg { width: 26px; height: 18px; }
-.switcher rect { fill: currentColor; }
-.switcher rect.outline { fill: none; stroke: currentColor; }
+.switcher rect { stroke: currentColor; stroke-width: 1.5; }
+.switcher rect.open { fill: var(--surface); }
+.switcher rect.veiled { fill: currentColor; }
 .switcher button[aria-pressed='true'] { border-color: var(--accent); color: var(--accent); background: var(--accent-tint); font-weight: 600; }
 
 /* Customer panel: phone, then the side column (stacks under the phone when narrow) */
