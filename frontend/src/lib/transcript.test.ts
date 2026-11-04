@@ -1,6 +1,6 @@
 import type { FlueConversationMessage, FlueConversationPart } from '@flue/react';
 import { describe, expect, it } from 'vitest';
-import { isTyping, toBubbles, toJudgmentLog } from './transcript.ts';
+import { isTyping, replyFailed, toBubbles, toJudgmentLog } from './transcript.ts';
 
 function message(
   id: string,
@@ -64,6 +64,15 @@ describe('isTyping', () => {
     expect(isTyping('idle')).toBe(false);
     expect(isTyping('connecting')).toBe(false);
     expect(isTyping('error')).toBe(false);
+  });
+});
+
+describe('replyFailed', () => {
+  it('is true only for an error that is not one of our failed sends', () => {
+    expect(replyFailed('error', 0)).toBe(true);
+    expect(replyFailed('error', 1)).toBe(false);
+    expect(replyFailed('idle', 0)).toBe(false);
+    expect(replyFailed('streaming', 0)).toBe(false);
   });
 });
 

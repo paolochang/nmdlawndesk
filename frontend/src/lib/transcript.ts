@@ -46,6 +46,14 @@ export function isTyping(status: AgentStatus): boolean {
   return status === 'submitted' || status === 'streaming';
 }
 
+/**
+ * The desk failed to reply to an admitted text (the hook reports `error` with no
+ * failed send of ours), so the phone says so instead of going quiet.
+ */
+export function replyFailed(status: AgentStatus, failedSends: number): boolean {
+  return status === 'error' && failedSends === 0;
+}
+
 /** Tool calls (`dynamic-tool`) and `reasoning` parts, in conversation order. */
 export function toJudgmentLog(messages: readonly FlueConversationMessage[]): JudgmentEntry[] {
   const entries: JudgmentEntry[] = [];

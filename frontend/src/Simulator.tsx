@@ -5,13 +5,17 @@ import { CustomerPhone } from './CustomerPhone.tsx';
 import { JudgmentLog } from './JudgmentLog.tsx';
 import { fetchGeneration, reportingUnauthorized, statusOf } from './lib/api.ts';
 import { customerConversationUrl, newCustomerPhone, PHONE_KEY, restoreCustomerPhone } from './lib/conversation.ts';
+import { recoverStaleSend } from './lib/recover.ts';
 import { sendFailure, type Session } from './lib/session.ts';
-import { isTyping, toBubbles, toJudgmentLog } from './lib/transcript.ts';
+import { isTyping, replyFailed, toBubbles, toJudgmentLog } from './lib/transcript.ts';
 
 type Panel = 'customer' | 'dave';
 
 const LOAD_FAILED = "Could not load Dave's calendar. Reload the page to try again.";
 const NOT_SENT = 'Text not sent. Please try again.';
+const SLOW_DOWN = 'Slow down a little: too many texts in a short time. Try again in a few minutes.';
+const RESET = "Dave's calendar was reset, so this is a new conversation.";
+const NO_REPLY = "Dave's desk couldn't reply. Please send your text again.";
 
 interface Props {
   session: Session;
@@ -31,8 +35,6 @@ export function Simulator({ session, onUnauthorized }: Props) {
   const [openPanel, setOpenPanel] = useState<Panel>('customer');
   const [notice, setNotice] = useState<string>();
   const [draft, setDraft] = useState('');
-  // A text refused with 409 (stale generation), re-sent once the new conversation's client is ready.
-  const resend = useRef<string>(undefined);
 
   useEffect(() => {
     let current = true;
@@ -57,43 +59,45 @@ export function Simulator({ session, onUnauthorized }: Props) {
   const agent = useFlueAgent({ client });
   const { sendMessage } = agent;
 
+  const showFailure = useCallback((caught: unknown, text: string) => {
+    const failure = sendFailure(statusOf(caught));
+    if (failure === 'sign-in-again') return; // reportingUnauthorized already went back to sign-in
+    setNotice(failure === 'slow-down' ? SLOW_DOWN : NOT_SENT);
+    setDraft((current) => current || text); // the text is not lost
+  }, []);
+
   const send = useCallback(
-    async (text: string, clearNotice = true) => {
-      if (clearNotice) setNotice(undefined);
+    async (text: string) => {
+      setNotice(undefined);
       try {
         await sendMessage(text);
       } catch (caught) {
-        switch (sendFailure(statusOf(caught))) {
-          case 'sign-in-again':
-            return; // reportingUnauthorized already went back to sign-in
-          case 'new-generation': {
-            const latest = await fetchGeneration(authFetch, session).catch(() => undefined);
-            if (latest === undefined || latest === generation) {
-              setNotice(NOT_SENT);
-              return;
-            }
-            setNotice("Dave's calendar was reset, so this is a new conversation.");
-            resend.current = text;
-            setGeneration(latest);
-            return;
-          }
-          case 'slow-down':
-            setNotice('Slow down a little: too many texts in a short time. Try again in a few minutes.');
-            return;
-          case 'not-sent':
-            setNotice(NOT_SENT);
+        if (sendFailure(statusOf(caught)) !== 'new-generation' || generation === undefined) {
+          showFailure(caught, text);
+          return;
         }
+        // 409: the calendar moved to a new generation. Re-send on the phone the
+        // text was typed on, then follow the calendar to that generation.
+        const recovery = await recoverStaleSend(
+          { visitorId: session.visitorId, phone, generation, text },
+          {
+            fetchGeneration: () => fetchGeneration(authFetch, session),
+            sendTo: (to, body) =>
+              createFlueClient({ url: to, token: session.token, fetch: authFetch }).send({
+                message: { kind: 'user', body },
+              }),
+          },
+        );
+        if (!recovery.ok) {
+          showFailure(recovery.error, text);
+          return;
+        }
+        setNotice(RESET);
+        setGeneration((current) => Math.max(current ?? 0, recovery.generation));
       }
     },
-    [sendMessage, authFetch, session, generation],
+    [sendMessage, generation, session, phone, authFetch, showFailure],
   );
-
-  useEffect(() => {
-    const text = resend.current;
-    if (text === undefined || !client) return;
-    resend.current = undefined;
-    void send(text, false); // keep the "calendar was reset" notice
-  }, [client, send]);
 
   function newCustomer() {
     usedPhones.current.push(phone);
@@ -103,6 +107,7 @@ export function Simulator({ session, onUnauthorized }: Props) {
   }
 
   const { failedSends } = agent;
+  const shownNotice = notice ?? (replyFailed(agent.status, failedSends.length) ? NO_REPLY : undefined);
   const bubbles = useMemo(
     () => toBubbles(agent.messages, failedSends.map((failed) => failed.id)),
     [agent.messages, failedSends],
@@ -123,7 +128,7 @@ export function Simulator({ session, onUnauthorized }: Props) {
               bubbles={bubbles}
               typing={isTyping(agent.status)}
               ready={client !== undefined}
-              notice={notice}
+              notice={shownNotice}
               draft={draft}
               onDraftChange={setDraft}
               onSend={send}

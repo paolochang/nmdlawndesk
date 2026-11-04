@@ -1,4 +1,5 @@
-import { useEffect, useRef, type FormEvent } from 'react';
+import { type FormEvent } from 'react';
+import { useStickToBottom } from './useStickToBottom.ts';
 import type { Bubble } from './lib/transcript.ts';
 
 interface Props {
@@ -14,10 +15,7 @@ interface Props {
 }
 
 export function CustomerPhone({ phone, bubbles, typing, ready, notice, draft, onDraftChange, onSend, onNewCustomer }: Props) {
-  const thread = useRef<HTMLOListElement>(null);
-  useEffect(() => {
-    thread.current?.scrollTo({ top: thread.current.scrollHeight });
-  }, [bubbles.length, typing]);
+  const thread = useStickToBottom<HTMLOListElement>([bubbles.length, typing]);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -60,7 +58,8 @@ export function CustomerPhone({ phone, bubbles, typing, ready, notice, draft, on
           placeholder={ready ? 'Text message' : 'Loading…'}
           disabled={!ready}
         />
-        <button type="submit" disabled={!ready || !draft.trim()}>
+        {/* Disabled only while loading: a disabled default button blocks Enter. */}
+        <button type="submit" disabled={!ready}>
           Send
         </button>
       </form>

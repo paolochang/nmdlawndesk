@@ -41,7 +41,7 @@ export function SignIn({ nickname: savedNickname, expired, onSignedIn }: Props) 
           Access code
           <input
             type="password"
-            autoComplete="off"
+            autoComplete="one-time-code"
             value={accessCode}
             onChange={(event) => setAccessCode(event.target.value)}
             required
