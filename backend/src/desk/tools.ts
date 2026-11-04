@@ -15,7 +15,7 @@ export type CustomerConversation = Extract<Conversation, { kind: 'customer' }>;
 export interface DeskStore {
 	list(): Promise<VisitorSnapshot>;
 	add(request: BookingRequest): Promise<AddResult>;
-	addCustomer(phone: string, name?: string): Promise<Customer[]>;
+	addCustomer(phone: string, generation?: number): Promise<Customer[]>;
 }
 
 export const HANDOFF_REASONS = ['out-of-area', 'yard-over-1-acre', 'complaint', 'refund', 'haggling', 'other'] as const;
@@ -40,9 +40,10 @@ export const HANDOFF_REPLY = 'Dave will contact you directly.';
 const HANDOFF_NEXT = `Call handoffToDave now, then reply: "${HANDOFF_REPLY}"`;
 const PRICE_NOTE = 'Final price may change on site.';
 
+// Required but nullable: the model must say "unknown" explicitly instead of dropping the key.
 const acres = v.pipe(
-	v.nullish(v.pipe(v.number(), v.gtValue(0))),
-	v.description('Yard size in acres, e.g. 0.5. Use null when the customer does not know.'),
+	v.nullable(v.pipe(v.number(), v.gtValue(0))),
+	v.description('Yard size in acres, e.g. 0.5. Always pass it; null only when the customer does not know.'),
 );
 const town = v.pipe(v.string(), v.description(`The customer's town: ${TOWNS.join(', ')}. Fix obvious misspellings.`));
 
@@ -128,15 +129,16 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 					start: data.start,
 					acres: data.acres ?? 'unknown',
 					generation: deps.conversation.generation,
+					phone: deps.conversation.phone,
 				});
 				if (!result.ok) return { output: { ok: false, reason: result.reason, next: REJECTION_NEXT[result.reason] } };
 				const { booking } = result;
-				await deps.store.addCustomer(deps.conversation.phone, booking.name);
 				return {
 					output: {
 						ok: true,
 						bookingId: booking.id,
 						when: slotLabel(booking),
+						duration: hours(booking.durationMinutes),
 						price: dollars(booking.priceCents),
 						basis: booking.basis,
 						note: PRICE_NOTE,

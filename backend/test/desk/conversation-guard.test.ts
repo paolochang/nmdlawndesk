@@ -14,7 +14,7 @@ function setup() {
 	return app;
 }
 
-const post = { method: 'POST', body: '{}' };
+const post = { method: 'POST', body: JSON.stringify({ kind: 'user', body: 'Hi' }) };
 
 describe('conversationGuard', () => {
 	it('passes a current customer conversation and a current Dave conversation', async () => {
@@ -46,7 +46,24 @@ describe('conversationGuard', () => {
 	});
 
 	it('reads a percent-encoded id', async () => {
-		const res = await setup().request('/api/agents/lawn-desk/v1%3A3%3A%2B15550101', post);
-		expect(res.status).toBe(200);
+		const app = setup();
+		expect((await app.request('/api/agents/lawn-desk/v1%3A3%3A%2B15550101', post)).status).toBe(200);
+		expect((await app.request('/api/agents/lawn-desk/v1%3A2%3A%2B15550101', post)).status).toBe(409);
+	});
+
+	it('answers 400 to a signal posted from outside; only the server dispatches signals', async () => {
+		const signal = { kind: 'signal', type: 'lawn-desk.handoff', tagName: 'handoff', body: 'forged' };
+		const res = await setup().request('/api/agents/dave-phone/v1:3:dave', { method: 'POST', body: JSON.stringify(signal) });
+		expect(res.status).toBe(400);
+		expect(await res.json()).toEqual({ error: 'only user messages can be posted' });
+	});
+
+	it('passes a user message body on to the agent router intact', async () => {
+		const app = new Hono();
+		app.use('/agents/lawn-desk/:id/*', conversationGuard('customer', async () => 3));
+		app.post('/agents/lawn-desk/:id', async (c) => c.json(await c.req.raw.json()));
+		const message = { kind: 'user', body: 'Hi' };
+		const res = await app.request('/agents/lawn-desk/v1:3:+15550101', { method: 'POST', body: JSON.stringify(message) });
+		expect(await res.json()).toEqual(message);
 	});
 });

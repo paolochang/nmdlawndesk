@@ -17,8 +17,8 @@ export class VisitorStore extends DurableObject {
 		return this.#ledger.add(request);
 	}
 
-	addCustomer(phone: string, name?: string) {
-		return this.#ledger.addCustomer(phone, name);
+	addCustomer(phone: string, generation?: number) {
+		return this.#ledger.addCustomer(phone, generation);
 	}
 
 	reset() {

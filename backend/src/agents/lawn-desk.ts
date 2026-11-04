@@ -18,9 +18,10 @@ export function LawnDesk({ id }: AgentProps) {
 	if (conversation?.kind !== 'customer') throw new Error(`LawnDesk serves customer conversations only, got ${id}`);
 	const store = visitorStore(conversation.visitorId);
 
-	// Every delivered message records the phone; the store ignores a known one.
+	// Every delivered message records the phone; the store ignores a known one
+	// and one from a generation a reset has left behind.
 	useAgentStart(async () => {
-		await store.addCustomer(conversation.phone);
+		await store.addCustomer(conversation.phone, conversation.generation);
 	});
 
 	const tools = deskTools({

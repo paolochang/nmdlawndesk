@@ -32,6 +32,8 @@ export interface BookingRequest {
 	acres: number | 'unknown';
 	/** The caller's conversation generation; a booking for an older one is refused. */
 	generation?: number;
+	/** The customer's phone: a successful booking records `name` for it in the same call. */
+	phone?: string;
 }
 
 export type AddResult =
@@ -94,7 +96,7 @@ export class VisitorLedger {
 	 * Only the request's known fields are read: RPC callers can send anything.
 	 */
 	add(request: BookingRequest): AddResult {
-		const { name, address, start, acres, generation } = request;
+		const { name, address, start, acres, generation, phone } = request;
 		const town = typeof request.town === 'string' ? resolveTown(request.town) : undefined;
 		if (typeof name !== 'string' || typeof address !== 'string' || typeof start !== 'string' || !town) {
 			return { ok: false, reason: 'invalid-request' };
@@ -124,23 +126,20 @@ export class VisitorLedger {
 			priceCents: q.priceCents,
 			basis: bookingBasis(name, address, town, q.basis),
 		};
-		this.#save({ ...state, bookings: [...state.bookings, booking], nextBookingNo: state.nextBookingNo + 1 });
+		const customers = typeof phone === 'string' ? withCustomer(state.customers, phone, name.trim()) : state.customers;
+		this.#save({ ...state, customers, bookings: [...state.bookings, booking], nextBookingNo: state.nextBookingNo + 1 });
 		return { ok: true, booking };
 	}
 
 	/**
-	 * Records a customer phone this visitor created, with the customer's name once
-	 * known. Adding a known phone again only sets a new non-blank name.
+	 * Records a customer phone this visitor created; a known phone changes nothing.
+	 * A phone from another `generation` (a conversation left behind by a reset) is ignored.
 	 */
-	addCustomer(phone: string, name?: string): Customer[] {
+	addCustomer(phone: string, generation?: number): Customer[] {
 		const state = this.#load();
-		const known = typeof name === 'string' && name.trim() ? name.trim() : undefined;
-		const existing = state.customers.find((c) => c.phone === phone);
-		if (existing && (!known || existing.name === known)) return state.customers;
-		const customer: Customer = known ? { phone, name: known } : { phone };
-		const customers = existing
-			? state.customers.map((c) => (c.phone === phone ? customer : c))
-			: [...state.customers, customer];
+		if (generation !== undefined && generation !== state.generation) return state.customers;
+		if (state.customers.some((c) => c.phone === phone)) return state.customers;
+		const customers = [...state.customers, { phone }];
 		this.#save({ ...state, customers });
 		return customers;
 	}
@@ -178,6 +177,14 @@ export class VisitorLedger {
 	#save(state: StoredState): void {
 		this.#kv.put(KEY, state);
 	}
+}
+
+/** `customers` with `phone` named `name`, added if new. */
+function withCustomer(customers: Customer[], phone: string, name: string): Customer[] {
+	const customer = { phone, name };
+	return customers.some((c) => c.phone === phone)
+		? customers.map((c) => (c.phone === phone ? customer : c))
+		: [...customers, customer];
 }
 
 function fresh(generation: number, preset: Preset): StoredState {

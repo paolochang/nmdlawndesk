@@ -1,3 +1,4 @@
+import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
 import { PRESETS, presetBookings } from '../../src/domain/presets.ts';
 import { type DaveAlert, type DeskStore, deskTools, HANDOFF_REPLY } from '../../src/desk/tools.ts';
@@ -12,7 +13,7 @@ function setup(generation = 1) {
 	const store: DeskStore = {
 		list: async () => ledger.list(),
 		add: async (request) => ledger.add(request),
-		addCustomer: async (phone, name) => ledger.addCustomer(phone, name),
+		addCustomer: async (phone, generation) => ledger.addCustomer(phone, generation),
 	};
 	const alerts: DaveAlert[] = [];
 	const tools = deskTools({
@@ -23,6 +24,8 @@ function setup(generation = 1) {
 	const call = async (name: string, data: unknown) => {
 		const tool = tools.find((t) => t.name === name);
 		if (!tool) throw new Error(`no tool ${name}`);
+		// The runtime parses model arguments with the input schema before `run`.
+		data = v.parse(tool.input!, data);
 		const result = await tool.run({ data, toolCallId: 'call-1', log: console } as never);
 		return typeof result === 'object' && result && 'output' in result ? result.output : result;
 	};
@@ -33,6 +36,16 @@ describe('desk tools', () => {
 	it('offers the four build-plan tools', () => {
 		const names = deskTools({} as never).map((t) => t.name);
 		expect(names).toEqual(['quoteJob', 'findSlots', 'bookSlot', 'handoffToDave']);
+	});
+
+	it('requires the yard size key on every sized tool; null means unknown', () => {
+		const tools = deskTools({} as never);
+		const input = (name: string) => tools.find((t) => t.name === name)!.input!;
+		const booking = { name: 'Sarah Lee', address: '45 Oak Rd', town: 'Birchwood', start: '2026-11-17T10:00' };
+		expect(v.safeParse(input('quoteJob'), {}).success).toBe(false);
+		expect(v.safeParse(input('findSlots'), { town: 'Ashford' }).success).toBe(false);
+		expect(v.safeParse(input('bookSlot'), booking).success).toBe(false);
+		expect(v.safeParse(input('bookSlot'), { ...booking, acres: null }).success).toBe(true);
 	});
 
 	describe('quoteJob', () => {
@@ -98,6 +111,7 @@ describe('desk tools', () => {
 				ok: true,
 				bookingId: 'g1-1',
 				when: 'Tue Nov 17, 10:00-11:00 AM',
+				duration: '1 h',
 				price: '$45',
 				basis: 'Sarah Lee · 45 Oak Rd, Birchwood · 0.5 acre → 1 h × $45 = $45',
 			});

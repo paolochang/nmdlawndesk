@@ -91,8 +91,9 @@ async function text(path: string, token: string, body: string): Promise<Message 
 	return reply;
 }
 
-const usedTool = (m: Message | undefined, name: string) =>
-	m?.parts.some((p) => p.type === 'dynamic-tool' && p.toolName === name && p.state === 'output-available');
+const toolOutputs = (m: Message | undefined, name: string) =>
+	(m?.parts ?? []).filter((p) => p.type === 'dynamic-tool' && p.toolName === name && p.state === 'output-available');
+const usedTool = (m: Message | undefined, name: string) => toolOutputs(m, name).length > 0;
 
 // 1. Sign in and start a fresh generation.
 const { visitorId, token } = await api<{ visitorId: string; token: string }>('/auth', {
@@ -108,21 +109,31 @@ console.log(`signed in: visitorId=${visitorId}, generation=${generation}, preset
 // 2. Booking: a customer in Birchwood with half an acre.
 const customer = `/agents/lawn-desk/${visitorId}:${generation}:+15550101`;
 console.log(`\n# Booking conversation ${customer}`);
+// The name comes in the third text: a booking before it means the agent invented one.
+const NAME = 'Sarah Lee';
 const script = [
 	'Hi, can you mow my lawn? It is half an acre at 45 Oak Rd, Birchwood.',
 	'The first time works for me.',
-	"I'm Sarah Lee.",
+	`I'm ${NAME}.`,
 	'Yes, please book the first time you offered.',
 ];
+const NAME_TEXT = 2;
 let booked: Booking | undefined;
-for (const body of script) {
-	await text(customer, token, body);
+let firstOffer: string | undefined;
+for (const [i, body] of script.entries()) {
+	const reply = await text(customer, token, body);
+	const offered = toolOutputs(reply, 'findSlots')[0]?.output as { slots?: { start: string }[] } | undefined;
+	firstOffer ??= offered?.slots?.[0]?.start;
 	const { bookings } = await api<{ bookings: Booking[] }>(`/calendar/${visitorId}`, { token });
 	booked = bookings.find((b) => !before.some((p) => p.id === b.id));
+	if (booked && i < NAME_TEXT) throw new Error(`M1 failed: booked before the customer gave a name (${booked.name})`);
 	if (booked) break;
 }
 if (!booked) throw new Error('M1 failed: no booking reached the calendar');
+if (booked.name !== NAME) throw new Error(`M1 failed: booked under ${booked.name}, not ${NAME}`);
+if (booked.start !== firstOffer) throw new Error(`M1 failed: booked ${booked.start}, first offer was ${firstOffer}`);
 console.log(`\n✓ booked in GET /calendar/${visitorId}: ${booked.id} ${booked.start} — ${booked.basis}`);
+console.log(`  (name ${NAME} asked for before booking; start = first slot offered)`);
 
 // 3. Handoff: a 2-acre yard goes to Dave.
 const handoff = `/agents/lawn-desk/${visitorId}:${generation}:+15550102`;
