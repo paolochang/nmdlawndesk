@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   authReducer,
+  failedSendView,
   loadAuth,
   NICKNAME_KEY,
   saveAuth,
@@ -105,5 +106,19 @@ describe('sendFailure', () => {
     expect(sendFailure(429)).toBe('slow-down');
     expect(sendFailure(500)).toBe('not-sent');
     expect(sendFailure(undefined)).toBe('not-sent');
+  });
+});
+
+describe('failedSendView', () => {
+  it('gives the text back to the same customer with the right notice', () => {
+    expect(failedSendView(429, true)).toEqual({ notice: 'slow-down', restoreDraft: true });
+    expect(failedSendView(500, true)).toEqual({ notice: 'not-sent', restoreDraft: true });
+    expect(failedSendView(undefined, true)).toEqual({ notice: 'not-sent', restoreDraft: true });
+  });
+
+  it('leaves a new customer and a sign-in alone', () => {
+    expect(failedSendView(429, false)).toEqual({ restoreDraft: false });
+    expect(failedSendView(500, false)).toEqual({ restoreDraft: false });
+    expect(failedSendView(401, true)).toEqual({ restoreDraft: false });
   });
 });

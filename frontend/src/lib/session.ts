@@ -77,3 +77,20 @@ export function sendFailure(status: number | undefined): SendFailure {
   if (status === 429) return 'slow-down';
   return 'not-sent';
 }
+
+export interface FailedSendView {
+  notice?: 'slow-down' | 'not-sent';
+  /** Put the text back into the composer. */
+  restoreDraft: boolean;
+}
+
+/**
+ * What the phone shows after a text finally fails (not 409, which recovers).
+ * Only the customer who typed it gets the notice and the text back: after New
+ * customer, restoring it would send the old customer's text from the new phone.
+ */
+export function failedSendView(status: number | undefined, sameCustomer: boolean): FailedSendView {
+  const failure = sendFailure(status);
+  if (failure === 'sign-in-again' || !sameCustomer) return { restoreDraft: false };
+  return { notice: failure === 'slow-down' ? 'slow-down' : 'not-sent', restoreDraft: true };
+}

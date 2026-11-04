@@ -6,7 +6,7 @@ import { JudgmentLog } from './JudgmentLog.tsx';
 import { fetchGeneration, reportingUnauthorized, statusOf } from './lib/api.ts';
 import { customerConversationUrl, newCustomerPhone, PHONE_KEY, restoreCustomerPhone } from './lib/conversation.ts';
 import { recoverStaleSend } from './lib/recover.ts';
-import { sendFailure, type Session } from './lib/session.ts';
+import { failedSendView, sendFailure, type Session } from './lib/session.ts';
 import { isTyping, replyFailed, toBubbles, toJudgmentLog } from './lib/transcript.ts';
 
 type Panel = 'customer' | 'dave';
@@ -31,6 +31,8 @@ export function Simulator({ session, onUnauthorized }: Props) {
   const [generation, setGeneration] = useState<number>();
   const [phone, setPhone] = useState(() => restoreCustomerPhone(sessionStorage.getItem(PHONE_KEY)));
   useEffect(() => sessionStorage.setItem(PHONE_KEY, phone), [phone]);
+  // The phone on screen right now, read by sends that finish after New customer.
+  const currentPhone = useRef(phone);
   const usedPhones = useRef<string[]>([]);
   const [openPanel, setOpenPanel] = useState<Panel>('customer');
   const [notice, setNotice] = useState<string>();
@@ -59,11 +61,12 @@ export function Simulator({ session, onUnauthorized }: Props) {
   const agent = useFlueAgent({ client });
   const { sendMessage } = agent;
 
-  const showFailure = useCallback((caught: unknown, text: string) => {
-    const failure = sendFailure(statusOf(caught));
-    if (failure === 'sign-in-again') return; // reportingUnauthorized already went back to sign-in
-    setNotice(failure === 'slow-down' ? SLOW_DOWN : NOT_SENT);
-    setDraft((current) => current || text); // the text is not lost
+  // A 401 already went back to sign-in (reportingUnauthorized); after New customer
+  // the failed text belongs to the previous customer and stays out of the composer.
+  const showFailure = useCallback((caught: unknown, text: string, from: string) => {
+    const view = failedSendView(statusOf(caught), currentPhone.current === from);
+    if (view.notice) setNotice(view.notice === 'slow-down' ? SLOW_DOWN : NOT_SENT);
+    if (view.restoreDraft) setDraft((current) => current || text);
   }, []);
 
   const send = useCallback(
@@ -73,7 +76,7 @@ export function Simulator({ session, onUnauthorized }: Props) {
         await sendMessage(text);
       } catch (caught) {
         if (sendFailure(statusOf(caught)) !== 'new-generation' || generation === undefined) {
-          showFailure(caught, text);
+          showFailure(caught, text, phone);
           return;
         }
         // 409: the calendar moved to a new generation. Re-send on the phone the
@@ -89,10 +92,10 @@ export function Simulator({ session, onUnauthorized }: Props) {
           },
         );
         if (!recovery.ok) {
-          showFailure(recovery.error, text);
+          showFailure(recovery.error, text, phone);
           return;
         }
-        setNotice(RESET);
+        if (currentPhone.current === phone) setNotice(RESET);
         setGeneration((current) => Math.max(current ?? 0, recovery.generation));
       }
     },
@@ -101,7 +104,9 @@ export function Simulator({ session, onUnauthorized }: Props) {
 
   function newCustomer() {
     usedPhones.current.push(phone);
-    setPhone(newCustomerPhone(Math.random, usedPhones.current));
+    const next = newCustomerPhone(Math.random, usedPhones.current);
+    currentPhone.current = next;
+    setPhone(next);
     setDraft('');
     setNotice(undefined);
   }
