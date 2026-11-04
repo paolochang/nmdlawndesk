@@ -7,4 +7,4 @@
 //
 // https://flueframework.com/docs/guide/cloudflare-target/#extending-cloudflarets-entrypoint
 
-export {};
+export { VisitorStore } from './store/visitor-store.ts';
