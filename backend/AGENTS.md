@@ -15,5 +15,6 @@ This is a [Flue](https://flueframework.com) project: agents are TypeScript funct
 - `npm run dev` — start the dev server.
 - `npm run deploy` — build and deploy the Worker.
 - `npm run check:types` — typecheck.
+- `npm test` — run the Vitest suite (`vitest.config.ts`, kept apart from the Cloudflare Vite plugin).
 - `npx flue docs search <query>` — search the Flue docs from the terminal (then `flue docs read <path>`).
 - `npx flue add` — list blueprints for adding channels, sandboxes, and databases.
