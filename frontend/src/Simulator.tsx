@@ -1,15 +1,21 @@
 import { useFlueAgent } from '@flue/react';
 import { createFlueClient } from '@flue/sdk';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CustomerCard } from './CustomerCard.tsx';
 import { CustomerPhone } from './CustomerPhone.tsx';
+import { CustomerSwitcher } from './CustomerSwitcher.tsx';
 import { JudgmentLog } from './JudgmentLog.tsx';
+import { BookingStatusCard, SuggestedReplies } from './SidePanels.tsx';
 import { fetchGeneration, reportingUnauthorized, statusOf } from './lib/api.ts';
-import { customerConversationUrl, newCustomerPhone, PHONE_KEY, restoreCustomerPhone } from './lib/conversation.ts';
+import { customerConversationUrl } from './lib/conversation.ts';
+import { panelLayout, type Focus } from './lib/layout.ts';
+import { CUSTOMER_KEY, newCustomer, restoreCustomer, type Customer } from './lib/persona.ts';
 import { recoverStaleSend } from './lib/recover.ts';
+import { earlierCustomers, loadRoster, rememberCustomer, ROSTER_KEY, type RosterEntry } from './lib/roster.ts';
 import { failedSendView, sendFailure, type Session } from './lib/session.ts';
+import { bookingStatus, type BookingStatus } from './lib/status.ts';
+import { conversationStage, suggestReplies } from './lib/suggestions.ts';
 import { isTyping, replyFailed, toBubbles, toJudgmentLog } from './lib/transcript.ts';
-
-type Panel = 'customer' | 'dave';
 
 const LOAD_FAILED = "Could not load Dave's calendar. Reload the page to try again.";
 const NOT_SENT = 'Text not sent. Please try again.';
@@ -22,6 +28,21 @@ interface Props {
   onUnauthorized: () => void;
 }
 
+function rosterEntry(customer: Customer, generation: number, status: BookingStatus): RosterEntry {
+  if (status.kind === 'booked') return { customer, generation, status: 'booked', detail: status.when };
+  return { customer, generation, status: status.kind };
+}
+
+function SwitchIcon({ focus }: { focus: Focus }) {
+  const [left, right] = focus === 'customer' ? [15, 7] : focus === 'dave' ? [7, 15] : [11, 11];
+  return (
+    <svg viewBox="0 0 26 18" aria-hidden="true">
+      <rect x="1" y="1" width={left} height="16" rx="2" className={focus === 'dave' ? 'outline' : ''} />
+      <rect x={3 + left} y="1" width={right} height="16" rx="2" className={focus === 'customer' ? 'outline' : ''} />
+    </svg>
+  );
+}
+
 export function Simulator({ session, onUnauthorized }: Props) {
   // Every request reports a 401, so an expired token anywhere returns to sign-in.
   const authFetch = useMemo(
@@ -29,12 +50,14 @@ export function Simulator({ session, onUnauthorized }: Props) {
     [onUnauthorized],
   );
   const [generation, setGeneration] = useState<number>();
-  const [phone, setPhone] = useState(() => restoreCustomerPhone(sessionStorage.getItem(PHONE_KEY)));
-  useEffect(() => sessionStorage.setItem(PHONE_KEY, phone), [phone]);
-  // The phone on screen right now, read by sends that finish after New customer.
+  const [customer, setCustomer] = useState(() => restoreCustomer(sessionStorage.getItem(CUSTOMER_KEY)));
+  useEffect(() => sessionStorage.setItem(CUSTOMER_KEY, JSON.stringify(customer)), [customer]);
+  const [roster, setRoster] = useState(() => loadRoster(sessionStorage.getItem(ROSTER_KEY)));
+  useEffect(() => sessionStorage.setItem(ROSTER_KEY, JSON.stringify(roster)), [roster]);
+  const phone = customer.phone;
+  // The phone on screen right now, read by sends that finish after the customer changed.
   const currentPhone = useRef(phone);
-  const usedPhones = useRef<string[]>([]);
-  const [openPanel, setOpenPanel] = useState<Panel>('customer');
+  const [focus, setFocus] = useState<Focus>('customer');
   const [notice, setNotice] = useState<string>();
   const [draft, setDraft] = useState('');
 
@@ -59,10 +82,25 @@ export function Simulator({ session, onUnauthorized }: Props) {
     [url, session.token, authFetch],
   );
   const agent = useFlueAgent({ client });
-  const { sendMessage } = agent;
+  const { sendMessage, failedSends } = agent;
 
-  // A 401 already went back to sign-in (reportingUnauthorized); after New customer
-  // the failed text belongs to the previous customer and stays out of the composer.
+  const bubbles = useMemo(
+    () => toBubbles(agent.messages, failedSends.map((failed) => failed.id)),
+    [agent.messages, failedSends],
+  );
+  const log = useMemo(() => toJudgmentLog(agent.messages), [agent.messages]);
+  const status = useMemo(() => bookingStatus(agent.messages), [agent.messages]);
+  const stage = useMemo(() => conversationStage(agent.messages), [agent.messages]);
+  const typing = isTyping(agent.status);
+  const ready = client !== undefined;
+  const earlier = generation === undefined ? [] : earlierCustomers(roster, generation, phone);
+  // The card locks once this customer has texted in this generation.
+  const texted =
+    bubbles.some((bubble) => bubble.from === 'customer') ||
+    roster.some((entry) => entry.customer.phone === phone && entry.generation === generation);
+
+  // A 401 already went back to sign-in (reportingUnauthorized); after the customer
+  // changed, the failed text belongs to the previous one and stays out of the composer.
   const showFailure = useCallback((caught: unknown, text: string, from: string) => {
     const view = failedSendView(statusOf(caught), currentPhone.current === from);
     if (view.notice) setNotice(view.notice === 'slow-down' ? SLOW_DOWN : NOT_SENT);
@@ -72,6 +110,7 @@ export function Simulator({ session, onUnauthorized }: Props) {
   const send = useCallback(
     async (text: string) => {
       setNotice(undefined);
+      if (generation !== undefined) setRoster((old) => rememberCustomer(old, rosterEntry(customer, generation, status)));
       try {
         await sendMessage(text);
       } catch (caught) {
@@ -99,25 +138,30 @@ export function Simulator({ session, onUnauthorized }: Props) {
         setGeneration((current) => Math.max(current ?? 0, recovery.generation));
       }
     },
-    [sendMessage, generation, session, phone, authFetch, showFailure],
+    [sendMessage, generation, session, phone, customer, status, authFetch, showFailure],
   );
 
-  function newCustomer() {
-    usedPhones.current.push(phone);
-    const next = newCustomerPhone(Math.random, usedPhones.current);
-    currentPhone.current = next;
-    setPhone(next);
+  /** Leaves the current customer (remembered if they texted) for `next`. */
+  function switchTo(next: Customer) {
+    if (texted && generation !== undefined) setRoster((old) => rememberCustomer(old, rosterEntry(customer, generation, status)));
+    currentPhone.current = next.phone;
+    setCustomer(next);
     setDraft('');
     setNotice(undefined);
   }
 
-  const { failedSends } = agent;
+  function onNewCustomer() {
+    const taken = [customer, ...roster.map((entry) => entry.customer)];
+    switchTo(newCustomer(Math.random, { names: taken.map((c) => c.name), phones: taken.map((c) => c.phone) }));
+  }
+
+  const layout = panelLayout(focus);
   const shownNotice = notice ?? (replyFailed(agent.status, failedSends.length) ? NO_REPLY : undefined);
-  const bubbles = useMemo(
-    () => toBubbles(agent.messages, failedSends.map((failed) => failed.id)),
-    [agent.messages, failedSends],
-  );
-  const log = useMemo(() => toJudgmentLog(agent.messages), [agent.messages]);
+  const switchButtons: [Focus, string, string][] = [
+    ['customer', 'Cust.', 'Customer wide, Dave hidden'],
+    ['both', 'Both', 'Both sides at the same width'],
+    ['dave', 'Dave', 'Dave wide, customer hidden'],
+  ];
 
   return (
     <div className="simulator">
@@ -125,37 +169,105 @@ export function Simulator({ session, onUnauthorized }: Props) {
         <h1>Dave's Lawn Desk</h1>
         <span className="subtitle">Text-message booking simulator</span>
       </header>
-      <div className="panels">
-        {openPanel === 'customer' ? (
-          <section className="panel" aria-label="Customer">
-            <CustomerPhone
-              phone={phone}
-              bubbles={bubbles}
-              typing={isTyping(agent.status)}
-              ready={client !== undefined}
-              notice={shownNotice}
-              draft={draft}
-              onDraftChange={setDraft}
-              onSend={send}
-              onNewCustomer={newCustomer}
-            />
-          </section>
-        ) : (
-          <button type="button" className="strip" onClick={() => setOpenPanel('customer')}>
-            Customer
-          </button>
-        )}
-        {openPanel === 'dave' ? (
-          <section className="panel" aria-label="Dave">
+      <main className={`stage focus-${focus}`}>
+        <section className={`panel${layout.veiled === 'customer' ? ' veiled' : ''}`} aria-label="Customer">
+          <div className="panel-head">
+            <h2>Customer</h2>
+            <CustomerSwitcher current={customer} earlier={earlier} onOpen={switchTo} />
+            {focus !== 'customer' && (
+              <button type="button" className="focus-btn" onClick={() => setFocus('customer')}>
+                Focus
+              </button>
+            )}
+          </div>
+          <div className="panel-main">
+            <div className="panel-content" inert={layout.veiled === 'customer'}>
+              <div className="cust-body">
+                <CustomerPhone
+                  bubbles={bubbles}
+                  typing={typing}
+                  ready={ready}
+                  notice={shownNotice}
+                  draft={draft}
+                  onDraftChange={setDraft}
+                  onSend={send}
+                />
+                <div className="cust-side">
+                  <CustomerCard
+                    customer={customer}
+                    locked={texted}
+                    onChange={(patch) => setCustomer((old) => ({ ...old, ...patch }))}
+                    onNewCustomer={onNewCustomer}
+                  />
+                  <SuggestedReplies
+                    replies={suggestReplies(stage, customer)}
+                    disabled={!ready || typing}
+                    onPick={(text) => void send(text)}
+                  />
+                  <BookingStatusCard status={status} />
+                </div>
+              </div>
+            </div>
+            {layout.veiled === 'customer' && (
+              <div className="veil">
+                <div className="veil-card">
+                  <b>Customer side is hidden</b>
+                  <p>You're looking at Dave's side. Show both sides to keep texting.</p>
+                  <div className="row">
+                    <button type="button" className="primary" onClick={() => setFocus('both')}>
+                      Show both sides
+                    </button>
+                    <button type="button" onClick={() => setFocus('customer')}>
+                      Back to customer
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+
+        <nav className="switcher" aria-label="Panel layout">
+          {switchButtons.map(([key, label, title]) => (
+            <button key={key} type="button" aria-pressed={focus === key} title={title} onClick={() => setFocus(key)}>
+              <SwitchIcon focus={key} />
+              {label}
+            </button>
+          ))}
+        </nav>
+
+        <section className={`panel${layout.veiled === 'dave' ? ' veiled' : ''}`} aria-label="Dave">
+          <div className="panel-head">
             <h2>Dave</h2>
-            <p className="placeholder">Dave's calendar, phone, and price table will appear here.</p>
-          </section>
-        ) : (
-          <button type="button" className="strip" onClick={() => setOpenPanel('dave')}>
-            Dave
-          </button>
-        )}
-      </div>
+            {focus !== 'dave' && (
+              <button type="button" className="focus-btn" onClick={() => setFocus('dave')}>
+                Focus
+              </button>
+            )}
+          </div>
+          <div className="panel-main">
+            <div className="panel-content" inert={layout.veiled === 'dave'}>
+              <p className="placeholder dave-placeholder">Dave's calendar, phone, and price table will appear here.</p>
+            </div>
+            {layout.veiled === 'dave' && (
+              <div className="veil">
+                <div className="veil-card">
+                  <b>Dave's side is hidden</b>
+                  <p>
+                    A customer learns prices and open times only by texting. Test the same way, then open Dave's side to
+                    check what happened.
+                  </p>
+                  <div className="row">
+                    <button type="button" className="primary" onClick={() => setFocus('both')}>
+                      Show both sides
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        </section>
+      </main>
       <JudgmentLog entries={log} />
     </div>
   );

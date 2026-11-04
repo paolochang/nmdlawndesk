@@ -77,6 +77,11 @@ describe('replyFailed', () => {
 });
 
 describe('toJudgmentLog', () => {
+  it('stamps each entry with the time of its message when the server sent one', () => {
+    const stamped = { ...message('m2', 'assistant', [quote]), timestamp: '2026-11-16T09:41:02.000Z' };
+    expect(toJudgmentLog([stamped])[0]).toMatchObject({ toolName: 'quoteJob', time: '2026-11-16T09:41:02.000Z' });
+  });
+
   it('lists tool calls with input and output or error, and reasoning, in order', () => {
     const messages = [
       message('m1', 'user', [{ type: 'text', text: 'Hi', state: 'done' }]),

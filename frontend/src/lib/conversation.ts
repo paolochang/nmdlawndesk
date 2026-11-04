@@ -23,11 +23,3 @@ export function newCustomerPhone(random: () => number = Math.random, taken: read
     if (!taken.includes(phone)) return phone;
   }
 }
-
-/** The tab keeps the open customer phone, so a reload or re-sign-in reopens the same conversation. */
-export const PHONE_KEY = 'lawn-desk.phone';
-
-/** The stored customer phone when it is one of ours; otherwise a new one. */
-export function restoreCustomerPhone(stored: string | null, random: () => number = Math.random): string {
-  return stored && /^\+1555\d{7}$/.test(stored) ? stored : newCustomerPhone(random);
-}

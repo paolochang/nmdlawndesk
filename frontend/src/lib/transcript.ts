@@ -19,8 +19,10 @@ export type JudgmentEntry =
       input: unknown;
       output?: unknown;
       errorText?: string;
+      /** Server capture time (ISO 8601) of the message, when sent. */
+      time?: string;
     }
-  | { id: string; kind: 'reasoning'; text: string; done: boolean };
+  | { id: string; kind: 'reasoning'; text: string; done: boolean; time?: string };
 
 /** One bubble per finished `text` part of a visible user or assistant message. */
 export function toBubbles(messages: readonly FlueConversationMessage[], failedIds: readonly string[] = []): Bubble[] {
@@ -60,7 +62,9 @@ export function toJudgmentLog(messages: readonly FlueConversationMessage[]): Jud
   for (const message of messages) {
     message.parts.forEach((part, index) => {
       if (part.type === 'reasoning') {
-        entries.push({ id: `${message.id}:${index}`, kind: 'reasoning', text: part.text, done: part.state === 'done' });
+        const entry: JudgmentEntry = { id: `${message.id}:${index}`, kind: 'reasoning', text: part.text, done: part.state === 'done' };
+        if (message.timestamp) entry.time = message.timestamp;
+        entries.push(entry);
       } else if (part.type === 'dynamic-tool') {
         const entry: JudgmentEntry = {
           id: part.toolCallId,
@@ -71,6 +75,7 @@ export function toJudgmentLog(messages: readonly FlueConversationMessage[]): Jud
         };
         if (part.state === 'output-available') entry.output = part.output;
         if (part.state === 'output-error') entry.errorText = part.errorText;
+        if (message.timestamp) entry.time = message.timestamp;
         entries.push(entry);
       }
     });

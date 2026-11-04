@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { customerConversationUrl, daveConversationUrl, newCustomerPhone, restoreCustomerPhone } from './conversation.ts';
+import { customerConversationUrl, daveConversationUrl, newCustomerPhone } from './conversation.ts';
 
 describe('conversation urls (build-plan §3)', () => {
   it('addresses the customer conversation on the lawn-desk agent', () => {
@@ -22,17 +22,5 @@ describe('newCustomerPhone', () => {
   it('draws again when the number is already taken', () => {
     const draws = [0.1, 0.1, 0.2];
     expect(newCustomerPhone(() => draws.shift()!, ['+15551000000'])).toBe('+15552000000');
-  });
-});
-
-describe('restoreCustomerPhone', () => {
-  it('reopens the stored customer phone', () => {
-    expect(restoreCustomerPhone('+15550123456', () => 0.5)).toBe('+15550123456');
-  });
-
-  it('starts a new customer when nothing usable is stored', () => {
-    expect(restoreCustomerPhone(null, () => 0.5)).toBe('+15555000000');
-    expect(restoreCustomerPhone('dave', () => 0.5)).toBe('+15555000000');
-    expect(restoreCustomerPhone('+1555012345', () => 0.5)).toBe('+15555000000');
   });
 });
