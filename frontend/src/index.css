@@ -3,13 +3,62 @@
   color: #1f2937;
   background: #f3f4f6;
 }
+* { box-sizing: border-box; }
 body { margin: 0; }
-.phone { max-width: 420px; margin: 0 auto; padding: 16px; display: flex; flex-direction: column; min-height: 100vh; box-sizing: border-box; }
-.phone h1 { font-size: 1.1rem; }
-.thread { list-style: none; padding: 0; margin: 0; flex: 1; display: flex; flex-direction: column; gap: 8px; }
-.bubble { max-width: 80%; padding: 8px 12px; border-radius: 16px; background: #e5e7eb; }
-.bubble.user { align-self: flex-end; background: #2563eb; color: white; }
-.bubble p { margin: 0; white-space: pre-wrap; }
-.status { min-height: 1.5em; color: #6b7280; font-size: 0.85rem; }
-form { display: flex; gap: 8px; }
-form input { flex: 1; padding: 10px; border-radius: 20px; border: 1px solid #d1d5db; }
+h1, h2 { margin: 0; }
+button {
+  font: inherit; padding: 8px 14px; border-radius: 8px; border: 1px solid #d1d5db;
+  background: white; cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: default; }
+input { font: inherit; padding: 10px; border-radius: 8px; border: 1px solid #d1d5db; }
+.notice { color: #92400e; background: #fef3c7; padding: 8px 12px; border-radius: 8px; margin: 8px 0; }
+.error { color: #b91c1c; margin: 0; }
+.placeholder { color: #6b7280; }
+
+/* Sign-in */
+.sign-in { max-width: 380px; margin: 10vh auto; padding: 24px; background: white; border-radius: 12px; }
+.sign-in form { display: flex; flex-direction: column; gap: 12px; }
+.sign-in label { display: flex; flex-direction: column; gap: 4px; font-size: 0.9rem; }
+.sign-in button[type='submit'] { background: #2563eb; color: white; border-color: #2563eb; }
+
+/* Layout: header, two panels, judgment log footer */
+.simulator { height: 100vh; display: flex; flex-direction: column; }
+.app-header { display: flex; align-items: baseline; gap: 12px; padding: 12px 16px; background: white; border-bottom: 1px solid #e5e7eb; }
+.app-header h1 { font-size: 1.1rem; }
+.subtitle { color: #6b7280; font-size: 0.85rem; }
+.panels { flex: 1; min-height: 0; display: flex; gap: 8px; padding: 8px; }
+.panel { flex: 1; min-width: 0; background: white; border-radius: 12px; padding: 12px; display: flex; flex-direction: column; }
+.panel > h2 { font-size: 1rem; }
+.strip {
+  width: 44px; flex: none; writing-mode: vertical-rl; border-radius: 12px;
+  background: #e5e7eb; font-weight: 600;
+}
+
+/* Customer phone */
+.phone { flex: 1; min-height: 0; max-width: 460px; width: 100%; margin: 0 auto; display: flex; flex-direction: column; }
+.phone-header { display: flex; justify-content: space-between; align-items: center; gap: 8px; padding-bottom: 8px; border-bottom: 1px solid #e5e7eb; }
+.phone-header h2 { font-size: 1rem; }
+.phone-number { color: #6b7280; font-size: 0.8rem; }
+.thread { list-style: none; margin: 0; padding: 12px 0; flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+.bubble { max-width: 80%; padding: 8px 12px; border-radius: 16px; white-space: pre-wrap; }
+.bubble.customer { align-self: flex-end; background: #2563eb; color: white; }
+.bubble.desk { align-self: flex-start; background: #e5e7eb; }
+.bubble.typing { color: #6b7280; font-style: italic; }
+.bubble.failed { opacity: 0.6; }
+.not-delivered { display: block; font-size: 0.7rem; text-align: right; }
+.composer { display: flex; gap: 8px; }
+.composer input { flex: 1; border-radius: 20px; }
+
+/* Judgment log */
+.judgment-log { height: 28vh; display: flex; flex-direction: column; background: #111827; color: #e5e7eb; padding: 8px 16px; }
+.judgment-log h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; color: #9ca3af; }
+.judgment-log ol { list-style: none; margin: 0; padding: 4px 0; overflow-y: auto; font-size: 0.8rem; }
+.entry { display: flex; flex-wrap: wrap; gap: 6px; padding: 3px 0; border-bottom: 1px solid #1f2937; }
+.entry .tool-name { font-weight: 600; color: #93c5fd; }
+.entry.reasoning .tool-name { color: #c4b5fd; }
+.entry .state { color: #9ca3af; }
+.entry.output-error .state { color: #fca5a5; }
+.entry code { font-family: ui-monospace, monospace; white-space: pre-wrap; word-break: break-word; }
+.entry .output { color: #86efac; }
+.entry .text { white-space: pre-wrap; }
