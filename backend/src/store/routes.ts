@@ -13,8 +13,8 @@ const VISITOR_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
 /**
  * `/config` (Dave's rules for the UI) and `/calendar/:visitorId` (that visitor's
- * calendar, plus reset). The auth middleware arrives in PR 4; until then these
- * routes are open, and the backend has no public URL.
+ * calendar, plus reset). The calendar routes sit behind the auth middleware
+ * (`mountAuth` in src/auth/middleware.ts); `/config` stays public.
  */
 export function storeRoutes(getStore: (visitorId: string) => VisitorStoreApi): Hono {
 	const app = new Hono();

@@ -162,3 +162,20 @@ describe('VisitorLedger', () => {
 		expect(first.ok && second.ok && first.booking.id !== second.booking.id).toBe(true);
 	});
 });
+
+describe('VisitorLedger.hit (per-visitor rate limit)', () => {
+	const t0 = Date.UTC(2026, 10, 7);
+
+	it('allows `limit` hits per fixed window, then refuses until the next window', () => {
+		const ledger = new VisitorLedger(memoryKv());
+		expect([1, 2, 3].map((i) => ledger.hit(t0 + i, 2, 60_000))).toEqual([true, true, false]);
+		expect(ledger.hit(t0 + 60_000, 2, 60_000)).toBe(true);
+	});
+
+	it('is not cleared by reset', () => {
+		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		ledger.hit(t0, 1, 60_000);
+		ledger.reset();
+		expect(ledger.hit(t0 + 1, 1, 60_000)).toBe(false);
+	});
+});
