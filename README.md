@@ -2,39 +2,30 @@
 
 flue, flue/react, cloudflare
 
-## Who it is for and what it does
+## 누구를 위한 에이전트이고, 어떤 업무를 대신하는지
 
-**For Dave**, a fictional one-person lawn-mowing business. Dave mows yards all morning
-and cannot hear his phone over the mower, so customer texts wait until the work is
-done.
+**Dave를 위한 에이전트다.** Dave는 동네 잔디 깎기 서비스를 혼자 운영하는 가상의 1인 자영업자다. 오전 내내 잔디를 깎는데, 잔디깎이 소음 때문에 작업 중에는 전화도 문자도 받지 못해서 일이 끝난 뒤 몰아서 답한다.
 
-**The agent answers those texts for him:**
-- It reads the customer's name, address, town, and yard size from the texts, and asks
-  only for what is missing.
-- It quotes a price from Dave's rules.
-- It offers two open times on the weekdays Dave works in that town.
-- It books the time the customer picks.
-- It hands off to Dave what it cannot decide: out-of-area, yards over 1 acre,
-  complaints, refunds, haggling.
+**에이전트는 Dave 대신 손님 문자에 답한다.**
+- 손님 문자에서 이름, 주소, 동네, 마당 크기를 뽑고, 빠진 것만 되묻는다.
+- Dave의 요금 규칙대로 견적을 안내한다.
+- Dave가 그 동네에 가는 요일 중 빈 시간 두 개를 제안한다.
+- 손님이 고른 시간으로 예약을 잡는다.
+- 스스로 정할 수 없는 문의는 Dave에게 넘긴다: 서비스 지역 밖, 1 acre 넘는 마당, 불만, 환불, 가격 흥정.
 
-The demo uses a web SMS simulator instead of real SMS, so reviewers can test it in a
-browser with no phone number.
+데모는 실제 SMS 대신 웹 문자 시뮬레이터로 만든다. 전화번호 없이 브라우저에서 바로 테스트할 수 있다.
 
-## Progress
+## 진행 상황
 
-Updated with every merged feature.
+feature를 merge할 때마다 갱신한다.
 
-**Works now**
-- Two Cloudflare Workers: `backend/` runs the Flue agent on Workers AI, and
-  `frontend/` serves a React chat and forwards `/api/*` to the backend through a
-  service binding.
-- Local dev: a message from the browser reaches the agent and the reply streams back
-  ("typing…" while it streams).
+**지금 되는 것**
+- Cloudflare Worker 두 개로 나눴다. `backend/`는 Workers AI로 Flue 에이전트를 돌리고, `frontend/`는 React chat 화면을 띄우고 `/api/*`를 service binding으로 backend에 넘긴다.
+- 로컬 dev에서 브라우저로 보낸 메시지가 에이전트에 닿고, 답이 스트리밍으로 돌아온다. 답이 오는 동안 "typing…"이 보인다.
 
-**Not yet**
-- The agent is a placeholder. It has no price rules or schedule yet, so it makes up
-  prices.
-- Booking store and calendar, agent tools, and handoff to Dave.
-- Reviewer sign-in and per-visitor isolation.
-- The SMS simulator UI: customer phone, Dave's phone, calendar, price table.
-- Production deploy.
+**아직 안 되는 것**
+- 에이전트는 아직 placeholder다. 요금 규칙과 일정을 모르기 때문에 가격을 지어낸다.
+- 예약 저장소와 달력, 에이전트 tool, Dave에게 넘기기
+- 리뷰어 로그인과 방문자별 환경 분리
+- 문자 시뮬레이터 화면: 손님 폰, Dave 폰, 달력, 요금표
+- production 배포
