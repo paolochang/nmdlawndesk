@@ -1,5 +1,7 @@
 // M1 evidence (ROADMAP Day 7): through the API alone, a scripted customer
-// conversation books a slot, and a handoff reaches the Dave conversation.
+// conversation books a slot, and a handoff reaches the Dave conversation. Then the
+// off-script turns of build-plan §4 "Conversation": a question after a handoff, a
+// greeting, a price question, and haggling.
 //
 //   npx vite dev --port 8787 --strictPort        # in another terminal
 //   ACCESS_CODE=... NICKNAME=... node scripts/m1.ts
@@ -86,14 +88,23 @@ async function text(path: string, token: string, body: string): Promise<Message 
 			console.log(`  [tool] ${part.toolName}(${JSON.stringify(part.input)}) → ${result}`);
 		}
 	}
-	const said = reply?.parts.filter((p) => p.type === 'text').map((p) => p.text).join(' ');
-	console.log(`  desk     < ${said}`);
+	console.log(`  desk     < ${said(reply)}`);
 	return reply;
 }
 
 const toolOutputs = (m: Message | undefined, name: string) =>
 	(m?.parts ?? []).filter((p) => p.type === 'dynamic-tool' && p.toolName === name && p.state === 'output-available');
 const usedTool = (m: Message | undefined, name: string) => toolOutputs(m, name).length > 0;
+const said = (m: Message | undefined) =>
+	(m?.parts ?? [])
+		.filter((p) => p.type === 'text')
+		.map((p) => p.text)
+		.join(' ');
+const HANDOFF_LINE = 'Dave will contact you directly';
+/** Off-script check: fails the run with the reason. */
+function expectThat(ok: boolean, what: string, reply: Message | undefined): void {
+	if (!ok) throw new Error(`Off-script failed: ${what} (desk said: ${said(reply)})`);
+}
 
 // 1. Sign in and start a fresh generation.
 const { visitorId, token } = await api<{ visitorId: string; token: string }>('/auth', {
@@ -151,8 +162,28 @@ for (let i = 0; i < 120; i++) {
 		console.log(`  signal: ${JSON.stringify(alert.signal?.attributes)} ${alert.parts.map((p) => p.text).join(' ')}`);
 		console.log(`  dave   < ${sms.text}`);
 		console.log('\nM1 reached.');
-		exit(0);
+		break;
 	}
+	if (i === 119) throw new Error('M1 failed: no alert in the Dave conversation');
 	await sleep(1000);
 }
-throw new Error('M1 failed: no alert in the Dave conversation');
+
+// 4. Off-script turns (build-plan §4 "Conversation").
+console.log(`\n# Off-script: a question after the handoff in ${handoff}`);
+const after = await text(handoff, token, 'Can you tell me your price table?');
+expectThat(!usedTool(after, 'handoffToDave'), 'handed off the same issue again', after);
+expectThat(!said(after).includes(HANDOFF_LINE), 'repeated the handoff line instead of answering', after);
+expectThat(said(after).includes('$45'), 'did not give the prices', after);
+
+const casual = `/agents/lawn-desk/${visitorId}:${generation}:+15550103`;
+console.log(`\n# Off-script: greeting, price question, haggling in ${casual}`);
+const hello = await text(casual, token, 'Hi there!');
+expectThat(!hello?.parts.some((p) => p.type === 'dynamic-tool'), 'called a tool on a greeting', hello);
+expectThat(!/address|acre|yard/i.test(said(hello)), 'asked for booking details on a greeting', hello);
+const prices = await text(casual, token, 'What do you charge for mowing?');
+expectThat(!usedTool(prices, 'handoffToDave'), 'treated a price question as haggling', prices);
+expectThat(said(prices).includes('$45'), 'did not give the price', prices);
+const haggle = await text(casual, token, 'That is too much. Can you do it for $30?');
+const haggled = toolOutputs(haggle, 'handoffToDave')[0]?.input as { reason?: string } | undefined;
+expectThat(haggled?.reason === 'haggling', 'did not hand off haggling', haggle);
+console.log('\n✓ Off-script turns passed.');

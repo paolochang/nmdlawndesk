@@ -67,6 +67,12 @@ describe('desk tools', () => {
 		it('says to hand off a yard over 1 acre', async () => {
 			expect(await setup().call('quoteJob', { acres: 2 })).toMatchObject({ handoff: 'yard-over-1-acre' });
 		});
+
+		it('does not ask for a second handoff of an issue already handed off', async () => {
+			const { next } = (await setup().call('quoteJob', { acres: 2 })) as { next: string };
+			expect(next).toMatch(/^If this issue is not handed off yet, call handoffToDave/);
+			expect(next).toContain('Otherwise do not hand it off again');
+		});
 	});
 
 	describe('findSlots', () => {
@@ -149,7 +155,21 @@ describe('desk tools', () => {
 			expect(alerts).toEqual([
 				{ reason: 'yard-over-1-acre', details: 'Ann, 9 Hill Rd, Ashford, 2 acres', customerPhone: '+15550101' },
 			]);
-			expect(output).toEqual({ ok: true, reply: HANDOFF_REPLY });
+			expect(output).toMatchObject({ ok: true, reply: HANDOFF_REPLY });
+		});
+
+		it('says to send the reply once and keep answering, without handing off again', async () => {
+			const output = (await setup().call('handoffToDave', { reason: 'out-of-area', details: 'Ann, Riverside' })) as {
+				next?: string;
+			};
+			expect(output.next).toMatch(/once/);
+			expect(output.next).toMatch(/keep answering/);
+			expect(output.next).toMatch(/do not call handoffToDave again/i);
+		});
+
+		it('tells haggling apart from a price question', () => {
+			const tool = deskTools({} as never).find((t) => t.name === 'handoffToDave')!;
+			expect(tool.description).toContain('Asking what a job costs is not haggling');
 		});
 	});
 });

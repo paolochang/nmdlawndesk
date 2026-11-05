@@ -37,7 +37,9 @@ export interface DeskDeps {
 /** The customer reply the prompt asks for on every handoff (build-plan §4). */
 export const HANDOFF_REPLY = 'Dave will contact you directly.';
 
-const HANDOFF_NEXT = `Call handoffToDave now, then reply: "${HANDOFF_REPLY}"`;
+const HANDOFF_NEXT = `If this issue is not handed off yet, call handoffToDave now, then reply: "${HANDOFF_REPLY}" Otherwise do not hand it off again; answer the customer's question from the rules.`;
+const HANDED_OFF_NEXT =
+	"Send the reply once, now. After that keep answering the customer's general questions from the rules; do not call handoffToDave again for this issue.";
 const PRICE_NOTE = 'Final price may change on site.';
 
 // Required but nullable: the model must say "unknown" explicitly instead of dropping the key.
@@ -149,7 +151,7 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 		defineTool({
 			name: 'handoffToDave',
 			description:
-				'Hand the customer to Dave: outside the service area, yard over 1 acre, complaint, refund, or haggling. Alerts Dave right away; do not collect more details first.',
+				'Hand the customer to Dave: outside the service area, yard over 1 acre, complaint, refund, or haggling (pushing for a lower price or a discount). Asking what a job costs is not haggling. Alerts Dave right away; do not collect more details first. Once per issue.',
 			input: v.object({
 				reason: v.picklist(HANDOFF_REASONS),
 				details: v.pipe(
@@ -159,7 +161,7 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 			}),
 			async run({ data }) {
 				await deps.alertDave({ reason: data.reason, details: data.details, customerPhone: deps.conversation.phone });
-				return { output: { ok: true, reply: HANDOFF_REPLY } };
+				return { output: { ok: true, reply: HANDOFF_REPLY, next: HANDED_OFF_NEXT } };
 			},
 		}),
 	];
