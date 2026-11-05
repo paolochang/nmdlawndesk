@@ -14,7 +14,7 @@ This is a [Flue](https://flueframework.com) project: agents are TypeScript funct
 ## Commands
 
 - `npx vite dev --port 8787 --strictPort` — start the dev server on the port the scripts and docs use (`npm run dev` alone serves Vite's default 5173; pass `BASE_URL` to `scripts/m1.ts` then). The agents need the Durable Object store and the Workers AI binding, so `flue run` (Node-only) cannot load them.
-- `ACCESS_CODE=... NICKNAME=... node scripts/m1.ts` — M1 evidence against the dev server: signs in, resets the calendar, books a slot through a scripted conversation, and checks a 2-acre handoff reaches Dave's phone. Use a made-up test nickname in the local allowlist. Calls the real Workers AI model.
+- `ACCESS_CODE=... NICKNAME=... node scripts/m1.ts` — M1 evidence against the dev server: signs in, resets the calendar, books a slot through a scripted conversation, and checks a 2-acre handoff reaches Dave's phone. Then it checks the off-script turns (build-plan §4 "Conversation"): a question after the handoff, a greeting, a price question, and haggling. Use a made-up test nickname in the local allowlist. Calls the real Workers AI model.
 - `npm run deploy` — build and deploy the Worker.
 - `npm run check:types` — typecheck.
 - `npm test` — run the Vitest suite (`vitest.config.ts`, kept apart from the Cloudflare Vite plugin).
