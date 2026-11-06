@@ -22,7 +22,7 @@ export interface AuthDeps {
 }
 
 /**
- * Per-visitor write limit: agent messages and aborts plus calendar resets. Caps
+ * Per-visitor write limit: agent messages plus calendar resets (aborts are free). Caps
  * LLM cost per reviewer; tune on Day 10 with the production values.
  */
 export const WRITE_RATE_LIMIT = { limit: 30, windowMs: 5 * 60 * 1000 };
@@ -70,8 +70,10 @@ function guard(deps: AuthDeps, now: () => number, ownerOf: (c: Context) => strin
 		const visitorId = scheme === 'Bearer' && token ? await verifyToken(SECRET, token, now()) : null;
 		if (!visitorId) return c.json({ error: 'unauthorized' }, 401);
 		if (ownerOf(c) !== visitorId) return c.json({ error: 'forbidden' }, 403);
-		// Only writes (agent messages and aborts, calendar reset) count: they cost LLM calls.
-		if (c.req.method === 'POST' && !(await deps.limit(visitorId))) {
+		// Only writes (agent messages, calendar reset) count: they cost LLM calls. An
+		// abort never counts and is never refused: it is how a visitor stops spending.
+		const counted = c.req.method === 'POST' && !c.req.path.endsWith('/abort');
+		if (counted && !(await deps.limit(visitorId))) {
 			return c.json({ error: 'too many requests' }, 429);
 		}
 		await next();

@@ -10,6 +10,16 @@ describe('nickname identity', () => {
 		expect(normalizeNickname('  Kim \t  Gang가 ')).toBe('kim gang가');
 	});
 
+	it('is idempotent when lowercasing changes the composition (J + combining caron)', async () => {
+		const once = normalizeNickname('J\u030c');
+		expect(normalizeNickname(once)).toBe(once);
+		expect(await allowEntry(SECRET, once)).toBe(await allowEntry(SECRET, 'J\u030c'));
+	});
+
+	it('drops invisible format characters a copied list line can carry (zero-width space, BOM)', () => {
+		expect(normalizeNickname('﻿Gang​ Kim‍')).toBe('gang kim');
+	});
+
 	it('gives `Gang`, ` gang `, and `GANG` the same visitorId', async () => {
 		const ids = await Promise.all(['Gang', ' gang ', 'GANG'].map((n) => visitorIdFor(SECRET, n)));
 		expect(new Set(ids).size).toBe(1);

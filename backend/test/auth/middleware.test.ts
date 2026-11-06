@@ -93,6 +93,15 @@ describe('POST /api/auth', () => {
 		expect((await (await setup({ SECRET: undefined })).signIn('gang')).status).toBe(500);
 		expect((await (await setup({ ACCESS_CODE: '' })).signIn('gang')).status).toBe(500);
 	});
+
+	it.each([
+		['a non-JSON body', 'nickname=gang'],
+		['a non-string nickname', JSON.stringify({ accessCode: ACCESS_CODE, nickname: 42 })],
+	])('answers 400 to %s', async (_, body) => {
+		const { app } = await setup();
+		const res = await app.request('/api/auth', { method: 'POST', headers: { 'content-type': 'application/json' }, body });
+		expect(res.status).toBe(400);
+	});
 });
 
 describe('auth middleware', () => {
@@ -135,6 +144,7 @@ describe('auth middleware', () => {
 		['GET', (v: string) => `/api/agents/lawn-desk/${v}:1:dave`],
 		['POST', (v: string) => `/api/agents/lawn-desk/${v}:1:dave/abort`],
 		['GET', (v: string) => `/api/agents/lawn-desk/${v}`],
+		['GET', (v: string) => `/api/agents/lawn-desk/${v}%3A1%3Adave`],
 		['GET', () => '/api/agents/lawn-desk/my-first-chat'],
 	])('answers 403 to another visitor’s %s path', async (method, path) => {
 		const { app, session } = await setup();
@@ -155,6 +165,26 @@ describe('auth middleware', () => {
 		expect((await send(mina)).status).toBe(200);
 		// Reads do not count against the limit.
 		expect((await app.request(`/api/calendar/${gang.visitorId}`, { headers: gang.headers })).status).toBe(200);
+	});
+
+	it('lets a visitor at the write limit still abort a running turn, without counting it', async () => {
+		const { app, session } = await setup();
+		const gang = await session('gang');
+		const path = `/api/agents/lawn-desk/${gang.visitorId}:1:+15550101`;
+		const post = (suffix = '') => app.request(path + suffix, { method: 'POST', headers: gang.headers });
+		for (let i = 0; i < LIMIT; i++) expect((await post()).status).toBe(200);
+		expect((await post('/abort')).status).toBe(200);
+		expect((await post()).status).toBe(429);
+		expect((await post('/abort')).status).toBe(200);
+	});
+
+	it('fails closed with 500 on protected routes when SECRET is not configured', async () => {
+		const { app, session } = await setup();
+		const { visitorId, headers } = await session('gang');
+		const broken = await setup({ SECRET: undefined });
+		expect((await broken.app.request(`/api/calendar/${visitorId}`, { headers })).status).toBe(500);
+		expect((await broken.app.request(`/api/agents/lawn-desk/${visitorId}:1:dave`, { headers })).status).toBe(500);
+		expect((await app.request(`/api/calendar/${visitorId}`, { headers })).status).toBe(200);
 	});
 
 	it('keeps /api/health and /api/config public', async () => {

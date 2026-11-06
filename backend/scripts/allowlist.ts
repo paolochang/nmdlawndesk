@@ -7,9 +7,9 @@
 // One nickname per line; blank lines and lines starting with # are skipped.
 // SECRET must be the Worker's SECRET, or no entry will match at sign-in.
 // Loading the output into KV: put-ai-to-work-challenge/build-plan.md §8 "Allowlist operations".
-import { readFileSync } from 'node:fs';
+import { readFileSync, realpathSync } from 'node:fs';
 import { argv, env, exit, stderr, stdin, stdout } from 'node:process';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 import { allowEntry, normalizeNickname } from '../src/auth/identity.ts';
 
 export interface KvEntry {
@@ -33,7 +33,18 @@ async function readStdin(): Promise<string> {
 	return text;
 }
 
-if (import.meta.url === pathToFileURL(argv[1] ?? '').href) {
+// Run as a CLI only when this file is the entry point. argv[1] keeps a symlinked
+// path while import.meta.url is the real one, so compare real paths.
+function realEntry(path: string | undefined): string {
+	try {
+		return path ? realpathSync(path) : '';
+	} catch {
+		return '';
+	}
+}
+
+const entry = realEntry(argv[1]);
+if (entry === fileURLToPath(import.meta.url)) {
 	const secret = env.SECRET;
 	if (!secret) {
 		stderr.write('Set SECRET to the Worker secret (see .dev.vars for local dev).\n');
