@@ -27,10 +27,17 @@ export async function allowlistEntries(secret: string, text: string): Promise<Kv
 	return [...keys].map((key) => ({ key, value: '1' }));
 }
 
-async function readStdin(): Promise<string> {
+/**
+ * Reads a whole byte stream (stdin) as UTF-8 text. One streaming decoder, so a
+ * character split across chunks is not turned into U+FFFD (a silent bad key).
+ */
+export async function readText(stream: AsyncIterable<Uint8Array | string>): Promise<string> {
+	const decoder = new TextDecoder();
 	let text = '';
-	for await (const chunk of stdin) text += chunk;
-	return text;
+	for await (const chunk of stream) {
+		text += typeof chunk === 'string' ? chunk : decoder.decode(chunk, { stream: true });
+	}
+	return text + decoder.decode();
 }
 
 // Run as a CLI only when this file is the entry point. argv[1] keeps a symlinked
@@ -50,7 +57,7 @@ if (entry === fileURLToPath(import.meta.url)) {
 		stderr.write('Set SECRET to the Worker secret (see .dev.vars for local dev).\n');
 		exit(1);
 	}
-	const text = argv[2] ? readFileSync(argv[2], 'utf8') : await readStdin();
+	const text = argv[2] ? readFileSync(argv[2], 'utf8') : await readText(stdin);
 	const entries = await allowlistEntries(secret, text);
 	stdout.write(`${JSON.stringify(entries, null, '\t')}\n`);
 	stderr.write(`${entries.length} allowlist entries\n`);

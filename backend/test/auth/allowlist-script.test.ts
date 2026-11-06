@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { allowlistEntries } from '../../scripts/allowlist.ts';
+import { allowlistEntries, readText } from '../../scripts/allowlist.ts';
 import { allowEntry } from '../../src/auth/identity.ts';
 
 const SCRIPT = join(dirname(fileURLToPath(import.meta.url)), '../../scripts/allowlist.ts');
@@ -17,6 +17,15 @@ describe('scripts/allowlist.ts', () => {
 			{ key: await allowEntry('s', 'mina kim'), value: '1' },
 		]);
 		expect(JSON.stringify(entries).toLowerCase()).not.toMatch(/gang|mina/);
+	});
+
+	it('decodes stdin as one UTF-8 stream, even when a character is split across chunks', async () => {
+		const bytes = Buffer.from('가\n');
+		async function* chunks() {
+			yield bytes.subarray(0, 1);
+			yield bytes.subarray(1);
+		}
+		expect(await readText(chunks())).toBe('가\n');
 	});
 
 	it('still runs when started through a symlinked path', async () => {
