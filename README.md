@@ -22,9 +22,15 @@ feature를 merge할 때마다 갱신한다.
 **지금 되는 것**
 - Cloudflare Worker 두 개로 나눴다. `backend/`는 Workers AI로 Flue 에이전트를 돌리고, `frontend/`는 React chat 화면을 띄우고 `/api/*`를 service binding으로 backend에 넘긴다.
 - 로컬 dev에서 브라우저로 보낸 메시지가 에이전트에 닿고, 답이 스트리밍으로 돌아온다. 답이 오는 동안 "typing…"이 보인다.
+- Dave의 업무 규칙을 코드로 만들고 테스트했다(`backend/src/domain/`, 테스트 68개):
+  - 근무 시간 8 AM-1 PM, 동네별 근무 요일, 시간당 $45 요금표
+  - 견적: ½ acre 이하 1시간 $45, 1 acre 이하 1.5시간 $67.50, 1 acre 초과는 Dave에게 넘김, 크기를 모르면 1시간 견적 후 현장에서 조정
+  - 빈 시간 찾기: 그 동네 근무 요일에 30분 단위로, 1 PM 전에 끝나고 기존 예약과 겹치지 않는 시간
+  - 테스트용 예약 일정 4종(seed preset)
+- `backend/README.md`, `frontend/README.md`에 로컬 실행 방법을 적었다: 설치, dev server(backend 8787을 먼저, 그다음 frontend 5180), 확인용 curl.
 
 **아직 안 되는 것**
-- 에이전트는 아직 placeholder다. 요금 규칙과 일정을 모르기 때문에 가격을 지어낸다.
+- 에이전트는 아직 placeholder다. 위 규칙이 아직 에이전트에 연결되지 않아서, 요금이나 일정을 물으면 모른다고 답한다.
 - 예약 저장소와 달력, 에이전트 tool, Dave에게 넘기기
 - 리뷰어 로그인과 방문자별 환경 분리
 - 문자 시뮬레이터 화면: 손님 폰, Dave 폰, 달력, 요금표
