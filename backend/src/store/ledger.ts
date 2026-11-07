@@ -48,6 +48,12 @@ interface StoredState extends VisitorSnapshot {
 }
 
 const KEY = 'state';
+const RATE_KEY = 'rate';
+
+interface RateWindow {
+	windowStart: number;
+	count: number;
+}
 
 /**
  * One visitor's test environment (build-plan §6): generation, seed preset,
@@ -121,6 +127,18 @@ export class VisitorLedger {
 		const next = fresh(current.generation + 1, pickPreset(current.presetId, this.#random));
 		this.#save(next);
 		return snapshot(next);
+	}
+
+	/**
+	 * Counts one rate-limited request in a fixed window of `windowMs` and says
+	 * whether it is within `limit`. Kept apart from the calendar, so reset does not clear it.
+	 */
+	hit(nowMs: number, limit: number, windowMs: number): boolean {
+		const windowStart = nowMs - (nowMs % windowMs);
+		const stored = this.#kv.get<RateWindow>(RATE_KEY);
+		const count = stored?.windowStart === windowStart ? stored.count + 1 : 1;
+		this.#kv.put(RATE_KEY, { windowStart, count } satisfies RateWindow);
+		return count <= limit;
 	}
 
 	#load(): StoredState {

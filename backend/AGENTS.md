@@ -18,3 +18,10 @@ This is a [Flue](https://flueframework.com) project: agents are TypeScript funct
 - `npm test` — run the Vitest suite (`vitest.config.ts`, kept apart from the Cloudflare Vite plugin).
 - `npx flue docs search <query>` — search the Flue docs from the terminal (then `flue docs read <path>`).
 - `npx flue add` — list blueprints for adding channels, sandboxes, and databases.
+- `node scripts/allowlist.ts <nickname-list> > <out.json>` — nickname list → `allowEntry` KV entries (needs `SECRET` in the environment). Load with `npx wrangler kv bulk put --binding ALLOWLIST --local <out.json>` for dev, `--remote` for production. Full steps: `../build-plan.md` §8 "Allowlist operations".
+
+## Auth and local secrets
+
+- Local dev reads `SECRET` and `ACCESS_CODE` from `.dev.vars` (gitignored); copy `.dev.vars.example`. Production uses `npx wrangler secret put`.
+- `src/auth/` holds sign-in (`POST /api/auth`) and the 401/403/429 guard; `mountAuth(...)` must stay before every `app.route(...)` in `src/app.ts`.
+- Never commit a nickname list or generated allowlist JSON.
