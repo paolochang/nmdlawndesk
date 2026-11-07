@@ -37,11 +37,17 @@ feature를 merge할 때마다 갱신한다.
   - 닉네임은 정규화(대소문자, 앞뒤 공백, 보이지 않는 문자)한 뒤 HMAC으로 바꿔 allowlist(Workers KV)와 비교한다. 닉네임 목록 원문은 repo에 넣지 않고, `scripts/allowlist.ts`로 바꾼 값만 KV에 넣는다.
   - 같은 닉네임은 어느 브라우저에서 들어와도 같은 `visitorId`와 같은 달력을 쓴다.
   - 달력과 에이전트 route는 token이 없거나 만료되면 401, 다른 방문자 것이면 403, 5분에 쓰기 30번을 넘으면 429를 준다.
+- 에이전트가 Dave의 규칙과 달력으로 일한다(`backend/src/desk/`, `backend/src/agents/`). API만으로 예약부터 Dave에게 넘기기까지 된다.
+  - tool 4개: `quoteJob`(견적), `findSlots`(빈 시간 2개), `bookSlot`(예약), `handoffToDave`(Dave에게 넘기기). 가격, 작업 시간, 빈 시간은 모델이 아니라 tool과 저장소가 계산한다.
+  - 예약 전에 손님 이름을 묻는다. 예약하면 손님 이름도 같이 기록한다.
+  - 서비스 지역 밖, 1 acre 초과, 불만, 환불, 흥정은 손님에게 "Dave will contact you directly."라고 답하고, Dave 폰 대화(`/api/agents/dave-phone/...`)로 알림을 보낸다. Dave 폰은 별도 에이전트(`DavePhone`)가 맡아, 알림을 Dave에게 보낼 문자로 정리한다.
+  - 인사나 가격·동네·시간 같은 일반 질문에는 규칙에서 바로 답하고, 견적이나 예약을 원할 때만 주소와 크기를 묻는다. 넘긴 뒤에도 질문에 계속 답한다.
+  - 대화 id가 형식에 맞지 않으면 400, reset 전 대화에서 보낸 문자는 409다. 옛 대화가 새 달력에 예약을 넣지 못한다.
+  - `scripts/m1.ts`: 로컬 dev server에서 실제 모델로 예약 한 건과 Dave 알림 한 건, 대화 규칙 4가지를 확인한다.
 - `backend/README.md`, `frontend/README.md`에 로컬 실행 방법을 적었다: 설치, `.dev.vars`와 로컬 allowlist 준비, dev server(backend 8787을 먼저, 그다음 frontend 5180), 로그인과 token을 쓰는 curl.
 
 **아직 안 되는 것**
-- 에이전트는 아직 placeholder다. 위 규칙과 달력이 아직 에이전트에 연결되지 않아서, 요금이나 일정을 물으면 모른다고 답한다.
-- 에이전트 tool(견적, 빈 시간 찾기, 예약), Dave에게 넘기기
+- 답장 품질: 가끔 목록 형식으로 답하거나, 예약 확인 끝에 넘기기 문구를 붙인다. 공개 전 E2E 테스트로 다듬는다.
 - 브라우저 chat 화면: 로그인 화면이 아직 없어서 메시지를 보내면 401을 받는다. 로그인 화면이 붙으면 다시 된다.
 - 로그인 시도 횟수 제한: 닉네임은 공개라서 access code가 유일한 장벽이다. 공개 배포 전에 추가한다.
 - 문자 시뮬레이터 화면: 손님 폰, Dave 폰, 달력, 요금표
