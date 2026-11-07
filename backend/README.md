@@ -5,9 +5,9 @@ texts and holds Dave's business rules. It has no public URL (`workers_dev: false
 the frontend Worker reaches it through a service binding and forwards every `/api/*`
 request unchanged.
 
-At this point the agent is still a placeholder: it does not use the rules in
-`src/domain/` yet, so it makes up prices. Later PRs add the booking store, sign-in,
-and the agent tools, and extend this README with each.
+At this point the agent is still a placeholder: the rules in `src/domain/` are not
+connected to it yet, so it does not know Dave's prices or schedule. Later PRs add the
+booking store, sign-in, and the agent tools, and extend this README with each.
 
 Notes for coding agents: [AGENTS.md](./AGENTS.md).
 
