@@ -90,9 +90,14 @@ export function presetBookings(preset: Preset, demoDate: string = RULES.demoDate
 			town: seed.town,
 			durationMinutes: q.durationMinutes,
 			priceCents: q.priceCents,
-			basis: `${seed.name} · ${seed.address}, ${seed.town} · ${q.basis}`,
+			basis: bookingBasis(seed.name, seed.address, seed.town, q.basis),
 		};
 	});
+}
+
+/** `Sarah Lee · 45 Oak Rd, Ashford · 0.5 acre → 1 h × $45 = $45` (build-plan §5). */
+export function bookingBasis(name: string, address: string, town: Town, quoteBasis: string): string {
+	return `${name} · ${address}, ${town} · ${quoteBasis}`;
 }
 
 /**
