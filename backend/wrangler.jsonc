@@ -16,6 +16,12 @@
 	"durable_objects": {
 		"bindings": [{ "name": "VISITOR_STORE", "class_name": "VisitorStore" }]
 	},
+	// Sign-in allowlist (build-plan §8): keys are allowEntry HMACs, never nicknames.
+	// No id: `wrangler deploy` provisions the namespace on first deploy; local dev
+	// uses a local namespace under .wrangler/state.
+	"kv_namespaces": [{ "binding": "ALLOWLIST" }],
+	// Secrets SECRET and ACCESS_CODE: `wrangler secret put` in production,
+	// .dev.vars locally (see .dev.vars.example).
 	// Every agent generates a SQLite-backed Durable Object class named after its
 	// identity (LawnDesk -> FlueLawnDeskAgent). Append a new tag for each new class;
 	// never rewrite a deployed entry.

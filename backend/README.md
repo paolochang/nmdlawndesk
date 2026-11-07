@@ -1,21 +1,19 @@
 # Dave's Lawn Desk — backend
 
 Cloudflare Worker `dave-lawn-desk-api`. It runs the Flue agent that answers customer
-texts, holds Dave's business rules, and keeps a booking calendar per visitor. It has no
-public URL (`workers_dev: false`):
-the frontend Worker reaches it through a service binding and forwards every `/api/*`
-request unchanged.
+texts, holds Dave's business rules, keeps a booking calendar per visitor, and signs
+reviewers in. It has no public URL (`workers_dev: false`): the frontend Worker reaches
+it through a service binding and forwards every `/api/*` request unchanged.
 
 At this point the agent is still a placeholder: the rules in `src/domain/` and the
 booking store in `src/store/` are not connected to it yet, so it does not know Dave's
-prices or schedule. Later PRs add sign-in and the agent tools, and extend this README
-with each.
+prices or schedule. A later PR adds the agent tools and extends this README.
 
 Notes for coding agents: [AGENTS.md](./AGENTS.md).
 
 ## Requirements
 
-- Node.js 22 or later.
+- Node.js 22.18 or later (the scripts in `scripts/` run `.ts` files directly).
 - A Cloudflare account, logged in with `npx wrangler login`. The `AI` binding calls
   the real Workers AI model even in local dev, and that usage counts against the
   account.
@@ -24,7 +22,28 @@ Notes for coding agents: [AGENTS.md](./AGENTS.md).
 
 ```sh
 npm ci
+cp .dev.vars.example .dev.vars   # then set SECRET and ACCESS_CODE
 ```
+
+`.dev.vars` is gitignored. `ACCESS_CODE` is the shared code a reviewer types to sign
+in. `SECRET` derives every visitor id and allowlist entry, so keep it fixed once you
+have loaded the allowlist.
+
+Sign-in also needs the nickname in the local allowlist. Keep the nickname list outside
+the repo (one nickname per line; blank lines and lines starting with `#` are skipped),
+turn it into allowlist entries with your `SECRET`, and load them into the local KV:
+
+```sh
+echo "my-test-nickname" > ~/allowlist-nicknames-local.txt
+set -a; source .dev.vars; set +a
+node scripts/allowlist.ts ~/allowlist-nicknames-local.txt > /tmp/allowlist.json
+npx wrangler kv bulk put --binding ALLOWLIST --local /tmp/allowlist.json
+rm /tmp/allowlist.json
+```
+
+If you change `SECRET`, load the allowlist again. For production, the same JSON goes
+in with `--remote` instead of `--local`, and the secrets with
+`npx wrangler secret put SECRET` / `npx wrangler secret put ACCESS_CODE`.
 
 ## Start the dev server
 
@@ -35,67 +54,88 @@ npx vite dev --port 8787 --strictPort
 Use this fixed port: the frontend docs expect it. `npm run dev` also works, but it
 takes Vite's default port 5173, which clashes with the frontend.
 
-Check that it is up, and talk to the agent directly:
-
-```sh
-curl http://localhost:8787/api/health   # {"ok":true}
-
-curl -X POST http://localhost:8787/api/agents/lawn-desk/my-first-chat \
-  -H 'content-type: application/json' \
-  -d '{"kind":"user","body":"How much to mow half an acre?"}'
-```
-
-Look at Dave's rules and a visitor's calendar. Any id made of letters, digits, `_`,
-or `-` works for now; each id gets its own calendar, starting from one of four seed
-schedules:
-
-```sh
-curl http://localhost:8787/api/config              # hours, town weekdays, prices, demo date
-curl http://localhost:8787/api/calendar/my-test    # generation, preset, customers, bookings
-curl -X POST http://localhost:8787/api/calendar/my-test/reset   # next generation, a different preset
-```
-
 Start this server before the frontend one. Both want the Workers debugger port 9229;
 if the frontend gets it first, this server stops with
 `EADDRINUSE: address already in use 127.0.0.1:9229`.
 
+## Try it with curl
+
+Public routes need no token:
+
+```sh
+curl http://localhost:8787/api/health   # {"ok":true}
+curl http://localhost:8787/api/config   # hours, town weekdays, prices, demo date
+```
+
+Sign in with the access code and an allowlisted nickname. The answer holds your
+`visitorId` and a token that is valid for 2 hours (`expiresAt` is in Unix seconds):
+
+```sh
+curl -s -X POST http://localhost:8787/api/auth \
+  -H 'content-type: application/json' \
+  -d '{"accessCode":"<ACCESS_CODE>","nickname":"my-test-nickname"}'
+# {"visitorId":"…","token":"…","expiresAt":…}
+```
+
+Use the token on the protected routes. The same nickname always gives the same
+`visitorId`, from any browser or machine:
+
+```sh
+TOKEN=…; VISITOR_ID=…
+curl http://localhost:8787/api/calendar/$VISITOR_ID -H "authorization: Bearer $TOKEN"
+curl -X POST http://localhost:8787/api/calendar/$VISITOR_ID/reset -H "authorization: Bearer $TOKEN"
+
+curl -X POST "http://localhost:8787/api/agents/lawn-desk/$VISITOR_ID:1:+15550101" \
+  -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
+  -d '{"kind":"user","body":"How much to mow half an acre?"}'
+```
+
 ## Routes
 
-All routes are under `/api` (`src/app.ts`). None needs a token yet; sign-in comes in
-a later PR, so do not deploy these routes publicly before then.
+All routes are under `/api` (`src/app.ts`).
 
-| Route | Purpose |
-| --- | --- |
-| `GET /api/health` | Liveness check |
-| `GET /api/config` | Dave's rules (`src/domain/rules.ts`): hours, town weekdays, prices, demo date |
-| `GET /api/calendar/<visitorId>` | The visitor's generation, seed preset, customers, and bookings |
-| `POST /api/calendar/<visitorId>/reset` | New generation, no customers, a different seed preset |
-| `/api/agents/lawn-desk/<id>` | A conversation with the Flue agent `LawnDesk` |
+| Route | Auth | Purpose |
+| --- | --- | --- |
+| `GET /api/health` | public | Liveness check |
+| `GET /api/config` | public | Dave's rules (`src/domain/rules.ts`): hours, town weekdays, prices, demo date |
+| `POST /api/auth` | public | `{ accessCode, nickname }` → `{ visitorId, token, expiresAt }`; 401 for a wrong code or a nickname not in the allowlist |
+| `GET /api/calendar/<visitorId>` | token | The visitor's generation, seed preset, customers, and bookings |
+| `POST /api/calendar/<visitorId>/reset` | token | New generation, no customers, a different seed preset |
+| `/api/agents/lawn-desk/<visitorId>:<generation>:<phone>` | token | A customer conversation with the Flue agent `LawnDesk` |
 
-`<visitorId>` must match `[A-Za-z0-9_-]{1,64}`, or the route answers 400. Each visitor's
-calendar lives in its own `VisitorStore` Durable Object (`visitor-<visitorId>`), which
-rejects overlapping or rule-breaking bookings.
+Protected routes answer 401 for a missing, invalid, or expired token, 403 when the
+path's `visitorId` is not the token's, and 429 once the visitor has made 30 writes
+(agent messages and calendar resets) in 5 minutes. `<visitorId>` must match
+`[A-Za-z0-9_-]{1,64}`, or the calendar route answers 400. Each visitor's calendar lives
+in its own `VisitorStore` Durable Object (`visitor-<visitorId>`), which rejects
+overlapping or rule-breaking bookings and also keeps the visitor's write counter.
 
 ## Scripts
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Vitest suite for the domain rules and the booking store (`vitest.config.ts`, kept apart from the Cloudflare Vite plugin) |
+| `npm test` | Vitest suite for the domain rules, the booking store, sign-in, and the auth guard (`vitest.config.ts`, kept apart from the Cloudflare Vite plugin) |
 | `npm run check:types` | TypeScript type check |
 | `npm run build` | Production build into `dist/` |
 | `npm run deploy` | Build and deploy the Worker |
+| `node scripts/allowlist.ts <list>` | Nickname list → allowlist KV entries (needs `SECRET` in the environment) |
 
 ## Layout
 
 ```
 src/
-├─ app.ts         route map
+├─ app.ts         route map (auth guard first, then every route)
 ├─ cloudflare.ts  Worker exports (VisitorStore Durable Object)
-├─ env.d.ts       binding types
+├─ env.d.ts       binding and secret types
 ├─ agents/        LawnDesk agent (placeholder)
+├─ auth/          sign-in, nickname identity, signed token, 401/403/429 guard
 ├─ domain/        Dave's rules, quote, slot finding, seed presets (pure, no I/O)
 └─ store/         per-visitor booking calendar: ledger logic, Durable Object, routes
+scripts/
+└─ allowlist.ts   nickname list → allowlist KV entries
 test/
+├─ app.test.ts    auth guard on the real app wiring
+├─ auth/          identity, guard, and allowlist script tests
 ├─ domain/        tests for src/domain
 └─ store/         ledger and route tests (Node, in-memory fakes)
 ```

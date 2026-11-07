@@ -35,14 +35,20 @@ npx vite dev --port 8787 --strictPort
 npx vite dev --port 5180 --strictPort
 ```
 
-Open http://localhost:5180 and send a message. In local dev the Cloudflare Vite plugin
-connects the `API` service binding to the backend dev server. "typing…" shows while
-the reply streams in.
+Open http://localhost:5180. In local dev the Cloudflare Vite plugin connects the `API`
+service binding to the backend dev server.
 
-Check the proxy without the browser:
+The chat page cannot reach the agent right now: the backend requires a sign-in token
+on `/api/agents/*`, and this page has no sign-in screen yet, so a message gets 401. The
+sign-in screen comes in a later PR. Until then, use the API through the proxy with
+curl, as in [../backend/README.md](../backend/README.md) "Try it with curl" with
+`localhost:5180` in place of `localhost:8787`:
 
 ```sh
 curl http://localhost:5180/api/health   # {"ok":true}, answered by the backend
+curl -s -X POST http://localhost:5180/api/auth \
+  -H 'content-type: application/json' \
+  -d '{"accessCode":"<ACCESS_CODE>","nickname":"my-test-nickname"}'
 ```
 
 `npm run dev` also works, but both projects default to Vite's port 5173, so pass

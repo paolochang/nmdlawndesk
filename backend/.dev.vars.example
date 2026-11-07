@@ -1,0 +1,5 @@
+# Local dev secrets. Copy to .dev.vars (gitignored) and change the values.
+# Production uses `npx wrangler secret put SECRET` / `ACCESS_CODE` instead.
+# SECRET must never be rotated during the demo: it derives every visitorId.
+SECRET="change-me-local-dev-secret"
+ACCESS_CODE="change-me-local-code"

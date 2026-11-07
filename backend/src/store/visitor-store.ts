@@ -24,4 +24,9 @@ export class VisitorStore extends DurableObject {
 	reset() {
 		return this.#ledger.reset();
 	}
+
+	/** One rate-limited write for this visitor (auth middleware, build-plan §8). */
+	hit(limit: number, windowMs: number) {
+		return this.#ledger.hit(Date.now(), limit, windowMs);
+	}
 }
