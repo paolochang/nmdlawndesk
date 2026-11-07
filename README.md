@@ -27,11 +27,16 @@ feature를 merge할 때마다 갱신한다.
   - 견적: ½ acre 이하 1시간 $45, 1 acre 이하 1.5시간 $67.50, 1 acre 초과는 Dave에게 넘김, 크기를 모르면 1시간 견적 후 현장에서 조정
   - 빈 시간 찾기: 그 동네 근무 요일에 30분 단위로, 1 PM 전에 끝나고 기존 예약과 겹치지 않는 시간
   - 테스트용 예약 일정 4종(seed preset)
+- 방문자별 예약 달력을 만들었다(`backend/src/store/`, 테스트 25개). 방문자마다 Durable Object 하나가 자기 달력을 갖는다.
+  - 처음 열면 테스트용 예약 일정 4종 중 하나로 시작한다.
+  - 예약을 추가할 때 겹치는 시간, 규칙에 어긋나는 시간, 이름 없는 예약을 거부한다. 가격은 저장소가 마당 크기로 직접 계산한다.
+  - reset하면 새 generation으로 바뀌고, 지금과 다른 일정으로 다시 시작한다.
+  - `GET /api/config`(Dave의 규칙), `GET /api/calendar/<visitorId>`, `POST /api/calendar/<visitorId>/reset`
 - `backend/README.md`, `frontend/README.md`에 로컬 실행 방법을 적었다: 설치, dev server(backend 8787을 먼저, 그다음 frontend 5180), 확인용 curl.
 
 **아직 안 되는 것**
-- 에이전트는 아직 placeholder다. 위 규칙이 아직 에이전트에 연결되지 않아서, 요금이나 일정을 물으면 모른다고 답한다.
-- 예약 저장소와 달력, 에이전트 tool, Dave에게 넘기기
-- 리뷰어 로그인과 방문자별 환경 분리
+- 에이전트는 아직 placeholder다. 위 규칙과 달력이 아직 에이전트에 연결되지 않아서, 요금이나 일정을 물으면 모른다고 답한다.
+- 에이전트 tool(견적, 빈 시간 찾기, 예약), Dave에게 넘기기
+- 리뷰어 로그인. 지금은 달력 route에 token이 없어서 visitorId만 알면 누구나 읽고 reset할 수 있다(로그인 전에는 공개 배포하지 않는다).
 - 문자 시뮬레이터 화면: 손님 폰, Dave 폰, 달력, 요금표
 - production 배포
