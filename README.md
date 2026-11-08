@@ -20,8 +20,8 @@ flue, flue/react, cloudflare
 feature를 merge할 때마다 갱신한다.
 
 **지금 되는 것**
-- Cloudflare Worker 두 개로 나눴다. `backend/`는 Workers AI로 Flue 에이전트를 돌리고, `frontend/`는 React chat 화면을 띄우고 `/api/*`를 service binding으로 backend에 넘긴다.
-- 에이전트 응답은 스트리밍으로 돌아온다(curl이나 Flue client로 확인. 브라우저 chat 화면은 아래 "아직 안 되는 것" 참고).
+- Cloudflare Worker 두 개로 나눴다. `backend/`는 Workers AI로 Flue 에이전트를 돌리고, `frontend/`는 문자 시뮬레이터 화면(React)을 띄우고 `/api/*`를 service binding으로 backend에 넘긴다.
+- 에이전트 응답은 스트리밍으로 돌아온다.
 - Dave의 업무 규칙을 코드로 만들고 테스트했다(`backend/src/domain/`, 테스트 68개):
   - 근무 시간 8 AM-1 PM, 동네별 근무 요일, 시간당 $45 요금표
   - 견적: ½ acre 이하 1시간 $45, 1 acre 이하 1.5시간 $67.50, 1 acre 초과는 Dave에게 넘김, 크기를 모르면 1시간 견적 후 현장에서 조정
@@ -43,12 +43,20 @@ feature를 merge할 때마다 갱신한다.
   - 서비스 지역 밖, 1 acre 초과, 불만, 환불, 흥정은 손님에게 "Dave will contact you directly."라고 답하고, Dave 폰 대화(`/api/agents/dave-phone/...`)로 알림을 보낸다. Dave 폰은 별도 에이전트(`DavePhone`)가 맡아, 알림을 Dave에게 보낼 문자로 정리한다.
   - 인사나 가격·동네·시간 같은 일반 질문에는 규칙에서 바로 답하고, 견적이나 예약을 원할 때만 주소와 크기를 묻는다. 넘긴 뒤에도 질문에 계속 답한다.
   - 대화 id가 형식에 맞지 않으면 400, reset 전 대화에서 보낸 문자는 409다. 옛 대화가 새 달력에 예약을 넣지 못한다.
-  - `scripts/m1.ts`: 로컬 dev server에서 실제 모델로 예약 한 건과 Dave 알림 한 건, 대화 규칙 4가지를 확인한다.
-- `backend/README.md`, `frontend/README.md`에 로컬 실행 방법을 적었다: 설치, `.dev.vars`와 로컬 allowlist 준비, dev server(backend 8787을 먼저, 그다음 frontend 5180), 로그인과 token을 쓰는 curl.
+  - `scripts/m1.ts`: 로컬 dev server에서 실제 모델로 예약 한 건과 Dave 알림 한 건, 대화 규칙 5가지를 확인한다.
+- 브라우저 문자 시뮬레이터의 손님 쪽 화면을 만들었다(`frontend/src/`, 테스트 71개).
+  - 로그인 화면: access code와 닉네임으로 로그인한다. 틀리면 어느 쪽이 틀렸는지 말하지 않는다. 닉네임만 브라우저에 남고 access code는 저장하지 않는다. token이 만료되면 로그인 화면으로 돌아가고, 다시 로그인하면 같은 달력과 대화가 열린다.
+  - 손님 폰: 손님이 문자를 보내면 에이전트가 답하는 동안 "typing…"이 보이고, 답장은 다 쓰인 뒤에 말풍선으로 나온다.
+  - 손님 카드: New customer를 누르면 가상의 이름, 거리, 동네, 마당 크기를 뽑는다(가끔 서비스 지역 밖 동네). 첫 문자 전까지 고칠 수 있다. 문자를 보낸 이전 손님은 목록에서 다시 열 수 있다.
+  - 추천 답장(누르면 바로 전송, 모델이 아니라 고정 문구에 카드와 빈 시간을 채움), 예약 상태(예약됨 / Dave에게 넘어감 / 아직 없음).
+  - 판단 기록(judgment log): 에이전트의 tool 호출(input, output)과 reasoning을 시간 순으로 보여 준다.
+  - 손님 쪽, Dave 쪽, 둘 다 중 하나를 크게 볼 수 있고, 좁은 쪽은 흐리게 가려진다.
+  - 다른 곳에서 달력을 reset한 뒤 보낸 문자는 새 대화로 다시 보내고, 화면에 그렇게 알린다.
+- `backend/README.md`, `frontend/README.md`에 로컬 실행 방법을 적었다: 설치, `.dev.vars`와 로컬 allowlist 준비, dev server(backend 8787을 먼저, 그다음 frontend 5180), 로그인과 token을 쓰는 curl, 브라우저에서 시뮬레이터 쓰는 법.
 
 **아직 안 되는 것**
 - 답장 품질: 가끔 목록 형식으로 답하거나, 예약 확인 끝에 넘기기 문구를 붙인다. 공개 전 E2E 테스트로 다듬는다.
-- 브라우저 chat 화면: 로그인 화면이 아직 없어서 메시지를 보내면 401을 받는다. 로그인 화면이 붙으면 다시 된다.
 - 로그인 시도 횟수 제한: 닉네임은 공개라서 access code가 유일한 장벽이다. 공개 배포 전에 추가한다.
-- 문자 시뮬레이터 화면: 손님 폰, Dave 폰, 달력, 요금표
+- 문자 시뮬레이터의 Dave 쪽 화면: Dave 폰, 달력, 요금표, 동네 지도, 전체 reset
+- 휴대폰 화면 폭에 맞춘 레이아웃(지금은 데스크톱 기준)
 - production 배포
