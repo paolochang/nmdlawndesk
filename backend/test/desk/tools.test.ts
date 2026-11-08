@@ -94,11 +94,11 @@ describe('desk tools', () => {
 		});
 
 		it("searches from the clock's today in Dave's time zone and names it in the tool text (build-plan §12)", async () => {
-			// Thu 2026-12-03 10:40 ET: preset A anchors on Sun 11-29 and books Thu 12-03 10:00-11:30.
+			// Thu 2026-12-03 10:40 ET: preset A's seeds start Sun 12-06, so Mon 12-07 is full.
 			const thursday = () => Date.parse('2026-12-03T15:40:00Z');
 			const { call } = setup(1, undefined, thursday);
 			const output = (await call('findSlots', { town: 'Ashford', acres: 0.5 })) as { slots: { start: string }[] };
-			expect(output.slots.map((s) => s.start)).toEqual(['2026-12-03T12:00', '2026-12-07T08:00']);
+			expect(output.slots.map((s) => s.start)).toEqual(['2026-12-03T12:00', '2026-12-10T08:00']);
 			const tool = deskTools({ clock: thursday } as never).find((t) => t.name === 'findSlots')!;
 			expect(JSON.stringify(tool.input)).toContain('Omit to search from today (2026-12-03)');
 		});
@@ -177,6 +177,18 @@ describe('desk tools', () => {
 				ok: false,
 				reason: 'missing-name',
 			});
+		});
+
+		// Holistic review P2-2: a same-day offer can pass the notice before the customer picks it.
+		it('tells the model to search again when an offered time became too soon', async () => {
+			let now = Date.parse('2026-12-03T15:59:00Z'); // Thu 10:59 ET: earliest start 11:59
+			const { call } = setup(1, undefined, () => now);
+			const offered = (await call('findSlots', { town: 'Ashford', acres: 0.5 })) as { slots: { start: string }[] };
+			expect(offered.slots[0].start).toBe('2026-12-03T12:00');
+			now = Date.parse('2026-12-03T16:01:00Z'); // 11:01 ET: 12:00 is now inside the notice
+			const output = await call('bookSlot', { ...booking, town: 'Ashford', start: '2026-12-03T12:00' });
+			expect(output).toMatchObject({ ok: false, reason: 'past' });
+			expect((output as { next: string }).next).toContain('Call findSlots again');
 		});
 
 		it('refuses a booking from a conversation of an older generation', async () => {

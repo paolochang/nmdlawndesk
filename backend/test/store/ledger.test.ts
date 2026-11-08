@@ -213,52 +213,65 @@ describe('VisitorLedger', () => {
 });
 
 describe('VisitorLedger live dates (build-plan §12)', () => {
-	// Thu 2026-12-03 10:40 in Dave's time zone (15:40 UTC); its week starts Sun 11-29.
+	// Thu 2026-12-03 10:40 in Dave's time zone (15:40 UTC); the coming Sunday is 12-06.
 	const THURSDAY = Date.parse('2026-12-03T15:40:00Z');
+	const overlapping = (bookings: { id: string; start: string; end: string }[]) =>
+		bookings.flatMap((a) => bookings.filter((b) => a !== b && a.start < b.end && b.start < a.end).map((b) => `${a.id} × ${b.id}`));
 
-	it("anchors a reset's seeds on the Sunday of today's week and says today", () => {
+	it("anchors a reset's seeds on the coming Sunday and says today", () => {
 		const ledger = new VisitorLedger(memoryKv(), sequence(0, 0), () => THURSDAY);
 		const after = ledger.reset();
-		expect(after.bookings).toEqual(presetBookings(PRESETS[1], '2026-11-29'));
+		expect(after.bookings).toEqual(presetBookings(PRESETS[1], '2026-12-06'));
 		expect(after).toMatchObject({ today: '2026-12-03', timeZone: 'America/New_York' });
 	});
+
+	// Holistic review P2-1: from Tuesday on, a this-week anchor left the preset's tight day in the past.
+	it.each(['11-29', '11-30', '12-01', '12-02', '12-03', '12-04', '12-05'])(
+		'puts every seed of every preset after today for a reset on 2026-%s',
+		(day) => {
+			const now = Date.parse(`2026-${day}T19:00:00Z`); // 14:00 ET
+			for (const r of [0, 0.3, 0.6, 0.9]) {
+				const { bookings, today, presetId } = new VisitorLedger(memoryKv(), sequence(r), () => now).list();
+				expect(bookings.filter((b) => b.start.slice(0, 10) <= today).map((b) => b.id), presetId).toEqual([]);
+			}
+		},
+	);
 
 	it('resets a state stored before live dates (schema 1) once', () => {
 		const kv = memoryKv();
 		kv.put('state', { schemaVersion: 1, generation: 3, presetId: 'A', customers: [], bookings: [], nextBookingNo: 1 });
 		const ledger = new VisitorLedger(kv, sequence(0), () => THURSDAY);
-		expect(ledger.list()).toMatchObject({ generation: 4, presetId: 'B', bookings: presetBookings(PRESETS[1], '2026-11-29') });
+		expect(ledger.list()).toMatchObject({ generation: 4, presetId: 'B', bookings: presetBookings(PRESETS[1], '2026-12-06') });
 		expect(ledger.list().generation).toBe(4);
 	});
 
-	it("tops up this week's seeds for a returning visitor whose seeds are all past", () => {
-		let now = SUNDAY();
-		const kv = memoryKv();
-		const ledger = new VisitorLedger(kv, sequence(0), () => now);
+	it('tops up the next two weeks of seeds once the first week is over, around desk bookings', () => {
+		let now = SUNDAY(); // seeds of preset A for 11-16 … 11-27
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), () => now);
 		ledger.addCustomer('+15550101');
-		// A desk booking where preset A's first seed lands in the week of 11-29 (Mon 11-30 08:00-09:30).
-		const desk = ledger.add({ ...request, town: 'Ashford', start: '2026-11-30T08:00', phone: '+15550101' });
-		expect(desk.ok).toBe(true);
+		// A desk booking where preset A's first seed of the 11-29 block lands (Mon 11-30 08:00-09:30).
+		expect(ledger.add({ ...request, town: 'Ashford', start: '2026-11-30T08:00', phone: '+15550101' }).ok).toBe(true);
 		const before = ledger.list();
 
-		now = THURSDAY; // every seed of the 11-15 week is past
+		now = Date.parse('2026-11-21T19:00:00Z'); // Sat 11-21: still the first week
+		expect(ledger.list().bookings).toEqual(before.bookings);
+
+		now = Date.parse('2026-11-22T15:00:00Z'); // Sun 11-22: the second week begins
 		const after = ledger.list();
 		const topped = presetBookings(PRESETS[0], '2026-11-29').filter((seed) => seed.start !== '2026-11-30T08:00');
-		expect(after).toMatchObject({ generation: 1, presetId: 'A', customers: before.customers, today: '2026-12-03' });
+		expect(after).toMatchObject({ generation: 1, presetId: 'A', customers: before.customers, today: '2026-11-22' });
 		expect(after.bookings).toEqual([...before.bookings, ...topped]);
-		for (const a of after.bookings) {
-			for (const b of after.bookings) if (a !== b) expect(a.start < b.end && b.start < a.end, `${a.id} × ${b.id}`).toBe(false);
-		}
+		expect(overlapping(after.bookings)).toEqual([]);
 		// Reading again adds nothing.
 		expect(ledger.list()).toEqual(after);
 	});
 
-	it('leaves the seeds alone while one is still on or after today', () => {
+	it('anchors the top-up on the coming Sunday after a long absence, so no new seed is in the past', () => {
 		let now = SUNDAY();
 		const ledger = new VisitorLedger(memoryKv(), sequence(0), () => now);
 		const before = ledger.list().bookings;
-		now = Date.parse('2026-11-24T15:00:00Z'); // Tue 11-24: preset A's week-2 seed is today
-		expect(ledger.list().bookings).toEqual(before);
+		now = Date.parse('2027-01-07T15:40:00Z'); // Thu 2027-01-07
+		expect(ledger.list().bookings).toEqual([...before, ...presetBookings(PRESETS[0], '2027-01-10')]);
 	});
 });
 

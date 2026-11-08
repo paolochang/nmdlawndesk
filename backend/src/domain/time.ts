@@ -58,9 +58,9 @@ export function addMinutes(dateTime: string, minutes: number): string {
 	return joinDateTime(addDays(date, days), total - days * 1440);
 }
 
-/** The Sunday on or before `date`. */
-export function sundayOf(date: string): string {
-	return addDays(date, -weekdayOf(date));
+/** The Sunday on or after `date`: `date` itself on a Sunday. */
+export function comingSunday(date: string): string {
+	return addDays(date, (7 - weekdayOf(date)) % 7);
 }
 
 /** An epoch time (ms) as wall-clock `YYYY-MM-DDTHH:mm` in `timeZone`. */

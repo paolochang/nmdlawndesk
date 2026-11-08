@@ -48,14 +48,14 @@ describe('seed presets', () => {
 			expect(tight).toBe(true);
 		});
 
-		it('has a seed in each of its two weeks, so a top-up always adds future seeds', () => {
+		it('has a seed in each of its two weeks, so neither week ahead is empty', () => {
 			expect(preset.bookings.some((b) => b.dayOffset < 7)).toBe(true);
 			expect(preset.bookings.some((b) => b.dayOffset > 7)).toBe(true);
 		});
 
-		// build-plan §12: a reset on Thu 2026-12-03 10:40 anchors on Sun 11-29.
-		it.each(TOWNS)('anchored mid-week, leaves 1 h and 1.5 h slots for %s through next week', (town) => {
-			const live = presetBookings(preset, '2026-11-29');
+		// build-plan §12: a reset on Thu 2026-12-03 10:40 anchors on the coming Sunday, 12-06.
+		it.each(TOWNS)('reset mid-week, leaves 1 h and 1.5 h slots for %s through next week', (town) => {
+			const live = presetBookings(preset, '2026-12-06');
 			for (const durationMinutes of [60, 90]) {
 				// Thu 12-03 through Fri 12-11.
 				const slots = findSlots({ now: '2026-12-03T10:40', town, durationMinutes, from: '2026-12-03', days: 9, bookings: live });

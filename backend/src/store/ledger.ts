@@ -1,8 +1,8 @@
-import { bookingBasis, isSeed, type Preset, pickPreset, presetBookings, PRESETS } from '../domain/presets.ts';
+import { bookingBasis, type Preset, pickPreset, presetBookings, PRESETS } from '../domain/presets.ts';
 import { quote } from '../domain/quote.ts';
 import { RULES, resolveTown, type Town } from '../domain/rules.ts';
 import { checkSlot, overlaps, type SlotCheck } from '../domain/slots.ts';
-import { type Clock, localDateTime, sundayOf } from '../domain/time.ts';
+import { addDays, type Clock, comingSunday, localDateTime } from '../domain/time.ts';
 import type { Booking } from '../domain/types.ts';
 
 /** The synchronous key-value API of a SQLite-backed Durable Object (`ctx.storage.kv`). */
@@ -60,7 +60,7 @@ export type AddResult =
 interface StoredState extends CalendarState {
 	/** Shape of this value; see STATE_VERSION. */
 	schemaVersion: number;
-	/** The Sunday the latest seeds are dated from (build-plan §12). */
+	/** The Sunday the latest two weeks of seeds are dated from (build-plan §12). */
 	anchor: string;
 	/** Next booking number in this generation. */
 	nextBookingNo: number;
@@ -158,7 +158,7 @@ export class VisitorLedger {
 		return customers;
 	}
 
-	/** New generation, no customers, and a different random preset's bookings for this week. */
+	/** New generation, no customers, and a different random preset's bookings from the coming Sunday. */
 	reset(): VisitorSnapshot {
 		const now = this.#now();
 		const current = this.#load(now);
@@ -211,8 +211,12 @@ function withCustomer(customers: Customer[], phone: string, name: string): Custo
 		: [...customers, customer];
 }
 
+/**
+ * Seeds start on the Monday after the coming Sunday (today on a Sunday), so every
+ * seed, and each preset's tight day, is still ahead whatever day the reset is.
+ */
 function fresh(generation: number, preset: Preset, now: string): StoredState {
-	const anchor = sundayOf(now.slice(0, 10));
+	const anchor = comingSunday(now.slice(0, 10));
 	return {
 		schemaVersion: STATE_VERSION,
 		generation,
@@ -225,16 +229,20 @@ function fresh(generation: number, preset: Preset, now: string): StoredState {
 }
 
 /**
- * A returning visitor (build-plan §12): when no seed is on or after `today`, the
- * preset's seeds for this week's Sunday join the calendar. The generation,
+ * A returning visitor (build-plan §12): once the first week of the current seeds
+ * is over, the preset's next two weeks join the calendar, right after the current
+ * ones (or from the coming Sunday after a longer absence), so the weeks ahead
+ * never run out of seeds and no new seed lands on a past day. The generation,
  * customers, and existing bookings stay; a seed that overlaps a booking already
  * there is skipped. Returns `state` itself when nothing changes.
  */
 function topUp(state: StoredState, today: string): StoredState {
-	if (state.bookings.some((b) => isSeed(b) && b.start.slice(0, 10) >= today)) return state;
-	const anchor = sundayOf(today);
+	if (today < addDays(state.anchor, 7)) return state;
 	const preset = PRESETS.find((p) => p.id === state.presetId);
-	if (!preset || anchor <= state.anchor) return state;
+	if (!preset) return state;
+	const next = addDays(state.anchor, 14);
+	const coming = comingSunday(today);
+	const anchor = coming > next ? coming : next;
 	const seeds = presetBookings(preset, anchor).filter((seed) => !state.bookings.some((b) => overlaps(b, seed)));
 	return { ...state, anchor, bookings: [...state.bookings, ...seeds] };
 }

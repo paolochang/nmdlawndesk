@@ -87,7 +87,7 @@ const town = v.pipe(v.string(), v.description(`The customer's town: ${TOWNS.join
 type Rejection = Extract<AddResult, { ok: false }>['reason'];
 const REJECTION_NEXT: Record<Rejection, string> = {
 	overlap: 'That time was just taken. Call findSlots again and offer the new times.',
-	past: 'Not a bookable time. Offer only times from findSlots.',
+	past: 'That time is too soon or already past. Call findSlots again and offer the new times.',
 	'wrong-weekday': 'Not a bookable time. Offer only times from findSlots.',
 	'outside-hours': 'Not a bookable time. Offer only times from findSlots.',
 	'off-grid': 'Not a bookable time. Offer only times from findSlots.',

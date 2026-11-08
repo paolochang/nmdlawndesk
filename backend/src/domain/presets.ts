@@ -118,8 +118,3 @@ export function pickPreset(currentId: string | undefined, random: () => number):
 	// Clamp out-of-range values from an injected source; NaN falls back to the first.
 	return choices[Math.min(Math.max(i, 0), choices.length - 1)] ?? choices[0];
 }
-
-/** Seed bookings come with a preset; every other booking was made by the desk. */
-export function isSeed(booking: Pick<Booking, 'id'>): boolean {
-	return booking.id.startsWith('seed-');
-}
