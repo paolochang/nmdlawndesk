@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DAVE_TOWNS, newCustomer, OUTSIDE_TOWNS, restoreCustomer, YARDS } from './persona.ts';
+import { DAVE_TOWNS, formatPhone, newCustomer, OUTSIDE_TOWNS, restoreCustomer, YARDS } from './persona.ts';
 
 /** A random source that returns the given draws in order, then 0.5. */
 function draws(...values: number[]) {
@@ -53,5 +53,15 @@ describe('restoreCustomer', () => {
 
   it('offers yard sizes on both sides of the 1-acre handoff, and unknown', () => {
     expect(YARDS).toEqual([0.25, 0.5, 0.75, 1, 1.5, 2, null]);
+  });
+});
+
+describe('formatPhone', () => {
+  it('shows a stored +1 number as +1 555-621-2802', () => {
+    expect(formatPhone('+15556212802')).toBe('+1 555-621-2802');
+  });
+
+  it('leaves anything else as stored', () => {
+    expect(formatPhone('dave')).toBe('dave');
   });
 });

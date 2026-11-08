@@ -1,4 +1,4 @@
-import { ALL_TOWNS, YARDS, type Customer } from './lib/persona.ts';
+import { ALL_TOWNS, formatPhone, YARDS, type Customer } from './lib/persona.ts';
 
 const YARD_LABEL: Record<string, string> = {
   '0.25': '¼ acre',
@@ -30,7 +30,7 @@ export function CustomerCard({ customer, locked, onChange, onNewCustomer }: Prop
       </div>
       <div>
         <div className="persona-name">{customer.name}</div>
-        <div className="persona-phone">{customer.phone}</div>
+        <div className="persona-phone">{formatPhone(customer.phone)}</div>
       </div>
       <div className="fields">
         <label htmlFor="customer-street">Street</label>

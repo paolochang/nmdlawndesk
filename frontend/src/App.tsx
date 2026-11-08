@@ -22,5 +22,5 @@ export default function App() {
       />
     );
   }
-  return <Simulator session={auth.session} onUnauthorized={onUnauthorized} />;
+  return <Simulator nickname={auth.nickname} session={auth.session} onUnauthorized={onUnauthorized} />;
 }

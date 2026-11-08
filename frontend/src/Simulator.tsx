@@ -24,6 +24,7 @@ const RESET = "Dave's calendar was reset, so this is a new conversation.";
 const NO_REPLY = "Dave's desk couldn't reply. Please send your text again.";
 
 interface Props {
+  nickname: string;
   session: Session;
   onUnauthorized: () => void;
 }
@@ -44,7 +45,7 @@ function SwitchIcon({ focus }: { focus: Focus }) {
   );
 }
 
-export function Simulator({ session, onUnauthorized }: Props) {
+export function Simulator({ nickname, session, onUnauthorized }: Props) {
   // Every request reports a 401, so an expired token anywhere returns to sign-in.
   const authFetch = useMemo(
     () => reportingUnauthorized((input, init) => fetch(input, init), onUnauthorized),
@@ -167,8 +168,13 @@ export function Simulator({ session, onUnauthorized }: Props) {
   return (
     <div className="simulator">
       <header className="app-header">
-        <h1>Dave's Lawn Desk</h1>
-        <span className="subtitle">Text-message booking simulator</span>
+        <div className="brand">
+          <h1>Dave's Lawn Desk</h1>
+          <span className="subtitle">Text-message booking simulator</span>
+        </div>
+        <div className="who">
+          Signed in as <b>{nickname}</b>
+        </div>
       </header>
       <main className={`stage focus-${focus}`}>
         <section className={`panel${layout.veiled === 'customer' ? ' veiled' : ''}`} aria-label="Customer">

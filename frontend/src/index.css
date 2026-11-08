@@ -48,7 +48,10 @@ input, select { font: inherit; color: inherit; padding: 8px 10px; border-radius:
 
 /* Layout: header, two panels (2/3 + 1/3, or half and half), judgment log */
 .simulator { max-width: 1600px; margin: 0 auto; padding: 0 16px 24px; }
-.app-header { display: flex; align-items: baseline; gap: 12px; padding: 14px 4px; }
+.app-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 14px 4px; }
+.brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin-right: auto; }
+.who { color: var(--muted); font-size: 0.9rem; }
+.who b { color: var(--ink); }
 .app-header h1 { font-size: 1.4rem; }
 .subtitle { color: var(--muted); font-size: 0.9rem; }
 .stage { display: grid; height: 800px; transition: grid-template-columns 0.7s cubic-bezier(0.4, 0, 0.2, 1); }

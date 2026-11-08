@@ -50,6 +50,12 @@ export interface Customer {
 /** The tab keeps the open customer, so a reload or a re-sign-in reopens the same conversation. */
 export const CUSTOMER_KEY = 'lawn-desk.customer';
 
+/** `+15556212802` → `+1 555-621-2802`; the stored form stays the conversation key. */
+export function formatPhone(phone: string): string {
+  const match = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(phone);
+  return match ? `+1 ${match[1]}-${match[2]}-${match[3]}` : phone;
+}
+
 function pick<T>(list: readonly T[], random: () => number): T {
   return list[Math.min(list.length - 1, Math.floor(random() * list.length))];
 }

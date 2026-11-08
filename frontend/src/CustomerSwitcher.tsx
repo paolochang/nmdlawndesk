@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Customer } from './lib/persona.ts';
+import { formatPhone, type Customer } from './lib/persona.ts';
 import type { RosterEntry } from './lib/roster.ts';
 
 const STATUS_LABEL = { open: 'Open', booked: 'Booked', 'with-dave': 'With Dave' } as const;
@@ -36,7 +36,7 @@ export function CustomerSwitcher({ current, earlier, onOpen }: Props) {
         onClick={() => setOpen(!open)}
       >
         <span>
-          <b>{current.name}</b> · {current.phone}
+          <b>{current.name}</b> · {formatPhone(current.phone)}
           {earlier.length > 0 && ` · ${earlier.length} earlier`}
         </span>
         <svg viewBox="0 0 12 12" aria-hidden="true">
