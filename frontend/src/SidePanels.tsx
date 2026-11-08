@@ -62,8 +62,6 @@ export function BookingStatusCard({ status }: { status: BookingStatus }) {
             <dd>
               {status.price} · {status.duration}
             </dd>
-            <dt>Booking</dt>
-            <dd>{status.bookingId}</dd>
           </dl>
           <p className="hint">
             {status.handedOff && `Also passed to Dave (${reason(status.handedOff)}). `}The final price may change on site.

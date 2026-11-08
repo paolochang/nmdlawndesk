@@ -32,7 +32,8 @@ export interface CalendarEvent {
   color: string;
   contrastColor: string;
   className?: string;
-  extendedProps: { name: string; town: string; basis: string };
+  /** `bookingId` only on the desk's bookings. */
+  extendedProps: { name: string; town: string; basis: string; bookingId?: string };
 }
 
 export interface CalendarWindow {
@@ -96,6 +97,8 @@ export function toEvents(bookings: readonly CalendarBooking[], config: DaveConfi
       contrastColor: isSeed(booking) ? INK : '#ffffff',
       extendedProps: { name: booking.name, town: booking.town, basis: booking.basis },
     };
+    // The store's id for a booking the desk made (Dave's reference); seed bookings have none to show.
+    if (!isSeed(booking)) event.extendedProps.bookingId = booking.id;
     if (booking.id === landingId) event.className = 'landing';
     return event;
   });

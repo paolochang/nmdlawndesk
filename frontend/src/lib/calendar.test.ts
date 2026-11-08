@@ -63,7 +63,13 @@ describe("Dave's calendar (build-plan §7)", () => {
         color: NEW_BOOKING_COLOR,
         contrastColor: '#ffffff',
         className: 'landing',
-        extendedProps: { name: 'Maya Torres', town: 'Birchwood', basis: 'Maya Torres · 45 Oak Rd, Birchwood · 0.5 acre → 1 h × $45 = $45' },
+        extendedProps: {
+          name: 'Maya Torres',
+          town: 'Birchwood',
+          basis: 'Maya Torres · 45 Oak Rd, Birchwood · 0.5 acre → 1 h × $45 = $45',
+          // Only the desk's bookings carry the store's booking id; seed ones are the made-up schedule.
+          bookingId: 'g2-1',
+        },
       },
     ]);
   });

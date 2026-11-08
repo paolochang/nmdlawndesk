@@ -88,14 +88,19 @@ function DaveCalendar({ config, bookings, landingId }: CalendarProps) {
           events={events}
           eventContent={(info) => (
             <div className="booking-block">
-              <b>{String(info.event.extendedProps.name)}</b>
+              <div className="booking-line">
+                <b>{String(info.event.extendedProps.name)}</b>
+                {info.event.extendedProps.bookingId && <small>{String(info.event.extendedProps.bookingId)}</small>}
+              </div>
               <span>
                 {info.timeText} · {String(info.event.extendedProps.town)}
               </span>
             </div>
           )}
           eventDidMount={(info) => {
-            info.el.title = String(info.event.extendedProps.basis ?? info.event.title);
+            const { basis, bookingId } = info.event.extendedProps;
+            const detail = String(basis ?? info.event.title);
+            info.el.title = bookingId ? `Booking ${String(bookingId)} · ${detail}` : detail;
           }}
         />
       </div>
