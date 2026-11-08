@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookingStatus } from './status.ts';
+import { bookingStatus, settledStatus } from './status.ts';
 import { done, message, running, text } from './test-messages.ts';
 
 const booked = done(
@@ -43,5 +43,20 @@ describe('bookingStatus (build-plan §7)', () => {
       kind: 'booked',
       handedOff: 'out-of-area',
     });
+  });
+});
+
+describe('settledStatus', () => {
+  const ask = message('m1', 'user', [text('Monday 8 AM works. Maya Torres')]);
+  const reply = message('m2', 'assistant', [booked, text('Booked: Mon Nov 16, 8 AM.')]);
+
+  it('keeps the status from before the last text while the desk is still replying', () => {
+    expect(settledStatus([ask, reply], true)).toEqual({ kind: 'open' });
+    const handoff = message('m2', 'assistant', [done('c4', 'handoffToDave', { reason: 'out-of-area' }, { ok: true })]);
+    expect(settledStatus([ask, handoff], true)).toEqual({ kind: 'open' });
+  });
+
+  it('shows the outcome once the reply is in', () => {
+    expect(settledStatus([ask, reply], false)).toEqual(bookingStatus([ask, reply]));
   });
 });

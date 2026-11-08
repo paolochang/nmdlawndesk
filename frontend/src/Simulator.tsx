@@ -13,7 +13,7 @@ import { CUSTOMER_KEY, newCustomer, restoreCustomer, type Customer } from './lib
 import { recoverStaleSend } from './lib/recover.ts';
 import { earlierCustomers, loadRoster, rememberCustomer, rememberRecovered, ROSTER_KEY, type RosterEntry } from './lib/roster.ts';
 import { failedSendView, sendFailure, type Session } from './lib/session.ts';
-import { bookingStatus, type BookingStatus } from './lib/status.ts';
+import { bookingStatus, settledStatus, type BookingStatus } from './lib/status.ts';
 import { conversationStage, repliesNow } from './lib/suggestions.ts';
 import { isTyping, replyFailed, toBubbles, toJudgmentLog } from './lib/transcript.ts';
 
@@ -213,7 +213,7 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
                     disabled={!ready}
                     onPick={(text) => void send(text)}
                   />
-                  <BookingStatusCard status={status} />
+                  <BookingStatusCard status={settledStatus(agent.messages, typing)} />
                 </div>
               </div>
             </div>

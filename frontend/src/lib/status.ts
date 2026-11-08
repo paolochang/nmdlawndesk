@@ -46,3 +46,14 @@ export function bookingStatus(messages: readonly FlueConversationMessage[]): Boo
   if (booking) return handoff ? { ...booking, handedOff: handoff } : booking;
   return handoff ? { kind: 'with-dave', reason: handoff } : { kind: 'open' };
 }
+
+/**
+ * The status to show now. While the desk is replying, its `bookSlot` or
+ * `handoffToDave` result can land before its text; until that text arrives the
+ * status stays what it was when the customer sent their last text.
+ */
+export function settledStatus(messages: readonly FlueConversationMessage[], deskReplying: boolean): BookingStatus {
+  if (!deskReplying) return bookingStatus(messages);
+  const lastText = messages.findLastIndex((message) => message.role === 'user');
+  return bookingStatus(messages.slice(0, lastText + 1));
+}
