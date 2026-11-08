@@ -206,13 +206,14 @@ button.danger { background: var(--err); border-color: var(--err); color: var(--s
 .booking-block { display: flex; flex-direction: column; min-width: 0; padding: 1px 2px; line-height: 1.25; }
 .booking-block b { font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .booking-block span { opacity: 0.85; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 0.72rem; }
-.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; align-items: start; }
-.fact { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+/* Both cards take the taller one's height; each card's note sits at its bottom. */
+.facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; align-items: stretch; }
+.fact { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: flex; flex-direction: column; }
 .fact h3 { margin: 0 0 6px; font-size: 0.9rem; }
 .fact table { width: 100%; border-collapse: collapse; font-size: 0.82rem; font-variant-numeric: tabular-nums; }
 .fact :is(th, td) { text-align: left; padding: 4px; border-top: 1px solid var(--line); vertical-align: top; }
 .fact th { font-weight: 600; color: var(--muted); border-top: 0; }
-.fact p { margin: 6px 0 0; font-size: 0.75rem; color: var(--muted); }
+.fact p { margin: auto 0 0; padding-top: 6px; font-size: 0.75rem; color: var(--muted); }
 .fact td i, .legend i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: 0; }
 .dave-phone { position: absolute; z-index: 3; top: 12px; right: 84px; }
 .dave-phone .avatar { background: var(--muted); }
