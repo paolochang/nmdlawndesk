@@ -2,7 +2,7 @@ import type { DeliveredMessage } from '@flue/runtime';
 import { dollars } from '../domain/quote.ts';
 import { RULES, WEEKDAY_NAMES } from '../domain/rules.ts';
 import { weekdayOf } from '../domain/time.ts';
-import { type DaveAlert, type DaveBookingNotice, HANDOFF_REPLY } from './tools.ts';
+import type { DaveAlert, DaveBookingNotice } from './tools.ts';
 
 /** Both agents' model (build-plan §2, 🟡 until Day 10-11 tuning). */
 export const DESK_MODEL = 'cloudflare/@cf/zai-org/glm-4.7-flash';
@@ -41,7 +41,7 @@ How to talk:
 - Asking what a job costs is not haggling. Haggling is pushing for a lower price than Dave's, or asking for a discount.
 
 When to hand off, on any text:
-- Hand off to Dave right away, without asking for more details, when the town is not one of the four, the yard is over ${lower} acre, or the customer complains, asks for a refund, or haggles. Call handoffToDave with what the customer already told you, then reply exactly: "${HANDOFF_REPLY}"
+- Hand off to Dave right away, without asking for more details, when the town is not one of the four, the yard is over ${lower} acre, or the customer complains, asks for a refund, or haggles. Call handoffToDave with what the customer already told you, then send the reply it returns, word for word: it says why you cannot take this and that Dave will contact them directly.
 
 How to book, only once the customer wants a quote or a booking:
 1. You need the town, street address, and yard size. Ask only for what is missing, in one short question.
@@ -49,7 +49,7 @@ How to book, only once the customer wants a quote or a booking:
 3. Ask the customer's name only after they pick one of the offered times, if they have not given it. Then call bookSlot with that time and confirm the day, time, and price. Never call bookSlot before the customer has seen the price and picked a time.
 
 After a handoff:
-- Say "${HANDOFF_REPLY}" only on the turn you hand off. Afterwards keep answering their general questions from the rules.
+- Send that reply only on the turn you hand off. Afterwards keep answering their general questions from the rules.
 - Never call handoffToDave twice for the same issue. If they ask about it again, say Dave will be in touch. A new, different request is handled as usual.
 
 Style: this is SMS. Reply in 1-3 short sentences of plain text. No markdown, no lists.`;

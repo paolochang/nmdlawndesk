@@ -1,7 +1,7 @@
 import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
 import { PRESETS, presetBookings } from '../../src/domain/presets.ts';
-import { type DaveAlert, type DaveBookingNotice, type DeskStore, deskTools, HANDOFF_REPLY } from '../../src/desk/tools.ts';
+import { type DaveAlert, type DaveBookingNotice, type DeskStore, deskTools, handoffReply } from '../../src/desk/tools.ts';
 import { type KvStorage, VisitorLedger } from '../../src/store/ledger.ts';
 
 // A ledger on an in-memory KV stands in for the Durable Object. Random 0 picks
@@ -182,7 +182,20 @@ describe('desk tools', () => {
 			expect(alerts).toEqual([
 				{ reason: 'yard-over-1-acre', details: 'Ann, 9 Hill Rd, Ashford, 2 acres', customerPhone: '+15550101' },
 			]);
-			expect(output).toMatchObject({ ok: true, reply: HANDOFF_REPLY });
+			expect(output).toMatchObject({ ok: true, reply: handoffReply('yard-over-1-acre') });
+		});
+
+		it('tells the customer why the desk cannot take it, then that Dave will contact them', () => {
+			expect(handoffReply('out-of-area')).toBe(
+				"Sorry, Dave doesn't work in your area; he only mows in Ashford, Clearwater, Birchwood, and Dunmore. I've passed your request to Dave, and he will contact you directly to talk it over.",
+			);
+			expect(handoffReply('yard-over-1-acre')).toBe(
+				"Sorry, I can't book yards over 1 acre; Dave prices those himself. I've asked Dave to contact you directly to talk it over.",
+			);
+			for (const reason of ['complaint', 'refund', 'haggling', 'other'] as const) {
+				expect(handoffReply(reason)).toMatch(/contact you directly/);
+				expect(handoffReply(reason)).not.toBe('Dave will contact you directly.');
+			}
 		});
 
 		it('says to send the reply once and keep answering, without handing off again', async () => {

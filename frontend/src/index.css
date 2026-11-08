@@ -121,7 +121,11 @@ button.danger { background: var(--err); border-color: var(--err); color: var(--s
 .fields :is(input, select) { width: 100%; padding: 6px 9px; min-height: 36px; }
 .fields :is(input, select):disabled { background: var(--code-bg); color: var(--muted); border-style: dashed; cursor: not-allowed; }
 .chip-list { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
-.chip { border: 1.5px solid var(--accent); border-radius: 18px 18px 6px 18px; text-align: left; max-width: 100%; font-size: 0.9rem; }
+.chip {
+  display: inline-flex; align-items: center; gap: 8px; border: 1.5px solid var(--accent); border-radius: 18px 18px 6px 18px;
+  text-align: left; max-width: 100%; font-size: 0.9rem;
+}
+.chip svg { flex: none; width: 14px; height: 14px; fill: none; stroke: var(--accent); stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .chip:hover:not(:disabled) { background: var(--accent-tint); }
 .status { font: 600 0.7rem var(--font-mono); text-transform: uppercase; padding: 2px 8px; border-radius: 6px; border: 1px solid currentColor; white-space: nowrap; }
 .status.booked { color: var(--ok); }

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import { DAVE_PHONE_PROMPT, daveAlertMessage, daveBookingMessage, lawnDeskPrompt } from '../../src/desk/prompts.ts';
-import { HANDOFF_REPLY } from '../../src/desk/tools.ts';
 
 describe('lawnDeskPrompt', () => {
 	it('states the rules from the config (build-plan §4)', () => {
@@ -12,7 +11,6 @@ describe('lawnDeskPrompt', () => {
 			'$45/hour',
 			'1.5 h, $67.50',
 			'may change on site',
-			'Dave will contact you directly.',
 		]) {
 			expect(prompt).toContain(fact);
 		}
@@ -47,7 +45,8 @@ describe('lawnDeskPrompt', () => {
 
 	it('says the handoff line once, then keeps answering without handing off the same issue again', () => {
 		const prompt = lawnDeskPrompt();
-		expect(prompt).toContain(`Say "${HANDOFF_REPLY}" only on the turn you hand off`);
+		expect(prompt).toContain('send the reply it returns, word for word');
+		expect(prompt).toContain('Send that reply only on the turn you hand off');
 		expect(prompt).toContain('keep answering their general questions');
 		expect(prompt).toContain('Never call handoffToDave twice for the same issue');
 	});

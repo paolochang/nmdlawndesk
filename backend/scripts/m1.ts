@@ -100,7 +100,8 @@ const said = (m: Message | undefined) =>
 		.filter((p) => p.type === 'text')
 		.map((p) => p.text)
 		.join(' ');
-const HANDOFF_LINE = 'Dave will contact you directly';
+/** Every handoff reply ends with this (`handoffReply` in src/desk/tools.ts). */
+const HANDOFF_LINE = 'contact you directly';
 /** Off-script check: fails the run with the reason. */
 function expectThat(ok: boolean, what: string, reply: Message | undefined): void {
 	if (!ok) throw new Error(`Off-script failed: ${what} (desk said: ${said(reply)})`);
