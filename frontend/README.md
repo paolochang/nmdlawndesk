@@ -48,8 +48,9 @@ service binding to the backend dev server.
 2. The customer's side opens with a made-up customer. Until the first text you can
    change the street, town, and yard size on the customer card; after it they lock.
 3. Text from the phone, or tap a suggested reply. While the agent works the phone
-   shows "typing…", and the reply appears once it is complete. The judgment log at the
-   bottom shows each tool call (input and output) and the reasoning.
+   shows "typing…", and the reply appears once it is complete. The judgment log docked at
+   the bottom shows each tool call (input and output) and the reasoning: it starts
+   collapsed (click its title to open it, drag its top edge to resize it).
 4. **New customer** starts a new conversation with a new number and a name that is
    not already on Dave's calendar; the calendar stays.
    Customers who texted can be reopened from the drop-down at the top of the panel.

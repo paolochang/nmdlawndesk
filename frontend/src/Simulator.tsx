@@ -524,7 +524,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
           </div>
         </section>
       </main>
-      <JudgmentLog entries={log} />
+      <JudgmentLog entries={log} conversation={url} historyReady={agent.historyReady} />
     </div>
   );
 }
