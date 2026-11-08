@@ -5,7 +5,7 @@
 // own details) and those stated times.
 import type { FlueConversationMessage } from '@flue/react';
 import type { Customer } from './persona.ts';
-import { textedStatus } from './status.ts';
+import { bookingUnconfirmed, textedStatus } from './status.ts';
 import { statesTime } from './texted.ts';
 
 export interface Slot {
@@ -21,6 +21,8 @@ export type Stage =
   /** `slots` when the desk asked for the name in the same text that offered them, before any pick. */
   | { kind: 'name'; slots?: Slot[] }
   | { kind: 'booked' }
+  /** The desk booked, but its text has not told the customer when: no time chips. */
+  | { kind: 'waiting' }
   | { kind: 'handed-off' };
 
 const isSlot = (value: unknown): value is Slot =>
@@ -42,6 +44,7 @@ export function conversationStage(messages: readonly FlueConversationMessage[]):
   const status = textedStatus(messages);
   if (status.kind === 'booked') return { kind: 'booked' };
   if (status.kind === 'with-dave') return { kind: 'handed-off' };
+  if (bookingUnconfirmed(messages)) return { kind: 'waiting' };
 
   let offers = 0;
   let slots: Slot[] = [];
@@ -138,6 +141,8 @@ export function suggestReplies(stage: Stage, customer: Customer): string[] {
     }
     case 'booked':
       return ['Thanks, see you then!', 'Can I move it to another day?'];
+    case 'waiting':
+      return ['Is it booked? What day and time?'];
     case 'handed-off':
       return ['OK, thanks!', "Can't you just give me a rough price?"];
   }

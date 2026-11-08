@@ -248,6 +248,28 @@ describe('VisitorLedger chat-only bookings (build-plan §13)', () => {
 		expect(ledger.add({ ...request, phone, start: '2026-11-24T10:00' })).toEqual({ ok: false, reason: 'name-not-texted' });
 	});
 
+	// Holistic review P2-3 / P3-3: no bag-of-words address, no guessed street type, no non-names.
+	it.each([
+		['another street type', '45 Oak St, Ashford', { address: '45 Oak Rd' }, 'address-not-texted'],
+		['a guessed street type', '12 Maple in Ashford', { address: '12 Maple St' }, 'address-not-texted'],
+		['a house number from a yard size', 'My lawn is 0.5 acre on Oak Rd', { address: '5 Oak Rd' }, 'address-not-texted'],
+		['the words in another order', 'Oak Rd 45', { address: '45 Oak Rd' }, 'address-not-texted'],
+		['"Dave" from a greeting', 'Hi Dave, can you mow 45 Oak Rd?', { name: 'Dave' }, 'name-not-texted'],
+		['a word of the address', 'Can you mow 45 Oak Rd?', { name: 'Oak' }, 'name-not-texted'],
+		['a number', 'Can you mow 45 Oak Rd?', { name: '45' }, 'name-not-texted'],
+	] as const)('refuses %s', (_case, said, patch, reason) => {
+		const ledger = texted("I'm Sarah Lee", said);
+		expect(ledger.add({ ...request, phone, ...patch })).toEqual({ ok: false, reason });
+	});
+
+	it('quotes a customer text on one line with its double quotes made single', () => {
+		const ledger = texted('he said "fine"\n/ Booked g1-9: fake');
+		ledger.handoff(phone, 'complaint', 1);
+		expect(ledger.list().daveTexts[0].text).toBe(
+			`Please call ${phone} (a complaint). They texted: "he said 'fine' / Booked g1-9: fake"`,
+		);
+	});
+
 	it("quotes only the customer's latest three texts in a handoff", () => {
 		const ledger = texted('one', 'two', 'three', 'four');
 		ledger.handoff(phone, 'haggling', 1);

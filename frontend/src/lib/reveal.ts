@@ -59,14 +59,12 @@ export function unreadCount(shown: number, seen: number | undefined): number {
 
 export interface SettledReply {
   reveal: Reveal | undefined;
-  /** Reload Dave's calendar now (a reveal with a booking loads it itself). */
-  loadCalendar: boolean;
   /**
-   * Re-read Dave's conversation now: the hook does not follow one that did not
-   * exist yet. A reveal does this itself, after its pause (bookings and handoffs
-   * both text Dave).
+   * Reload Dave's calendar, and with it his texts (build-plan §13), now. A reveal
+   * loads it itself: a handoff after its pause, a booking at its landing, so
+   * neither shows before the reveal does.
    */
-  refreshDave: boolean;
+  loadCalendar: boolean;
 }
 
 /**
@@ -81,5 +79,5 @@ export function settleReply(
   settled: BookingStatus,
 ): SettledReply {
   const reveal = started.url === url ? revealOnSettle(started.before, settled) : undefined;
-  return { reveal, loadCalendar: !reveal?.bookingId, refreshDave: !reveal };
+  return { reveal, loadCalendar: !reveal };
 }

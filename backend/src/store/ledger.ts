@@ -86,9 +86,14 @@ interface StoredState extends CalendarState {
 	texts?: Record<string, string[]>;
 }
 
-/** Texts kept per customer, and the longest text kept. */
-const MAX_TEXTS = 40;
-const MAX_TEXT_LENGTH = 500;
+/**
+ * Texts kept per customer, the longest text kept (in code points), and how many
+ * customers' texts a generation keeps, so the one state value stays well under the
+ * Durable Object's value limit.
+ */
+const MAX_TEXTS = 20;
+const MAX_TEXT_LENGTH = 300;
+const MAX_TEXTING_CUSTOMERS = 30;
 
 const KEY = 'state';
 /**
@@ -144,7 +149,7 @@ export class VisitorLedger {
 		if (generation !== undefined && generation !== state.generation) return { ok: false, reason: 'stale-generation' };
 		if (typeof phone === 'string') {
 			const texts = state.texts?.[phone] ?? [];
-			if (!nameTexted(texts, name)) return { ok: false, reason: 'name-not-texted' };
+			if (!nameTexted(texts, name, address)) return { ok: false, reason: 'name-not-texted' };
 			if (!addressTexted(texts, address)) return { ok: false, reason: 'address-not-texted' };
 		}
 		let q: ReturnType<typeof quote>;
@@ -190,8 +195,10 @@ export class VisitorLedger {
 		const state = this.#load(this.#now());
 		if (generation !== state.generation || typeof phone !== 'string' || typeof text !== 'string') return;
 		const customers = state.customers.some((c) => c.phone === phone) ? state.customers : [...state.customers, { phone }];
-		const kept = [...(state.texts?.[phone] ?? []), text.slice(0, MAX_TEXT_LENGTH)].slice(-MAX_TEXTS);
-		this.#save({ ...state, customers, texts: { ...state.texts, [phone]: kept } });
+		const kept = [...(state.texts?.[phone] ?? []), Array.from(text).slice(0, MAX_TEXT_LENGTH).join('')].slice(-MAX_TEXTS);
+		// The customer who texted longest ago gives way; their bookings stay, new ones need fresh texts.
+		const others = Object.entries(state.texts ?? {}).filter(([known]) => known !== phone).slice(-(MAX_TEXTING_CUSTOMERS - 1));
+		this.#save({ ...state, customers, texts: { ...Object.fromEntries(others), [phone]: kept } });
 	}
 
 	/**

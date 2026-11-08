@@ -29,6 +29,8 @@ export function bookingText(booking: Booking, phone: string): string {
 
 /** `Please call +15550102 (yard over 1 acre). They texted: "…" / "…"` */
 export function handoffText(reason: HandoffReason, phone: string, texts: readonly string[]): string {
-	const quoted = texts.slice(-QUOTED_TEXTS).map((text) => `"${text}"`).join(' / ');
+	// One line per quote, double quotes made single, so a quote cannot pose as another text.
+	const quote = (text: string) => `"${text.replace(/\s+/g, ' ').trim().replaceAll('"', "'")}"`;
+	const quoted = texts.slice(-QUOTED_TEXTS).map(quote).join(' / ');
 	return `Please call ${phone} (${REASON_LABELS[reason]}).${quoted ? ` They texted: ${quoted}` : ''}`;
 }

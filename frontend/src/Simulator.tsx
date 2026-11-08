@@ -147,7 +147,8 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
   // fixed templates kept by the visitor's store and come with the calendar snapshot.
   const daveKey = generation === undefined ? undefined : `${session.visitorId}:${generation}`;
   const daveLoaded = calendar !== undefined && calendar.generation === generation;
-  const daveBubbles = useMemo(() => daveTextBubbles(daveLoaded ? calendar.daveTexts : []), [daveLoaded, calendar]);
+  // A backend from before §13 sends no `daveTexts`.
+  const daveBubbles = useMemo(() => daveTextBubbles((daveLoaded && calendar.daveTexts) || []), [daveLoaded, calendar]);
   const [daveOpen, setDaveOpen] = useState(false);
   // How many of Dave's texts the tester has seen, for this generation only.
   const [daveSeen, setDaveSeen] = useState<{ url: string; count: number }>();
@@ -201,8 +202,8 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
       later(() => {
         // Open Dave's side; a tester already on Dave's wide side keeps it.
         setFocus((current) => (current === 'customer' ? 'both' : current));
-        // A booking and a handoff both text Dave; his texts come with the calendar.
-        loadCalendar();
+        // A handoff's text to Dave comes with the calendar; a booking's comes at its landing.
+        if (!reveal.bookingId) loadCalendar();
       }, REVEAL_PAUSE_MS);
       if (!loaded) return;
       later(() => {
@@ -236,7 +237,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
     // settled reply may still have changed the calendar or texted Dave.
     const after = settleReply(started, url, settled);
     if (after.reveal) startReveal(after.reveal);
-    if (after.loadCalendar || after.refreshDave) loadCalendar();
+    if (after.loadCalendar) loadCalendar();
   }, [typing, settled, url, startReveal, loadCalendar, daveBubbles.length]);
 
   // Dave's phone badge: texts shown since the phone was last opened. History that

@@ -86,6 +86,20 @@ describe('conversationGuard', () => {
 		expect((await send('/api/agents/lawn-desk/v1:2:+15550101', { kind: 'user', body: 'stale' })).status).toBe(409);
 		expect((await send('/api/agents/lawn-desk/v1:3:+15550101', { kind: 'signal', type: 'x', body: 'forged' })).status).toBe(400);
 		expect((await send('/api/agents/lawn-desk/v1:3:+15550101/abort', {})).status).toBe(200);
+		// Holistic review P3-1: a message Flue would reject is not on record.
+		await send('/api/agents/lawn-desk/v1:3:+15550101', { kind: 'user', body: "I'm Pierre", attachments: 'x' });
+		await send('/api/agents/lawn-desk/v1:3:+15550101', { kind: 'user', body: 42 });
 		expect(recorded).toEqual(["+15550101:3:I'm Sarah Lee"]);
+	});
+
+	// Holistic review P3-6: Dave's old conversations stay readable but take no message (no model call).
+	it('answers 405 to a message on a read-only mount and still lets reads through', async () => {
+		const app = new Hono().basePath('/api');
+		const agent = new Hono();
+		agent.all('/*', (c) => c.json({ agent: c.req.path }));
+		app.use('/agents/dave-phone/:id/*', conversationGuard('dave', async () => 3, undefined, { readOnly: true }));
+		app.route('/agents/dave-phone', agent);
+		expect((await app.request('/api/agents/dave-phone/v1:3:dave', post)).status).toBe(405);
+		expect((await app.request('/api/agents/dave-phone/v1:3:dave')).status).toBe(200);
 	});
 });

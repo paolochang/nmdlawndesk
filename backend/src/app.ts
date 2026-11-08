@@ -45,8 +45,9 @@ app.use(
 app.route('/agents/lawn-desk', createAgentRouter(LawnDesk));
 
 // Dave's phone, `<visitorId>:<generation>:dave`: alerts landed here until build-plan §13
-// moved Dave's texts into the visitor store; kept so older conversations still open.
-app.use('/agents/dave-phone/:id/*', conversationGuard('dave', generation));
+// moved Dave's texts into the visitor store; kept read-only (405 to any message, so no
+// model call) so older conversations still open.
+app.use('/agents/dave-phone/:id/*', conversationGuard('dave', generation, undefined, { readOnly: true }));
 app.route('/agents/dave-phone', createAgentRouter(DavePhone));
 
 // /api/config and /api/calendar/:visitorId[/reset].

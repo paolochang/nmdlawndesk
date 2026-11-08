@@ -86,12 +86,24 @@ describe('conversationStage (build-plan §7)', () => {
     expect(conversationStage([hi, dashes])).toEqual({ kind: 'slots', slots, searchedAgain: false });
   });
 
-  it('is not booked until a desk text states the booking', () => {
+  // Holistic P3-5: an unconfirmed booking offers no time chips.
+  it('waits, without time chips, while a booking was never stated in a text', () => {
     const silent = message('m8', 'assistant', [
       done('c4', 'bookSlot', { start: '2026-11-16T08:00' }, { ok: true, when: 'Mon Nov 16, 8:00-9:00 AM' }),
       text('All set, thanks!'),
     ]);
-    expect(conversationStage([hi, offered, silent]).kind).not.toBe('booked');
+    expect(conversationStage([hi, offered, silent])).toEqual({ kind: 'waiting' });
+    expect(suggestReplies({ kind: 'waiting' }, maya)).toEqual(['Is it booked? What day and time?']);
+  });
+
+  // Codex P2 / holistic P2-2: a time counts only next to its own date, as a start, with its AM/PM.
+  it.each([
+    ['swapped times', 'Nov 16 at 9:30 AM or Nov 19 at 8 AM'],
+    ['a range end on another day', 'Mon Nov 16, 7:00-9:30 AM is open. Thu Nov 19 is full.'],
+    ['the wrong meridiem', 'Nov 16 at 8 PM or Nov 19 at 9:30 PM'],
+  ])('offers no time the desk did not state: %s', (_case, said) => {
+    const offer = message('m4', 'assistant', [done('c2', 'findSlots', { town: 'Ashford', acres: 0.5 }, { slots }), text(said)]);
+    expect(conversationStage([hi, offer])).toEqual({ kind: 'slots', slots: [], searchedAgain: false });
   });
 });
 

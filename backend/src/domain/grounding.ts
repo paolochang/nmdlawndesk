@@ -1,35 +1,53 @@
 // Whether a value the desk wants to book came from the customer's own texts
 // (build-plan §13): the desk may not guess a name or an address.
 
-/** Lowercase words: letters and digits only, so punctuation and spacing never matter. */
+/** Street types a customer and the desk may write either way, each mapped to one form. */
+export const STREET_TYPES: Record<string, string> = {
+	road: 'rd', rd: 'rd', street: 'st', st: 'st', avenue: 'ave', ave: 'ave', av: 'ave', lane: 'ln', ln: 'ln',
+	drive: 'dr', dr: 'dr', court: 'ct', ct: 'ct', way: 'way', place: 'pl', pl: 'pl', boulevard: 'blvd', blvd: 'blvd',
+	terrace: 'ter', ter: 'ter', circle: 'cir', cir: 'cir', highway: 'hwy', hwy: 'hwy', parkway: 'pkwy', pkwy: 'pkwy',
+};
+
+/**
+ * Lowercase words of letters and digits. A dot inside a number stays (`0.5` is one
+ * word, so it never grounds a house number `5`); other punctuation separates words.
+ */
 function words(text: string): string[] {
 	return text
 		.normalize('NFKC')
 		.toLowerCase()
-		.split(/[^\p{L}\p{N}]+/u)
+		.split(/[^\p{L}\p{N}.]+/u)
+		.map((word) => word.replace(/^\.+|\.+$/g, ''))
 		.filter(Boolean);
 }
 
-/** Street types that a customer and the desk may write either way (`Rd` / `Road`). */
-const STREET_TYPES = new Set([
-	'rd', 'road', 'st', 'street', 'ave', 'av', 'avenue', 'ln', 'lane', 'dr', 'drive', 'ct', 'court',
-	'way', 'pl', 'place', 'blvd', 'boulevard', 'ter', 'terrace', 'cir', 'circle', 'hwy', 'highway', 'pkwy', 'parkway',
-]);
-
-/** The name, word for word and in order, appears in one of the customer's texts. */
-export function nameTexted(texts: readonly string[], name: string): boolean {
-	const wanted = words(name);
+/** `wanted` appears word for word, in order, inside one of `texts`. */
+function inOneText(texts: readonly string[], wanted: readonly string[], form = (word: string) => word): boolean {
 	if (!wanted.length) return false;
 	return texts.some((text) => {
-		const said = words(text);
+		const said = words(text).map(form);
 		return said.some((_, i) => wanted.every((word, j) => said[i + j] === word));
 	});
 }
 
-/** Every word of the street address but its street type appears in the customer's texts. */
+const streetForm = (word: string) => STREET_TYPES[word] ?? word;
+
+/**
+ * The name, word for word and in order, appears in one of the customer's texts. A
+ * name needs a letter, and is never "Dave" or a word of the address being booked.
+ */
+export function nameTexted(texts: readonly string[], name: string, address = ''): boolean {
+	const wanted = words(name);
+	if (!wanted.some((word) => /\p{L}/u.test(word))) return false;
+	const addressWords = new Set(words(address));
+	if (wanted.every((word) => word === 'dave' || addressWords.has(word))) return false;
+	return inOneText(texts, wanted);
+}
+
+/**
+ * The street address, word for word and in order, appears in one of the customer's
+ * texts; `Rd` and `Road` (and the other street types) count as the same word.
+ */
 export function addressTexted(texts: readonly string[], address: string): boolean {
-	const wanted = words(address).filter((word) => !STREET_TYPES.has(word));
-	if (!wanted.length) return false;
-	const said = new Set(texts.flatMap(words));
-	return wanted.every((word) => said.has(word));
+	return inOneText(texts, words(address).map(streetForm), streetForm);
 }

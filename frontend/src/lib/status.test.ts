@@ -69,18 +69,45 @@ describe('textedStatus', () => {
     expect(textedStatus([message('m2', 'user', [text('Monday works')]), reply('All set, thanks!')])).toEqual({ kind: 'open' });
     expect(textedStatus([reply("You're booked for Monday Nov 16 at 8 AM.")])).toEqual({
       kind: 'booked',
-      when: 'Mon Nov 16, 8:00-9:00 AM',
+      when: 'Mon Nov 16, 8:00 AM',
     });
   });
 
-  it('fills where and price only when the text states them', () => {
-    expect(textedStatus([reply('Booked Mon Nov 16, 8:00-9:00 AM at 45 Oak Rd. $45 for 1 hour.')])).toEqual({
+  it('fills the end time, street, town, and price only when the text states them', () => {
+    expect(textedStatus([reply('Booked Mon Nov 16, 8:00-9:00 AM at 45 Oak Rd, Ashford. $45 for 1 hour.')])).toEqual({
       kind: 'booked',
-      when: 'Mon Nov 16, 8:00-9:00 AM',
+      when: 'Mon Nov 16, 8:00 AM-9:00 AM',
       where: '45 Oak Rd, Ashford',
       price: '$45',
       duration: '1 h',
     });
+    // Codex P2: the tool's end time and town are not the text's.
+    expect(textedStatus([reply('Booked Nov 16 at 8 AM at 45 Oak Rd.')])).toEqual({
+      kind: 'booked',
+      when: 'Mon Nov 16, 8:00 AM',
+      where: '45 Oak Rd',
+    });
+    // Holistic P3-4: "$45" is a price, not the house number.
+    expect(textedStatus([reply('Booked Nov 16 at 8 AM on Oak Rd for $45.')])).toEqual({
+      kind: 'booked',
+      when: 'Mon Nov 16, 8:00 AM',
+      price: '$45',
+    });
+  });
+
+  // Codex P2: details the desk texts after confirming still fill in.
+  it('keeps filling details from later desk texts until the next booking', () => {
+    const later = message('m5', 'assistant', [text('It is $45 for 1 hour.')]);
+    expect(textedStatus([reply('Booked Nov 16 at 8 AM.'), message('m4', 'user', [text('How much?')]), later])).toEqual({
+      kind: 'booked',
+      when: 'Mon Nov 16, 8:00 AM',
+      price: '$45',
+      duration: '1 h',
+    });
+  });
+
+  it('does not take a different meridiem for the booked time', () => {
+    expect(textedStatus([reply('Booked Nov 16 at 8 PM.')])).toEqual({ kind: 'open' });
   });
 
   it('says the customer is with Dave once the desk texts the handoff reply', () => {
@@ -89,6 +116,11 @@ describe('textedStatus', () => {
     expect(textedStatus([message('m4', 'assistant', [handoff, text('He will contact you directly.')])])).toEqual({
       kind: 'with-dave',
       reason: 'complaint',
+    });
+    // Holistic P3-4: a paraphrased reply does not tell the customer why.
+    expect(textedStatus([message('m4', 'assistant', [handoff, text('Dave will contact you directly about it.')])])).toEqual({
+      kind: 'with-dave',
+      reason: 'other',
     });
   });
 

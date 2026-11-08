@@ -250,5 +250,6 @@ if (!namedBooking) {
 }
 if (namedBooking?.name !== 'Rosa Quinn') throw new Error(`Chat-only failed: booked ${JSON.stringify(namedBooking?.name)}, not Rosa Quinn`);
 const namedText = (await daveTexts()).find((t) => t.id === namedBooking.id);
+if (!namedText?.text.includes('Rosa Quinn')) throw new Error(`Chat-only failed: Dave's phone has no text with Rosa Quinn (${JSON.stringify(namedText)})`);
 console.log(`\n✓ Chat-only: ${namedBooking.id} ${namedBooking.start} — ${namedBooking.basis}`);
 console.log(`  dave   < ${namedText?.text}`);
