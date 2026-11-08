@@ -1,53 +1,26 @@
-import { useFlueAgent } from '@flue/react';
-import { useState, type FormEvent } from 'react';
+import { useCallback, useEffect, useReducer } from 'react';
+import { authReducer, loadAuth, saveAuth } from './lib/session.ts';
+import { SignIn } from './SignIn.tsx';
+import { Simulator } from './Simulator.tsx';
 
-// Walking skeleton (M0): one customer conversation with the backend agent,
-// reached through the /api proxy. The real simulator UI replaces this in PR 6.
+// The web SMS simulator (build-plan §7, §8): sign in, then the customer and
+// Dave panels with the judgment log. Any 401 returns to the sign-in form with
+// the nickname prefilled; signing in again opens the same environment.
 export default function App() {
-  const [conversationId] = useState(() => `m0-${crypto.randomUUID()}`);
-  const [draft, setDraft] = useState('');
-  const { messages, status, sendMessage } = useFlueAgent({
-    url: `/api/agents/lawn-desk/${conversationId}`,
-    live: 'sse',
-  });
-
-  async function onSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const text = draft.trim();
-    if (!text) return;
-    setDraft('');
-    try {
-      await sendMessage(text);
-    } catch {
-      // The hook already marks the send as failed; keep the text so it can be resent.
-      setDraft(text);
-    }
-  }
-
-  return (
-    <main className="phone">
-      <h1>Dave's Lawn Desk</h1>
-      <ol className="thread" aria-label="Conversation">
-        {messages.map((message) => (
-          <li key={message.id} className={`bubble ${message.role}`}>
-            {message.parts.map((part, index) =>
-              part.type === 'text' ? <p key={index}>{part.text}</p> : null,
-            )}
-          </li>
-        ))}
-      </ol>
-      <p className="status" role="status">
-        {status === 'submitted' || status === 'streaming' ? 'typing…' : status === 'error' ? 'error' : ''}
-      </p>
-      <form onSubmit={onSubmit}>
-        <input
-          aria-label="Message"
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          placeholder="Text Dave's Lawn Desk"
-        />
-        <button type="submit">Send</button>
-      </form>
-    </main>
+  const [auth, dispatch] = useReducer(authReducer, undefined, () =>
+    loadAuth(localStorage, sessionStorage, Date.now()),
   );
+  useEffect(() => saveAuth(auth, localStorage, sessionStorage), [auth]);
+  const onUnauthorized = useCallback(() => dispatch({ type: 'unauthorized' }), []);
+
+  if (auth.status === 'signed-out') {
+    return (
+      <SignIn
+        nickname={auth.nickname}
+        expired={auth.expired}
+        onSignedIn={(nickname, session) => dispatch({ type: 'signed-in', nickname, session })}
+      />
+    );
+  }
+  return <Simulator nickname={auth.nickname} session={auth.session} onUnauthorized={onUnauthorized} />;
 }
