@@ -14,7 +14,7 @@ import { recoverStaleSend } from './lib/recover.ts';
 import { earlierCustomers, loadRoster, rememberCustomer, rememberRecovered, ROSTER_KEY, type RosterEntry } from './lib/roster.ts';
 import { failedSendView, sendFailure, type Session } from './lib/session.ts';
 import { bookingStatus, type BookingStatus } from './lib/status.ts';
-import { conversationStage, suggestReplies } from './lib/suggestions.ts';
+import { conversationStage, repliesNow } from './lib/suggestions.ts';
 import { isTyping, replyFailed, toBubbles, toJudgmentLog } from './lib/transcript.ts';
 
 const LOAD_FAILED = "Could not load Dave's calendar. Reload the page to try again.";
@@ -208,8 +208,9 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
                     onNewCustomer={onNewCustomer}
                   />
                   <SuggestedReplies
-                    replies={suggestReplies(stage, customer)}
-                    disabled={!ready || typing}
+                    replies={repliesNow(stage, customer, typing)}
+                    waiting={typing}
+                    disabled={!ready}
                     onPick={(text) => void send(text)}
                   />
                   <BookingStatusCard status={status} />

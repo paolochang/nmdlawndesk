@@ -93,6 +93,15 @@ const acresShort = (acres: number) => ACRES_SHORT[String(acres)] ?? `${acres} ac
 /** A believable typo: lower case, last vowel dropped (`Ashford` → `ashfrd`). */
 const typo = (town: string) => town.toLowerCase().replace(/[aeiou](?=[^aeiou]*$)/, '');
 
+/**
+ * The picks to show now. None while the desk is replying: its tool results land
+ * before its text, so the stage would already answer a reply the customer has
+ * not read yet.
+ */
+export function repliesNow(stage: Stage, customer: Customer, deskReplying: boolean): string[] {
+  return deskReplying ? [] : suggestReplies(stage, customer);
+}
+
 export function suggestReplies(stage: Stage, customer: Customer): string[] {
   const { name, town, street, acres } = customer;
   const place = `${street}, ${town}`;

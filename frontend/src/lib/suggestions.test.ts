@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Customer } from './persona.ts';
-import { conversationStage, shortSlot, suggestReplies } from './suggestions.ts';
+import { conversationStage, repliesNow, shortSlot, suggestReplies } from './suggestions.ts';
 import { done, message, text } from './test-messages.ts';
 
 const maya: Customer = { phone: '+15552841937', name: 'Maya Torres', town: 'Ashford', street: '45 Oak Rd', acres: 0.5 };
@@ -94,6 +94,14 @@ describe('suggestReplies', () => {
   it('closes politely or pushes back after the outcome', () => {
     expect(suggestReplies({ kind: 'booked' }, maya)).toEqual(['Thanks, see you then!', 'Can I move it to another day?']);
     expect(suggestReplies({ kind: 'handed-off' }, maya)).toEqual(['OK, thanks!', "Can't you just give me a rough price?"]);
+  });
+});
+
+describe('repliesNow', () => {
+  it('offers no picks until the desk has finished its reply', () => {
+    const stage = { kind: 'slots', slots, searchedAgain: false } as const;
+    expect(repliesNow(stage, maya, true)).toEqual([]);
+    expect(repliesNow(stage, maya, false)).toEqual(suggestReplies(stage, maya));
   });
 });
 

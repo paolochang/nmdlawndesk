@@ -2,18 +2,21 @@ import type { BookingStatus } from './lib/status.ts';
 
 interface SuggestedProps {
   replies: string[];
+  /** The desk is replying; picks come back once its text arrives. */
+  waiting: boolean;
   disabled: boolean;
   onPick: (text: string) => void;
 }
 
 // Fixed replies for the current stage of the conversation; clicking one sends it.
-export function SuggestedReplies({ replies, disabled, onPick }: SuggestedProps) {
+export function SuggestedReplies({ replies, waiting, disabled, onPick }: SuggestedProps) {
   return (
     <div className="card">
       <div className="card-top">
         <h3>Suggested replies</h3>
         <span className="hint">Click to send, or type in the phone</span>
       </div>
+      {waiting && <p className="hint">Waiting for the desk's reply…</p>}
       <div className="chip-list">
         {replies.map((reply) => (
           <button key={reply} type="button" className="chip" disabled={disabled} onClick={() => onPick(reply)}>
