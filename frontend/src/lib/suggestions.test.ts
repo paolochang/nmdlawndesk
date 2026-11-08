@@ -66,18 +66,29 @@ describe('suggestReplies', () => {
     expect(suggestReplies({ kind: 'details' }, { ...maya, acres: null })).toEqual(["Not sure how big. It's 45 Oak Rd, Ashford"]);
     expect(suggestReplies({ kind: 'name' }, maya)).toEqual(["It's Maya Torres", 'Maya']);
     expect(suggestReplies({ kind: 'name', slots }, maya)).toEqual([
-      "It's Maya Torres. Monday 8 AM works",
-      'Maya Torres, Thursday 9:30 AM please',
+      "It's Maya Torres. Monday Nov 16 at 8 AM works",
+      'Maya Torres, Thursday Nov 19 at 9:30 AM please',
     ]);
   });
 
   it('turns the offered slots into picks, with one ask for later times', () => {
     expect(suggestReplies({ kind: 'slots', slots, searchedAgain: false }, maya)).toEqual([
-      'Monday 8 AM works',
-      'Thursday 9:30 AM, please',
+      'Monday Nov 16 at 8 AM works',
+      'Thursday Nov 19 at 9:30 AM, please',
       'Neither works. Anything the week after?',
     ]);
-    expect(suggestReplies({ kind: 'slots', slots: [slots[0]], searchedAgain: true }, maya)).toEqual(['Monday 8 AM works']);
+    expect(suggestReplies({ kind: 'slots', slots: [slots[0]], searchedAgain: true }, maya)).toEqual(['Monday Nov 16 at 8 AM works']);
+  });
+
+  it('tells apart the same weekday and time in different weeks', () => {
+    const weekApart = [
+      { start: '2026-11-16T08:00', label: 'Mon Nov 16, 8:00-9:00 AM' },
+      { start: '2026-11-23T08:00', label: 'Mon Nov 23, 8:00-9:00 AM' },
+    ];
+    expect(suggestReplies({ kind: 'slots', slots: weekApart, searchedAgain: true }, maya)).toEqual([
+      'Monday Nov 16 at 8 AM works',
+      'Monday Nov 23 at 8 AM, please',
+    ]);
   });
 
   it('closes politely or pushes back after the outcome', () => {
@@ -87,8 +98,8 @@ describe('suggestReplies', () => {
 });
 
 describe('shortSlot', () => {
-  it('names the weekday and the start time', () => {
-    expect(shortSlot('2026-11-17T12:00')).toBe('Tuesday 12 PM');
-    expect(shortSlot('2026-11-20T09:30')).toBe('Friday 9:30 AM');
+  it('names the weekday, the date, and the start time', () => {
+    expect(shortSlot('2026-11-17T12:00')).toBe('Tuesday Nov 17 at 12 PM');
+    expect(shortSlot('2026-11-20T09:30')).toBe('Friday Nov 20 at 9:30 AM');
   });
 });

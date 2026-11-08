@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Customer } from './persona.ts';
-import { earlierCustomers, loadRoster, rememberCustomer, type RosterEntry } from './roster.ts';
+import { earlierCustomers, loadRoster, rememberCustomer, rememberRecovered, type RosterEntry } from './roster.ts';
 
 const maya: Customer = { phone: '+15552841937', name: 'Maya Torres', town: 'Ashford', street: '45 Oak Rd', acres: 0.5 };
 const ben: Customer = { phone: '+15550000001', name: 'Ben Okafor', town: 'Fernhill', street: '2 Hill Ct', acres: 1 };
@@ -25,6 +25,14 @@ describe('earlier customers (build-plan §7)', () => {
       { customer: ben, generation: 1, status: 'booked' },
     ];
     expect(earlierCustomers(roster, 2, maya.phone)).toEqual([{ customer: ben, generation: 2, status: 'with-dave' }]);
+  });
+
+  it('lists a customer whose refused text was re-sent in the new generation, while another is open', () => {
+    // Maya texted in generation 2, got a 409, and the tester opened Ben before the retry landed in generation 3.
+    const roster: RosterEntry[] = [{ customer: maya, generation: 2, status: 'open' }];
+    expect(earlierCustomers(rememberRecovered(roster, maya, 3), 3, ben.phone)).toEqual([
+      { customer: maya, generation: 3, status: 'open' },
+    ]);
   });
 
   it('reads back only well-formed entries', () => {

@@ -25,6 +25,14 @@ export function rememberCustomer(roster: readonly RosterEntry[], entry: RosterEn
   return [entry, ...others].slice(0, MAX_ENTRIES);
 }
 
+/**
+ * Lists a customer whose refused (409) text was re-sent in `generation`, even when the
+ * tester has opened another customer since. That conversation starts with no booking.
+ */
+export function rememberRecovered(roster: readonly RosterEntry[], customer: Customer, generation: number): RosterEntry[] {
+  return rememberCustomer(roster, { customer, generation, status: 'open' });
+}
+
 /** The other customers of this generation, newest first. */
 export function earlierCustomers(roster: readonly RosterEntry[], generation: number, currentPhone: string): RosterEntry[] {
   return roster.filter((entry) => entry.generation === generation && entry.customer.phone !== currentPhone);

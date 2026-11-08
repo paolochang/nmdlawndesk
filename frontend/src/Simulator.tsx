@@ -11,7 +11,7 @@ import { customerConversationUrl } from './lib/conversation.ts';
 import { panelLayout, type Focus } from './lib/layout.ts';
 import { CUSTOMER_KEY, newCustomer, restoreCustomer, type Customer } from './lib/persona.ts';
 import { recoverStaleSend } from './lib/recover.ts';
-import { earlierCustomers, loadRoster, rememberCustomer, ROSTER_KEY, type RosterEntry } from './lib/roster.ts';
+import { earlierCustomers, loadRoster, rememberCustomer, rememberRecovered, ROSTER_KEY, type RosterEntry } from './lib/roster.ts';
 import { failedSendView, sendFailure, type Session } from './lib/session.ts';
 import { bookingStatus, type BookingStatus } from './lib/status.ts';
 import { conversationStage, suggestReplies } from './lib/suggestions.ts';
@@ -136,6 +136,7 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
           showFailure(recovery.error, text, phone);
           return;
         }
+        setRoster((old) => rememberRecovered(old, customer, recovery.generation));
         if (currentPhone.current === phone) setNotice(RESET);
         setGeneration((current) => Math.max(current ?? 0, recovery.generation));
       }

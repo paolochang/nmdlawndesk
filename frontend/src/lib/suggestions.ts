@@ -65,15 +65,19 @@ export function conversationStage(messages: readonly FlueConversationMessage[]):
 }
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** `2026-11-16T08:00` → `Monday 8 AM`; `…T09:30` → `… 9:30 AM`. */
+/**
+ * `2026-11-16T08:00` → `Monday Nov 16 at 8 AM`; `…T09:30` → `… at 9:30 AM`. The date tells
+ * apart offers on the same weekday and time in different weeks.
+ */
 export function shortSlot(start: string): string {
   const [date, time = '00:00'] = start.split('T');
   const [year, month, day] = date.split('-').map(Number);
   const [hour, minute] = time.split(':').map(Number);
   const weekday = WEEKDAYS[new Date(Date.UTC(year, month - 1, day)).getUTCDay()];
   const clock = `${((hour + 11) % 12) + 1}${minute ? `:${String(minute).padStart(2, '0')}` : ''}`;
-  return `${weekday} ${clock} ${hour < 12 ? 'AM' : 'PM'}`;
+  return `${weekday} ${MONTHS[month - 1]} ${day} at ${clock} ${hour < 12 ? 'AM' : 'PM'}`;
 }
 
 const ACRES_WORDS: Record<string, string> = {
