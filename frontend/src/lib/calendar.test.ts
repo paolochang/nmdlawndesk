@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { acceptSnapshot, calendarWindow, dayLabel, toEvents, type CalendarBooking, type CalendarSnapshot } from './calendar.ts';
+import { acceptSnapshot, calendarWindow, dayLabel, toEvents, todayLabel, type CalendarBooking, type CalendarSnapshot } from './calendar.ts';
 import { GROUP_TINTS, INK, NEW_BOOKING_COLOR } from './config.ts';
 import { config } from './test-messages.ts';
 
@@ -16,18 +16,28 @@ const booking = (id: string, town: string, start: string, end: string): Calendar
 });
 
 describe("Dave's calendar (build-plan §7)", () => {
-  it('shows the bookable weeks from the Monday after the demo date, within opening hours', () => {
-    expect(calendarWindow(config, [])).toEqual({
-      start: '2026-11-16',
-      end: '2026-11-30',
+  // build-plan §12: the snapshot's `today` (Dave's date) places the window.
+  it("shows the bookable weeks from the Monday of the snapshot's today, within opening hours", () => {
+    expect(calendarWindow(config, '2026-12-03', [])).toEqual({
+      start: '2026-11-30',
+      end: '2026-12-18',
       slotMinTime: '08:00',
       slotMaxTime: '13:00',
     });
   });
 
+  it('starts on the next Monday when today is a Saturday or Sunday', () => {
+    expect(calendarWindow(config, '2026-12-05', []).start).toBe('2026-12-07');
+    expect(calendarWindow(config, '2026-11-15', []).start).toBe('2026-11-16');
+  });
+
   it('stretches the window to a booking made past the default search window', () => {
     const late = booking('g1-3', 'Birchwood', '2026-12-01T08:00', '2026-12-01T09:00');
-    expect(calendarWindow(config, [late]).end).toBe('2026-12-02');
+    expect(calendarWindow(config, '2026-11-15', [late]).end).toBe('2026-12-02');
+  });
+
+  it("says today with Dave's time zone in the header", () => {
+    expect(todayLabel('2026-12-03', 'America/New_York')).toBe('Thu, Dec 3, 2026 · New York time');
   });
 
   it('labels each weekday with its towns, and Wednesday as off', () => {
@@ -76,7 +86,14 @@ describe("Dave's calendar (build-plan §7)", () => {
 });
 
 describe('acceptSnapshot (Reset all vs an in-flight calendar load)', () => {
-  const snapshot = (generation: number): CalendarSnapshot => ({ generation, presetId: 'A', customers: [], bookings: [] });
+  const snapshot = (generation: number): CalendarSnapshot => ({
+    generation,
+    presetId: 'A',
+    customers: [],
+    bookings: [],
+    today: '2026-12-03',
+    timeZone: 'America/New_York',
+  });
 
   it('never lets a calendar loaded before a reset replace the reset one', () => {
     expect(acceptSnapshot(snapshot(5), snapshot(4))).toBe(false);
