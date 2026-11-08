@@ -77,6 +77,15 @@ describe('conversationStage (build-plan §7)', () => {
     expect(conversationStage([hi, one])).toEqual({ kind: 'slots', slots: [slots[0]], searchedAgain: false });
   });
 
+  // Browser check: the model wrote the range with a non-breaking hyphen (U+2011).
+  it('reads a time range written with any dash', () => {
+    const dashes = message('m4', 'assistant', [
+      done('c2', 'findSlots', { town: 'Ashford', acres: 0.5 }, { town: 'Ashford', slots }),
+      text('I can come Mon Nov 16 8\u20119 AM or Thu Nov 19 9:30\u201310:30 AM.'),
+    ]);
+    expect(conversationStage([hi, dashes])).toEqual({ kind: 'slots', slots, searchedAgain: false });
+  });
+
   it('is not booked until a desk text states the booking', () => {
     const silent = message('m8', 'assistant', [
       done('c4', 'bookSlot', { start: '2026-11-16T08:00' }, { ok: true, when: 'Mon Nov 16, 8:00-9:00 AM' }),

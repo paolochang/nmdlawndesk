@@ -2,6 +2,8 @@
 // side shows a booking detail or offers a time only once the desk's text stated
 // it; tool results never reach the customer by themselves.
 
+/** A hyphen or dash of any kind: models write ranges with `-`, `‑` (U+2011), `–`, or `—`. */
+const DASH = '[-\\u2010-\\u2015\\u2212]';
 const MONTHS = ['january', 'february', 'march', 'april', 'may', 'june', 'july', 'august', 'september', 'october', 'november', 'december'];
 
 /** Whether `text` states the day and start time of `start` (`YYYY-MM-DDTHH:mm`). */
@@ -18,10 +20,10 @@ export function statesTime(text: string, start: string): boolean {
   ).test(lower);
   const h12 = ((hour + 11) % 12) + 1;
   const minutes = String(minute).padStart(2, '0');
-  // `8 AM`, `8:00`, `8-9 AM`, `8 to 9`; a start on the half hour needs its minutes.
+  // `8 AM`, `8:00`, `8-9 AM` (any dash), `8 to 9`; a start on the half hour needs its minutes.
   const timed = minute
     ? new RegExp(`(?<![\\d:])${h12}:${minutes}\\b`).test(lower)
-    : new RegExp(`(?<![\\d:])${h12}(?::00)?\\s*(?:a\\.?m\\b|p\\.?m\\b|-|–|to\\b|o'clock)|(?<![\\d:])${h12}:00\\b`).test(lower);
+    : new RegExp(`(?<![\\d:])${h12}(?::00)?\\s*(?:a\\.?m\\b|p\\.?m\\b|${DASH}|to\\b|o'clock)|(?<![\\d:])${h12}:00\\b`).test(lower);
   return dated && timed;
 }
 

@@ -4,7 +4,7 @@ This is a [Flue](https://flueframework.com) project: agents are TypeScript funct
 
 ## Layout
 
-- `src/agents/` — agent modules. A module whose first line is the `'use agent'` directive exports agents: every exported capitalized function is one, and the function name is its durable identity. `LawnDesk` serves customer conversations, `DavePhone` the Dave conversation; both only wire `src/desk/`.
+- `src/agents/` — agent modules. A module whose first line is the `'use agent'` directive exports agents: every exported capitalized function is one, and the function name is its durable identity. `LawnDesk` serves customer conversations; `DavePhone` only keeps Dave conversations from before build-plan §13 readable (Dave's texts now live in the visitor store). Both only wire `src/desk/`.
 - `src/desk/` — the agent's tools (`deskTools`), prompts, and the conversation-id guard. Plain modules, tested in Node with fakes.
 - `src/domain/` — pure business rules (no I/O); `src/store/` — the per-visitor `VisitorStore` Durable Object.
 - `src/app.ts` — the route map; every route is mounted here explicitly.
