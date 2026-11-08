@@ -13,10 +13,18 @@ import { acceptSnapshot, type CalendarSnapshot } from './lib/calendar.ts';
 import type { DaveConfig } from './lib/config.ts';
 import { customerConversationUrl, daveConversationUrl } from './lib/conversation.ts';
 import { panelLayout, type Focus } from './lib/layout.ts';
-import { CUSTOMER_KEY, newCustomer, restoreCustomer, type Customer } from './lib/persona.ts';
+import { newCustomer, type Customer } from './lib/persona.ts';
 import { recoverStaleSend } from './lib/recover.ts';
 import { gatedBubbles, LANDING_MS, PANELS_OPEN_MS, REVEAL_PAUSE_MS, settleReply, unreadCount, type Reveal } from './lib/reveal.ts';
-import { earlierCustomers, loadRoster, rememberCustomer, rememberRecovered, ROSTER_KEY, takenDetails, type RosterEntry } from './lib/roster.ts';
+import {
+  earlierCustomers,
+  loadCustomers,
+  rememberCustomer,
+  rememberRecovered,
+  saveCustomers,
+  takenDetails,
+  type RosterEntry,
+} from './lib/roster.ts';
 import { failedSendView, sendFailure, type Session } from './lib/session.ts';
 import { bookingStatus, settledStatus, type BookingStatus } from './lib/status.ts';
 import { conversationStage, repliesNow } from './lib/suggestions.ts';
@@ -69,10 +77,11 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
     [onUnauthorized],
   );
   const [generation, setGeneration] = useState<number>();
-  const [customer, setCustomer] = useState(() => restoreCustomer(sessionStorage.getItem(CUSTOMER_KEY)));
-  useEffect(() => sessionStorage.setItem(CUSTOMER_KEY, JSON.stringify(customer)), [customer]);
-  const [roster, setRoster] = useState(() => loadRoster(sessionStorage.getItem(ROSTER_KEY)));
-  useEffect(() => sessionStorage.setItem(ROSTER_KEY, JSON.stringify(roster)), [roster]);
+  // Kept per visitor in localStorage, so a new tab or a restarted browser reopens them.
+  const [saved] = useState(() => loadCustomers(localStorage, session.visitorId));
+  const [customer, setCustomer] = useState(saved.customer);
+  const [roster, setRoster] = useState(saved.roster);
+  useEffect(() => saveCustomers(localStorage, session.visitorId, customer, roster), [session.visitorId, customer, roster]);
   const phone = customer.phone;
   // The phone on screen right now, read by sends that finish after the customer changed.
   const currentPhone = useRef(phone);

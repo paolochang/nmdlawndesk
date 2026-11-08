@@ -22,5 +22,6 @@ export default function App() {
       />
     );
   }
-  return <Simulator nickname={auth.nickname} session={auth.session} onUnauthorized={onUnauthorized} />;
+  // Keyed by visitor: another nickname opens its own customers.
+  return <Simulator key={auth.session.visitorId} nickname={auth.nickname} session={auth.session} onUnauthorized={onUnauthorized} />;
 }

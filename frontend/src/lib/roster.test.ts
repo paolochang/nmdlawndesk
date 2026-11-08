@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import type { Customer } from './persona.ts';
-import { earlierCustomers, loadRoster, rememberCustomer, rememberRecovered, takenDetails, type RosterEntry } from './roster.ts';
+import {
+  earlierCustomers,
+  loadCustomers,
+  loadRoster,
+  rememberCustomer,
+  rememberRecovered,
+  saveCustomers,
+  takenDetails,
+  type RosterEntry,
+} from './roster.ts';
 
 const maya: Customer = { phone: '+15552841937', name: 'Maya Torres', town: 'Ashford', street: '45 Oak Rd', acres: 0.5 };
 const ben: Customer = { phone: '+15550000001', name: 'Ben Okafor', town: 'Fernhill', street: '2 Hill Ct', acres: 1 };
@@ -40,6 +49,25 @@ describe('earlier customers (build-plan §7)', () => {
     expect(loadRoster(JSON.stringify([good, { customer: { phone: 'x' }, generation: 1, status: 'open' }, 'junk']))).toEqual([good]);
     expect(loadRoster(null)).toEqual([]);
     expect(loadRoster('{')).toEqual([]);
+  });
+});
+
+describe('customers kept in the browser (build-plan §7)', () => {
+  it("reopens the visitor's customer and earlier customers in a new tab, never another visitor's", () => {
+    // One browser's localStorage, shared by every tab of that browser.
+    const data = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => void data.set(key, value),
+      removeItem: (key: string) => void data.delete(key),
+    };
+    const roster: RosterEntry[] = [{ customer: ben, generation: 1, status: 'with-dave' }];
+    saveCustomers(storage, 'visitor-a', maya, roster);
+
+    expect(loadCustomers(storage, 'visitor-a')).toEqual({ customer: maya, roster });
+    const other = loadCustomers(storage, 'visitor-b', () => 0.5);
+    expect(other.customer.phone).not.toBe(maya.phone);
+    expect(other.roster).toEqual([]);
   });
 });
 

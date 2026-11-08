@@ -69,7 +69,9 @@ service binding to the backend dev server.
    conversations with a new customer.
 
 The nickname stays in `localStorage` to prefill the form; the token stays in this
-tab's `sessionStorage` until it expires (2 hours). The access code is not stored. A
+tab's `sessionStorage` until it expires (2 hours). The access code is not stored. The
+open customer and the earlier customers stay in `localStorage` per nickname, so a new
+tab or a restarted browser reopens them. A
 401 from any call (expired or altered token) returns to sign-in with the nickname
 filled in, and signing in again reopens the same calendar and conversations. If the
 calendar was reset elsewhere, the next text goes to a new conversation and the phone
