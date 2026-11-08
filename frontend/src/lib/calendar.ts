@@ -74,3 +74,11 @@ export function toEvents(bookings: readonly CalendarBooking[], config: DaveConfi
     return event;
   });
 }
+
+/**
+ * Whether a loaded calendar may replace the one on screen: never one from an older
+ * generation, so a load that started before Reset all cannot undo it.
+ */
+export function acceptSnapshot(current: CalendarSnapshot | undefined, incoming: CalendarSnapshot): boolean {
+  return current === undefined || incoming.generation >= current.generation;
+}

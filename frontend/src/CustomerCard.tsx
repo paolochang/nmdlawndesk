@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ALL_TOWNS, formatPhone, YARDS, type Customer } from './lib/persona.ts';
 
 const YARD_LABEL: Record<string, string> = {
@@ -16,10 +17,12 @@ interface Props {
   locked: boolean;
   onChange: (patch: Partial<Pick<Customer, 'street' | 'town' | 'acres'>>) => void;
   onNewCustomer: () => void;
+  /** The town map, shown beside the address fields. */
+  map?: ReactNode;
 }
 
 // Who the tester is texting as. The desk only knows what is texted to it.
-export function CustomerCard({ customer, locked, onChange, onNewCustomer }: Props) {
+export function CustomerCard({ customer, locked, onChange, onNewCustomer, map }: Props) {
   return (
     <div className="card">
       <div className="card-top">
@@ -32,6 +35,7 @@ export function CustomerCard({ customer, locked, onChange, onNewCustomer }: Prop
         <div className="persona-name">{customer.name}</div>
         <div className="persona-phone">{formatPhone(customer.phone)}</div>
       </div>
+      <div className="persona-body">
       <div className="fields">
         <label htmlFor="customer-street">Street</label>
         <input
@@ -60,6 +64,8 @@ export function CustomerCard({ customer, locked, onChange, onNewCustomer }: Prop
             </option>
           ))}
         </select>
+      </div>
+      {map}
       </div>
       <p className="hint">
         {locked ? (

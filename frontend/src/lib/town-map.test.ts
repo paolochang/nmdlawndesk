@@ -4,10 +4,20 @@ import { config } from './test-messages.ts';
 import { townMap } from './town-map.ts';
 
 describe('townMap (build-plan §7)', () => {
-  it("shows only the customer's own town while the customer side is focused", () => {
+  it('shows every town on the customer side, neutral, with the customer\'s own town marked', () => {
     const view = townMap('customer', 'Birchwood', config);
     expect(view.daveView).toBe(false);
-    expect(view.markers).toEqual([{ town: 'Birchwood', x: 110, y: 134, color: OUTSIDE_COLOR, customer: true }]);
+    expect(view.markers.map((m) => m.town)).toEqual([
+      'Ashford',
+      'Clearwater',
+      'Birchwood',
+      'Dunmore',
+      'Kestrel Bay',
+      'Fernhill',
+      'Oakmere',
+    ]);
+    expect(new Set(view.markers.map((m) => m.color))).toEqual(new Set([OUTSIDE_COLOR]));
+    expect(view.markers.filter((m) => m.customer).map((m) => m.town)).toEqual(['Birchwood']);
   });
 
   it("colours every town by Dave's weekday group once his side is open, outside towns grey", () => {

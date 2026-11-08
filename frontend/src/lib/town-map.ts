@@ -1,7 +1,8 @@
 // The town map (build-plan §7): a fictional map of Dave's four towns and the
-// outside towns customers can be drawn in. While the customer side is focused it
-// shows only the customer's own town, since a customer does not know Dave's
-// schedule; once Dave's side is open, every town takes its weekday group's colour.
+// outside towns customers can be drawn in, with the customer's own town marked.
+// While the customer side is focused every town is neutral, since a customer does
+// not know Dave's schedule; once Dave's side is open, every town takes its weekday
+// group's colour.
 import { OUTSIDE_COLOR, townColor, type DaveConfig } from './config.ts';
 import type { Focus } from './layout.ts';
 
@@ -36,7 +37,6 @@ export function townMap(focus: Focus, customerTown: string, config: DaveConfig |
   const markers: TownMarker[] = [];
   for (const [town, position] of Object.entries(TOWN_POSITIONS)) {
     const customer = town === customerTown;
-    if (!daveView && !customer) continue;
     const color = daveView ? townColor(config, town) : OUTSIDE_COLOR;
     markers.push({ town, ...position, color, customer });
   }

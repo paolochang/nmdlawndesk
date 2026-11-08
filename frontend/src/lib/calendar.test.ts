@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calendarWindow, toEvents, type CalendarBooking } from './calendar.ts';
+import { acceptSnapshot, calendarWindow, toEvents, type CalendarBooking, type CalendarSnapshot } from './calendar.ts';
 import { GROUP_COLORS } from './config.ts';
 import { config } from './test-messages.ts';
 
@@ -53,5 +53,16 @@ describe("Dave's calendar (build-plan §7)", () => {
         extendedProps: { basis: 'Maya Torres · 45 Oak Rd, Birchwood · 0.5 acre → 1 h × $45 = $45' },
       },
     ]);
+  });
+});
+
+describe('acceptSnapshot (Reset all vs an in-flight calendar load)', () => {
+  const snapshot = (generation: number): CalendarSnapshot => ({ generation, presetId: 'A', customers: [], bookings: [] });
+
+  it('never lets a calendar loaded before a reset replace the reset one', () => {
+    expect(acceptSnapshot(snapshot(5), snapshot(4))).toBe(false);
+    expect(acceptSnapshot(snapshot(5), snapshot(5))).toBe(true);
+    expect(acceptSnapshot(snapshot(5), snapshot(6))).toBe(true);
+    expect(acceptSnapshot(undefined, snapshot(1))).toBe(true);
   });
 });

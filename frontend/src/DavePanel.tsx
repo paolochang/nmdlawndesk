@@ -57,17 +57,35 @@ function DaveCalendar({ config, bookings, landingId }: CalendarProps) {
   );
 }
 
-// The price table and the town days, straight from /config.
-function RulesCard({ config }: { config: DaveConfig }) {
+// Work hours and town days, then the price table, straight from /config.
+function RulesTables({ config }: { config: DaveConfig }) {
+  const hours = `${clock(config.hours.open)}–${clock(config.hours.close)}`;
   return (
-    <div className="card rules">
-      <div className="card-top">
-        <h3>Prices and towns</h3>
-        <span className="hint">
-          {clock(config.hours.open)}–{clock(config.hours.close)}, {money(config.hourlyRateCents)}/hour
-        </span>
-      </div>
+    <div className="rules">
       <table>
+        <caption>Work hours and towns</caption>
+        <thead>
+          <tr>
+            <th scope="col">Days</th>
+            <th scope="col">Towns</th>
+            <th scope="col">Hours</th>
+          </tr>
+        </thead>
+        <tbody>
+          {townDays(config).map((group) => (
+            <tr key={group.days}>
+              <td>
+                <i style={{ background: group.color }} aria-hidden="true" />
+                {group.days}
+              </td>
+              <td>{group.towns}</td>
+              <td>{hours}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <table>
+        <caption>Prices ({money(config.hourlyRateCents)}/hour)</caption>
         <thead>
           <tr>
             <th scope="col">Yard</th>
@@ -85,14 +103,6 @@ function RulesCard({ config }: { config: DaveConfig }) {
           ))}
         </tbody>
       </table>
-      <ul className="town-days">
-        {townDays(config).map((group) => (
-          <li key={group.days}>
-            <i style={{ background: group.color }} aria-hidden="true" />
-            <b>{group.days}</b> {group.towns}
-          </li>
-        ))}
-      </ul>
       <p className="hint">Other towns are handed to Dave. The final price may change on site.</p>
     </div>
   );
@@ -107,7 +117,7 @@ interface PhoneProps {
 function DavePhone({ bubbles, typing }: PhoneProps) {
   const thread = useStickToBottom<HTMLOListElement>([bubbles.length, typing]);
   return (
-    <div className="phone dave-phone">
+    <div className="phone dave-phone" id="dave-phone">
       <div className="phone-screen">
         <div className="thread-head">
           <div className="avatar" aria-hidden="true">
@@ -145,17 +155,41 @@ interface Props {
   landingId: string | undefined;
   daveBubbles: readonly Bubble[];
   daveTyping: boolean;
+  /** Dave's phone is open over the calendar. */
+  daveOpen: boolean;
+  /** New texts since the phone was last opened (the button's badge). */
+  daveUnread: number;
+  onToggleDave: () => void;
 }
 
-export function DavePanel({ config, bookings, landingId, daveBubbles, daveTyping }: Props) {
+export function DavePanel({ config, bookings, landingId, daveBubbles, daveTyping, daveOpen, daveUnread, onToggleDave }: Props) {
   if (!config || !bookings) return <p className="placeholder dave-placeholder">Loading Dave's calendar…</p>;
+  const label = daveOpen ? "Hide Dave's phone" : daveUnread ? `Dave's phone, ${daveUnread} new` : "Dave's phone";
   return (
-    <div className="dave-body">
-      <DaveCalendar config={config} bookings={bookings} landingId={landingId} />
-      <div className="dave-side">
-        <DavePhone bubbles={daveBubbles} typing={daveTyping} />
-        <RulesCard config={config} />
+    <>
+      <div className="dave-body">
+        <DaveCalendar config={config} bookings={bookings} landingId={landingId} />
+        <RulesTables config={config} />
       </div>
-    </div>
+      {daveOpen && <DavePhone bubbles={daveBubbles} typing={daveTyping} />}
+      <button
+        type="button"
+        className={`phone-fab${daveOpen ? ' open' : ''}`}
+        aria-label={label}
+        aria-expanded={daveOpen}
+        aria-controls="dave-phone"
+        title={label}
+        onClick={onToggleDave}
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          {daveOpen ? (
+            <path d="M6 6l12 12M18 6 6 18" />
+          ) : (
+            <path d="M8 2.5h8a1.5 1.5 0 0 1 1.5 1.5v16a1.5 1.5 0 0 1-1.5 1.5H8A1.5 1.5 0 0 1 6.5 20V4A1.5 1.5 0 0 1 8 2.5ZM10.5 18.5h3" />
+          )}
+        </svg>
+        {!daveOpen && daveUnread > 0 && <span className="badge">{daveUnread}</span>}
+      </button>
+    </>
   );
 }

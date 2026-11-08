@@ -47,3 +47,12 @@ export function revealOnSettle(before: BookingStatus, after: BookingStatus): Rev
 export function gatedBubbles(bubbles: readonly Bubble[], held: number | undefined): readonly Bubble[] {
   return held === undefined ? bubbles : bubbles.slice(0, held);
 }
+
+/**
+ * The badge on Dave's phone button: texts shown since the phone was last opened.
+ * `seen` is undefined until the conversation's history has loaded, so a reload
+ * does not count old texts as new.
+ */
+export function unreadCount(shown: number, seen: number | undefined): number {
+  return seen === undefined ? 0 : Math.max(0, shown - seen);
+}

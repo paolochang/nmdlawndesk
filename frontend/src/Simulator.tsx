@@ -9,13 +9,13 @@ import { JudgmentLog } from './JudgmentLog.tsx';
 import { BookingStatusCard, SuggestedReplies } from './SidePanels.tsx';
 import { TownMap } from './TownMap.tsx';
 import { fetchCalendar, fetchConfig, fetchGeneration, reportingUnauthorized, resetCalendar, statusOf } from './lib/api.ts';
-import type { CalendarSnapshot } from './lib/calendar.ts';
+import { acceptSnapshot, type CalendarSnapshot } from './lib/calendar.ts';
 import type { DaveConfig } from './lib/config.ts';
 import { customerConversationUrl, daveConversationUrl } from './lib/conversation.ts';
 import { panelLayout, type Focus } from './lib/layout.ts';
 import { CUSTOMER_KEY, newCustomer, restoreCustomer, type Customer } from './lib/persona.ts';
 import { recoverStaleSend } from './lib/recover.ts';
-import { gatedBubbles, LANDING_MS, PANELS_OPEN_MS, REVEAL_PAUSE_MS, revealOnSettle, type Reveal } from './lib/reveal.ts';
+import { gatedBubbles, LANDING_MS, PANELS_OPEN_MS, REVEAL_PAUSE_MS, revealOnSettle, unreadCount, type Reveal } from './lib/reveal.ts';
 import { earlierCustomers, loadRoster, rememberCustomer, rememberRecovered, ROSTER_KEY, type RosterEntry } from './lib/roster.ts';
 import { failedSendView, sendFailure, type Session } from './lib/session.ts';
 import { bookingStatus, settledStatus, type BookingStatus } from './lib/status.ts';
@@ -116,21 +116,16 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
     };
   }, []);
 
-  // The conversation moved ahead of the calendar (a 409 recovery): load the new calendar.
-  const calendarGeneration = calendar?.generation;
-  useEffect(() => {
-    if (generation === undefined || calendarGeneration === undefined || calendarGeneration >= generation) return;
-    let current = true;
-    fetchCalendar(authFetch, session).then(
-      (loaded) => {
-        if (current) setCalendar(loaded);
-      },
-      () => undefined,
-    );
-    return () => {
-      current = false;
-    };
-  }, [generation, calendarGeneration, authFetch, session]);
+  /** Shows `snapshot` unless the screen already has a newer generation (Reset all won). */
+  const showCalendar = useCallback((snapshot: CalendarSnapshot) => {
+    setCalendar((current) => (acceptSnapshot(current, snapshot) ? snapshot : current));
+  }, []);
+
+  // Dave's calendar is shared by every conversation, so it is reloaded on its own:
+  // whenever a reply settles, a conversation opens, or Dave's side is opened.
+  const loadCalendar = useCallback(() => {
+    fetchCalendar(authFetch, session).then(showCalendar, () => undefined);
+  }, [authFetch, session, showCalendar]);
 
   const url = generation === undefined ? undefined : customerConversationUrl(session.visitorId, generation, phone);
   const client = useMemo(
@@ -138,6 +133,10 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
     [url, session.token, authFetch],
   );
   const agent = useFlueAgent({ client });
+  // A conversation opened (New customer, an earlier customer, a new generation).
+  useEffect(() => {
+    if (url) loadCalendar();
+  }, [url, loadCalendar]);
   const { sendMessage, failedSends } = agent;
 
   // Dave's phone: read-only, the desk's handoff alerts (build-plan §4, §7).
@@ -149,6 +148,9 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
   const dave = useFlueAgent({ client: daveClient });
   const refreshDave = dave.refresh;
   const daveBubbles = useMemo(() => toBubbles(dave.messages), [dave.messages]);
+  const [daveOpen, setDaveOpen] = useState(false);
+  // How many of Dave's texts the tester has seen, for this Dave conversation only.
+  const [daveSeen, setDaveSeen] = useState<{ url: string; count: number }>();
 
   const bubbles = useMemo(
     () => toBubbles(agent.messages, failedSends.map((failed) => failed.id)),
@@ -173,11 +175,25 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
   const [daveHeld, setDaveHeld] = useState<number>();
   const replying = useRef<{ url: string | undefined; before: BookingStatus }>(undefined);
   const timers = useRef<number[]>([]);
+  // Bumped by Reset all: a reveal from before the reset must not touch the new environment.
+  const revealEpoch = useRef(0);
+  const cancelReveals = useCallback(() => {
+    revealEpoch.current++;
+    timers.current.forEach((timer) => window.clearTimeout(timer));
+    timers.current = [];
+    setLandingId(undefined);
+  }, []);
   useEffect(() => () => timers.current.forEach((timer) => window.clearTimeout(timer)), []);
 
   const startReveal = useCallback(
     (reveal: Reveal) => {
-      const later = (run: () => void, ms: number) => timers.current.push(window.setTimeout(run, ms));
+      const epoch = revealEpoch.current;
+      const later = (run: () => void, ms: number) =>
+        timers.current.push(
+          window.setTimeout(() => {
+            if (revealEpoch.current === epoch) run();
+          }, ms),
+        );
       const loaded = reveal.bookingId ? fetchCalendar(authFetch, session) : undefined;
       later(() => {
         setFocus('both');
@@ -187,7 +203,8 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
       later(() => {
         loaded.then(
           (snapshot) => {
-            setCalendar(snapshot);
+            if (revealEpoch.current !== epoch) return;
+            showCalendar(snapshot);
             setLandingId(reveal.bookingId);
             later(() => setLandingId(undefined), LANDING_MS);
           },
@@ -195,7 +212,7 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
         );
       }, REVEAL_PAUSE_MS + PANELS_OPEN_MS);
     },
-    [authFetch, session, refreshDave],
+    [authFetch, session, refreshDave, showCalendar],
   );
 
   useEffect(() => {
@@ -210,11 +227,21 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
     if (!started) return;
     replying.current = undefined;
     setDaveHeld(undefined);
-    // Only a reply in the conversation still on screen reveals anything.
-    if (started.url !== url) return;
-    const reveal = revealOnSettle(started.before, settled);
+    // Only a reply in the conversation still on screen reveals anything; any
+    // other settled reply may still have changed the calendar.
+    const reveal = started.url === url ? revealOnSettle(started.before, settled) : undefined;
     if (reveal) startReveal(reveal);
-  }, [typing, settled, url, startReveal, daveBubbles.length]);
+    if (!reveal?.bookingId) loadCalendar();
+  }, [typing, settled, url, startReveal, loadCalendar, daveBubbles.length]);
+
+  // Dave's phone badge: texts shown since the phone was last opened. History that
+  // loads with the conversation counts as seen.
+  const shownDave = gatedBubbles(daveBubbles, daveHeld);
+  const daveSeenCount = daveSeen && daveSeen.url === daveUrl ? daveSeen.count : undefined;
+  // Adjusted while rendering (React's pattern for state derived from props), not in an effect.
+  if (daveUrl && dave.historyReady && (daveSeenCount === undefined || (daveOpen && daveSeenCount !== shownDave.length))) {
+    setDaveSeen({ url: daveUrl, count: shownDave.length });
+  }
 
   // A 401 already went back to sign-in (reportingUnauthorized); after the customer
   // changed, the failed text belongs to the previous one and stays out of the composer.
@@ -281,9 +308,10 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
     setResetting(true);
     try {
       const snapshot = await resetCalendar(authFetch, session);
-      setCalendar(snapshot);
+      cancelReveals();
+      showCalendar(snapshot);
       setGeneration(snapshot.generation);
-      setLandingId(undefined);
+      setDaveOpen(false);
       setFocus('customer');
       onNewCustomer();
     } catch (caught) {
@@ -293,6 +321,12 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
       setResetting(false);
       setConfirmingReset(false);
     }
+  }
+
+  /** The tester changes the layout; opening Dave's side shows a fresh calendar. */
+  function openFocus(next: Focus) {
+    setFocus(next);
+    if (next !== 'customer') loadCalendar();
   }
 
   const layout = panelLayout(focus);
@@ -347,7 +381,7 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
             <h2>Customer</h2>
             <CustomerSwitcher current={customer} earlier={earlier} onOpen={switchTo} />
             {focus !== 'customer' && (
-              <button type="button" className="focus-btn" onClick={() => setFocus('customer')}>
+              <button type="button" className="focus-btn" onClick={() => openFocus('customer')}>
                 Focus
               </button>
             )}
@@ -370,6 +404,7 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
                     locked={texted}
                     onChange={(patch) => setCustomer((old) => ({ ...old, ...patch }))}
                     onNewCustomer={onNewCustomer}
+                    map={<TownMap focus={focus} customerTown={customer.town} config={config} />}
                   />
                   <SuggestedReplies
                     replies={repliesNow(stage, customer, typing)}
@@ -378,7 +413,6 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
                     onPick={(text) => void send(text)}
                   />
                   <BookingStatusCard status={settled} />
-                  <TownMap focus={focus} customerTown={customer.town} config={config} />
                 </div>
               </div>
             </div>
@@ -388,10 +422,10 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
                   <b>Customer side is hidden</b>
                   <p>You're looking at Dave's side. Show both sides to keep texting.</p>
                   <div className="row">
-                    <button type="button" className="primary" onClick={() => setFocus('both')}>
+                    <button type="button" className="primary" onClick={() => openFocus('both')}>
                       Show both sides
                     </button>
-                    <button type="button" onClick={() => setFocus('customer')}>
+                    <button type="button" onClick={() => openFocus('customer')}>
                       Back to customer
                     </button>
                   </div>
@@ -403,7 +437,7 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
 
         <nav className="switcher" aria-label="Panel layout">
           {switchButtons.map(([key, label, title]) => (
-            <button key={key} type="button" aria-pressed={focus === key} title={title} onClick={() => setFocus(key)}>
+            <button key={key} type="button" aria-pressed={focus === key} title={title} onClick={() => openFocus(key)}>
               <SwitchIcon focus={key} />
               {label}
             </button>
@@ -414,7 +448,7 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
           <div className="panel-head">
             <h2>Dave</h2>
             {focus !== 'dave' && (
-              <button type="button" className="focus-btn" onClick={() => setFocus('dave')}>
+              <button type="button" className="focus-btn" onClick={() => openFocus('dave')}>
                 Focus
               </button>
             )}
@@ -425,8 +459,11 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
                 config={config}
                 bookings={calendar?.bookings}
                 landingId={landingId}
-                daveBubbles={gatedBubbles(daveBubbles, daveHeld)}
+                daveBubbles={shownDave}
                 daveTyping={daveHeld === undefined && isTyping(dave.status)}
+                daveOpen={daveOpen}
+                daveUnread={unreadCount(shownDave.length, daveSeenCount)}
+                onToggleDave={() => setDaveOpen((open) => !open)}
               />
             </div>
             {layout.veiled === 'dave' && (
@@ -438,7 +475,7 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
                     check what happened.
                   </p>
                   <div className="row">
-                    <button type="button" className="primary" onClick={() => setFocus('both')}>
+                    <button type="button" className="primary" onClick={() => openFocus('both')}>
                       Show both sides
                     </button>
                   </div>

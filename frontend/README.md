@@ -6,9 +6,9 @@ through the `API` service binding, so the browser talks to one origin and needs 
 CORS.
 
 The simulator has a sign-in screen, the customer's side (a phone that texts the
-lawn-desk agent, a customer card, suggested replies, booking status, a town map),
-Dave's side (his week calendar, his phone with handoff alerts, the price table and
-town days), and a judgment log of the agent's tool calls and reasoning.
+lawn-desk agent, a customer card with a town map, suggested replies, booking status),
+Dave's side (his week calendar, his work hours, town days, and prices, and his phone
+with handoff alerts), and a judgment log of the agent's tool calls and reasoning.
 
 Backend: [../backend/README.md](../backend/README.md).
 
@@ -53,14 +53,15 @@ service binding to the backend dev server.
 4. **New customer** starts a new conversation with a new number; the calendar stays.
    Customers who texted can be reopened from the drop-down at the top of the panel.
 5. The switch in the middle widens the customer side, Dave's side, or both. Dave's
-   side shows his calendar for the two bookable weeks, his phone (read-only), and the
-   price table and town days from `/api/config`.
+   side shows his calendar for the two bookable weeks, and below it his work hours,
+   town days, and prices from `/api/config`. The round button at the bottom right
+   opens his phone (read-only); a red badge counts new texts.
 6. When the desk's reply confirms a booking, both sides open after a short pause and
    the new booking lands in Dave's calendar. After a handoff, the alert arrives in
-   Dave's phone. Both wait for the desk's text to reach the customer phone; only the
+   Dave's phone and its button shows a badge. Both wait for the desk's text to reach the customer phone; only the
    judgment log updates while the desk is still working.
-7. The town map shows where the customer lives; with Dave's side open it also colours
-   each town by Dave's weekdays.
+7. The town map in the customer card shows every town and marks where the customer
+   lives; with Dave's side open it also colours each town by Dave's weekdays.
 8. **Reset all** (top right, asks first) gives Dave a new schedule and starts fresh
    conversations with a new customer.
 

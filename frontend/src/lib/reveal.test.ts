@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gatedBubbles, revealOnSettle } from './reveal.ts';
+import { gatedBubbles, revealOnSettle, unreadCount } from './reveal.ts';
 import type { BookingStatus } from './status.ts';
 
 const open: BookingStatus = { kind: 'open' };
@@ -38,5 +38,14 @@ describe("gatedBubbles (Dave's phone)", () => {
   it("holds alerts that arrive while the customer's desk is still replying, and shows them after", () => {
     expect(gatedBubbles(bubbles, 1)).toEqual([bubbles[0]]);
     expect(gatedBubbles(bubbles, undefined)).toEqual(bubbles);
+  });
+});
+
+describe("unreadCount (Dave's phone badge)", () => {
+  it('counts texts that arrived since the phone was last opened, not the history it loaded with', () => {
+    expect(unreadCount(3, undefined)).toBe(0);
+    expect(unreadCount(3, 1)).toBe(2);
+    expect(unreadCount(3, 3)).toBe(0);
+    expect(unreadCount(0, 2)).toBe(0);
   });
 });
