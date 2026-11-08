@@ -1,7 +1,7 @@
 // M1 evidence (ROADMAP Day 7): through the API alone, a scripted customer
 // conversation books a slot, and a handoff reaches the Dave conversation. Then the
 // off-script turns of build-plan §4 "Conversation": a question after a handoff, a
-// greeting, a price question, and haggling.
+// greeting, a price question, haggling, and a complaint with no booking intent.
 //
 //   npx vite dev --port 8787 --strictPort        # in another terminal
 //   ACCESS_CODE=... NICKNAME=... node scripts/m1.ts
@@ -134,6 +134,8 @@ let firstOffer: string | undefined;
 for (const [i, body] of script.entries()) {
 	const reply = await text(customer, token, body);
 	const offered = toolOutputs(reply, 'findSlots')[0]?.output as { slots?: { start: string }[] } | undefined;
+	if (!firstOffer && offered && usedTool(reply, 'bookSlot'))
+		throw new Error('M1 failed: booked in the same reply that found the times, before the customer picked one');
 	firstOffer ??= offered?.slots?.[0]?.start;
 	const { bookings } = await api<{ bookings: Booking[] }>(`/calendar/${visitorId}`, { token });
 	booked = bookings.find((b) => !before.some((p) => p.id === b.id));
@@ -186,4 +188,11 @@ expectThat(said(prices).includes('$45'), 'did not give the price', prices);
 const haggle = await text(casual, token, 'That is too much. Can you do it for $30?');
 const haggled = toolOutputs(haggle, 'handoffToDave')[0]?.input as { reason?: string } | undefined;
 expectThat(haggled?.reason === 'haggling', 'did not hand off haggling', haggle);
+
+// A complaint wants neither a quote nor a booking; it is still handed off.
+const unhappy = `/agents/lawn-desk/${visitorId}:${generation}:+15550104`;
+console.log(`\n# Off-script: a complaint in ${unhappy}`);
+const complaint = await text(unhappy, token, 'Your mowing yesterday damaged my fence. I want a refund.');
+const reason = (toolOutputs(complaint, 'handoffToDave')[0]?.input as { reason?: string } | undefined)?.reason;
+expectThat(reason === 'complaint' || reason === 'refund', 'did not hand off a complaint', complaint);
 console.log('\n✓ Off-script turns passed.');

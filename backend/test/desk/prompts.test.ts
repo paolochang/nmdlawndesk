@@ -26,6 +26,21 @@ describe('lawnDeskPrompt', () => {
 		expect(prompt).toMatch(/only once the customer wants a quote or a booking:\s*1\. You need the town, street address, and yard size/);
 	});
 
+	it('keeps the handoff rule outside the quote-or-booking gate', () => {
+		// A complaint or refund text wants neither a quote nor a booking (PR #8 post-E2E review).
+		const prompt = lawnDeskPrompt();
+		const rule = prompt.indexOf('or the customer complains, asks for a refund, or haggles');
+		expect(rule).toBeGreaterThan(-1);
+		expect(rule).toBeLessThan(prompt.indexOf('How to book, only once'));
+		expect(prompt).toContain('When to hand off, on any text:');
+	});
+
+	it('offers the price and times before asking the name, and books only a time the customer picked', () => {
+		const prompt = lawnDeskPrompt();
+		expect(prompt).toContain("Ask the customer's name only after they pick one of the offered times");
+		expect(prompt).toContain('Never call bookSlot before the customer has seen the price and picked a time');
+	});
+
 	it('tells a price question apart from haggling', () => {
 		expect(lawnDeskPrompt()).toContain('Asking what a job costs is not haggling');
 	});

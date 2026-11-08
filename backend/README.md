@@ -99,7 +99,7 @@ curl "http://localhost:8787/api/agents/dave-phone/$VISITOR_ID:$GENERATION:dave" 
 `scripts/m1.ts` drives the agent through the API alone. It signs in, resets the
 calendar, books a slot through a scripted conversation, checks that a 2-acre request
 reaches Dave's phone, and then sends off-script texts (a question after a handoff, a
-greeting, a price question, haggling). With the dev server running:
+greeting, a price question, haggling, a complaint). With the dev server running:
 
 ```sh
 ACCESS_CODE=… NICKNAME=my-test-nickname node scripts/m1.ts
