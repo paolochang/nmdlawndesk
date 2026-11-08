@@ -4,13 +4,18 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { CustomerCard } from './CustomerCard.tsx';
 import { CustomerPhone } from './CustomerPhone.tsx';
 import { CustomerSwitcher } from './CustomerSwitcher.tsx';
+import { DavePanel } from './DavePanel.tsx';
 import { JudgmentLog } from './JudgmentLog.tsx';
 import { BookingStatusCard, SuggestedReplies } from './SidePanels.tsx';
-import { fetchGeneration, reportingUnauthorized, statusOf } from './lib/api.ts';
-import { customerConversationUrl } from './lib/conversation.ts';
+import { TownMap } from './TownMap.tsx';
+import { fetchCalendar, fetchConfig, fetchGeneration, reportingUnauthorized, resetCalendar, statusOf } from './lib/api.ts';
+import type { CalendarSnapshot } from './lib/calendar.ts';
+import type { DaveConfig } from './lib/config.ts';
+import { customerConversationUrl, daveConversationUrl } from './lib/conversation.ts';
 import { panelLayout, type Focus } from './lib/layout.ts';
 import { CUSTOMER_KEY, newCustomer, restoreCustomer, type Customer } from './lib/persona.ts';
 import { recoverStaleSend } from './lib/recover.ts';
+import { gatedBubbles, LANDING_MS, PANELS_OPEN_MS, REVEAL_PAUSE_MS, revealOnSettle, type Reveal } from './lib/reveal.ts';
 import { earlierCustomers, loadRoster, rememberCustomer, rememberRecovered, ROSTER_KEY, type RosterEntry } from './lib/roster.ts';
 import { failedSendView, sendFailure, type Session } from './lib/session.ts';
 import { bookingStatus, settledStatus, type BookingStatus } from './lib/status.ts';
@@ -22,11 +27,23 @@ const NOT_SENT = 'Text not sent. Please try again.';
 const SLOW_DOWN = 'Slow down a little: too many texts in a short time. Try again in a few minutes.';
 const RESET = "Dave's calendar was reset, so this is a new conversation.";
 const NO_REPLY = "Dave's desk couldn't reply. Please send your text again.";
+const RESET_FAILED = 'Reset did not go through. Please try again.';
 
 interface Props {
   nickname: string;
   session: Session;
   onUnauthorized: () => void;
+}
+
+/** `2026-11-15` → `Sun, Nov 15, 2026`. */
+function demoDay(date: string): string {
+  return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
 }
 
 function rosterEntry(customer: Customer, generation: number, status: BookingStatus): RosterEntry {
@@ -63,11 +80,16 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
   const [notice, setNotice] = useState<string>();
   const [draft, setDraft] = useState('');
 
+  const [calendar, setCalendar] = useState<CalendarSnapshot>();
+  const [config, setConfig] = useState<DaveConfig>();
+
   useEffect(() => {
     let current = true;
-    fetchGeneration(authFetch, session).then(
+    fetchCalendar(authFetch, session).then(
       (loaded) => {
-        if (current) setGeneration(loaded);
+        if (!current) return;
+        setCalendar(loaded);
+        setGeneration(loaded.generation);
       },
       (caught: unknown) => {
         if (current && statusOf(caught) !== 401) setNotice(LOAD_FAILED);
@@ -78,6 +100,38 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
     };
   }, [authFetch, session]);
 
+  // /config is public and never changes while the page is open.
+  useEffect(() => {
+    let current = true;
+    fetchConfig((input, init) => fetch(input, init)).then(
+      (loaded) => {
+        if (current) setConfig(loaded);
+      },
+      () => {
+        if (current) setNotice(LOAD_FAILED);
+      },
+    );
+    return () => {
+      current = false;
+    };
+  }, []);
+
+  // The conversation moved ahead of the calendar (a 409 recovery): load the new calendar.
+  const calendarGeneration = calendar?.generation;
+  useEffect(() => {
+    if (generation === undefined || calendarGeneration === undefined || calendarGeneration >= generation) return;
+    let current = true;
+    fetchCalendar(authFetch, session).then(
+      (loaded) => {
+        if (current) setCalendar(loaded);
+      },
+      () => undefined,
+    );
+    return () => {
+      current = false;
+    };
+  }, [generation, calendarGeneration, authFetch, session]);
+
   const url = generation === undefined ? undefined : customerConversationUrl(session.visitorId, generation, phone);
   const client = useMemo(
     () => (url ? createFlueClient({ url, token: session.token, fetch: authFetch }) : undefined),
@@ -85,6 +139,16 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
   );
   const agent = useFlueAgent({ client });
   const { sendMessage, failedSends } = agent;
+
+  // Dave's phone: read-only, the desk's handoff alerts (build-plan §4, §7).
+  const daveUrl = generation === undefined ? undefined : daveConversationUrl(session.visitorId, generation);
+  const daveClient = useMemo(
+    () => (daveUrl ? createFlueClient({ url: daveUrl, token: session.token, fetch: authFetch }) : undefined),
+    [daveUrl, session.token, authFetch],
+  );
+  const dave = useFlueAgent({ client: daveClient });
+  const refreshDave = dave.refresh;
+  const daveBubbles = useMemo(() => toBubbles(dave.messages), [dave.messages]);
 
   const bubbles = useMemo(
     () => toBubbles(agent.messages, failedSends.map((failed) => failed.id)),
@@ -94,12 +158,63 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
   const status = useMemo(() => bookingStatus(agent.messages), [agent.messages]);
   const stage = useMemo(() => conversationStage(agent.messages), [agent.messages]);
   const typing = isTyping(agent.status);
+  const settled = useMemo(() => settledStatus(agent.messages, typing), [agent.messages, typing]);
   const ready = client !== undefined;
   const earlier = generation === undefined ? [] : earlierCustomers(roster, generation, phone);
   // The card locks once this customer has texted in this generation.
   const texted =
     bubbles.some((bubble) => bubble.from === 'customer') ||
     roster.some((entry) => entry.customer.phone === phone && entry.generation === generation);
+
+  // The booking reveal (build-plan §7) starts when the desk's reply reaches the
+  // customer phone, never from the tool result. While the desk replies, Dave's
+  // phone holds new alerts (`daveHeld`) and the status shown stays settled.
+  const [landingId, setLandingId] = useState<string>();
+  const [daveHeld, setDaveHeld] = useState<number>();
+  const replying = useRef<{ url: string | undefined; before: BookingStatus }>(undefined);
+  const timers = useRef<number[]>([]);
+  useEffect(() => () => timers.current.forEach((timer) => window.clearTimeout(timer)), []);
+
+  const startReveal = useCallback(
+    (reveal: Reveal) => {
+      const later = (run: () => void, ms: number) => timers.current.push(window.setTimeout(run, ms));
+      const loaded = reveal.bookingId ? fetchCalendar(authFetch, session) : undefined;
+      later(() => {
+        setFocus('both');
+        if (reveal.handoff) refreshDave();
+      }, REVEAL_PAUSE_MS);
+      if (!loaded) return;
+      later(() => {
+        loaded.then(
+          (snapshot) => {
+            setCalendar(snapshot);
+            setLandingId(reveal.bookingId);
+            later(() => setLandingId(undefined), LANDING_MS);
+          },
+          () => undefined,
+        );
+      }, REVEAL_PAUSE_MS + PANELS_OPEN_MS);
+    },
+    [authFetch, session, refreshDave],
+  );
+
+  useEffect(() => {
+    if (typing) {
+      if (!replying.current) {
+        replying.current = { url, before: settled };
+        setDaveHeld(daveBubbles.length);
+      }
+      return;
+    }
+    const started = replying.current;
+    if (!started) return;
+    replying.current = undefined;
+    setDaveHeld(undefined);
+    // Only a reply in the conversation still on screen reveals anything.
+    if (started.url !== url) return;
+    const reveal = revealOnSettle(started.before, settled);
+    if (reveal) startReveal(reveal);
+  }, [typing, settled, url, startReveal, daveBubbles.length]);
 
   // A 401 already went back to sign-in (reportingUnauthorized); after the customer
   // changed, the failed text belongs to the previous one and stays out of the composer.
@@ -158,6 +273,28 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
     switchTo(newCustomer(Math.random, { names: taken.map((c) => c.name), phones: taken.map((c) => c.phone) }));
   }
 
+  const [confirmingReset, setConfirmingReset] = useState(false);
+  const [resetting, setResetting] = useState(false);
+
+  /** Reset all: a new generation with a different seed preset, and a new customer. */
+  async function onReset() {
+    setResetting(true);
+    try {
+      const snapshot = await resetCalendar(authFetch, session);
+      setCalendar(snapshot);
+      setGeneration(snapshot.generation);
+      setLandingId(undefined);
+      setFocus('customer');
+      onNewCustomer();
+    } catch (caught) {
+      const status = statusOf(caught);
+      if (status !== 401) setNotice(status === 429 ? SLOW_DOWN : RESET_FAILED);
+    } finally {
+      setResetting(false);
+      setConfirmingReset(false);
+    }
+  }
+
   const layout = panelLayout(focus);
   const shownNotice = notice ?? (replyFailed(agent.status, failedSends.length) ? NO_REPLY : undefined);
   const switchButtons: [Focus, string, string][] = [
@@ -172,6 +309,33 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
         <div className="brand">
           <h1>Dave's Lawn Desk</h1>
           <span className="subtitle">Text-message booking simulator</span>
+        </div>
+        {config && (
+          <div className="today">
+            Today <b>{demoDay(config.demoDate)}</b>
+          </div>
+        )}
+        <div className="reset">
+          {confirmingReset ? (
+            <>
+              <span>Start over with a new schedule?</span>
+              <button type="button" className="danger" disabled={resetting} onClick={() => void onReset()}>
+                {resetting ? 'Resetting…' : 'Reset all'}
+              </button>
+              <button type="button" disabled={resetting} onClick={() => setConfirmingReset(false)}>
+                Cancel
+              </button>
+            </>
+          ) : (
+            <button
+              type="button"
+              disabled={generation === undefined}
+              title="New schedule for Dave, fresh conversations"
+              onClick={() => setConfirmingReset(true)}
+            >
+              Reset all
+            </button>
+          )}
         </div>
         <div className="who">
           Signed in as <b>{nickname}</b>
@@ -213,7 +377,8 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
                     disabled={!ready}
                     onPick={(text) => void send(text)}
                   />
-                  <BookingStatusCard status={settledStatus(agent.messages, typing)} />
+                  <BookingStatusCard status={settled} />
+                  <TownMap focus={focus} customerTown={customer.town} config={config} />
                 </div>
               </div>
             </div>
@@ -256,7 +421,13 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
           </div>
           <div className="panel-main">
             <div className="panel-content" inert={layout.veiled === 'dave'}>
-              <p className="placeholder dave-placeholder">Dave's calendar, phone, and price table will appear here.</p>
+              <DavePanel
+                config={config}
+                bookings={calendar?.bookings}
+                landingId={landingId}
+                daveBubbles={gatedBubbles(daveBubbles, daveHeld)}
+                daveTyping={daveHeld === undefined && isTyping(dave.status)}
+              />
             </div>
             {layout.veiled === 'dave' && (
               <div className="veil">

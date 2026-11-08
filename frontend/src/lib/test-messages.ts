@@ -1,5 +1,24 @@
-// Message builders for the Node tests of the simulator's UI logic.
+// Message builders and fixtures for the Node tests of the simulator's UI logic.
 import type { FlueConversationMessage, FlueConversationPart } from '@flue/react';
+import type { DaveConfig } from './config.ts';
+
+/** `GET /api/config` as the backend serves it (backend `RULES`). */
+export const config: DaveConfig = {
+  demoDate: '2026-11-15',
+  hours: { open: '08:00', close: '13:00' },
+  slotStepMinutes: 30,
+  searchDays: 14,
+  townGroups: [
+    { weekdays: [1, 4], towns: ['Ashford', 'Clearwater'] },
+    { weekdays: [2, 5], towns: ['Birchwood', 'Dunmore'] },
+  ],
+  hourlyRateCents: 4500,
+  priceTable: [
+    { maxAcres: 0.5, durationMinutes: 60 },
+    { maxAcres: 1, durationMinutes: 90 },
+  ],
+  unknownSizeDurationMinutes: 60,
+};
 
 export function message(
   id: string,

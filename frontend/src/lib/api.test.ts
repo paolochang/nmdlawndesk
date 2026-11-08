@@ -1,6 +1,6 @@
 import { FlueApiError } from '@flue/sdk';
 import { describe, expect, it, vi } from 'vitest';
-import { ApiError, fetchGeneration, reportingUnauthorized, signIn, statusOf } from './api.ts';
+import { ApiError, fetchGeneration, reportingUnauthorized, resetCalendar, signIn, statusOf } from './api.ts';
 
 const session = { visitorId: 'v123', token: 'payload.sig', expiresAt: 1_800_007_200 };
 
@@ -40,6 +40,25 @@ describe('fetchGeneration', () => {
   it('throws an ApiError with the status when the calendar is refused', async () => {
     const fetchFn = vi.fn<typeof fetch>(async () => new Response('', { status: 401 }));
     expect(statusOf(await fetchGeneration(fetchFn, session).catch((e: unknown) => e))).toBe(401);
+  });
+});
+
+describe('resetCalendar (Reset all)', () => {
+  it('posts the reset with the bearer token and returns the new calendar', async () => {
+    const fresh = { generation: 5, presetId: 'C', customers: [], bookings: [] };
+    const fetchFn = vi.fn<typeof fetch>(async () => Response.json(fresh));
+
+    await expect(resetCalendar(fetchFn, session)).resolves.toEqual(fresh);
+
+    const [url, init] = fetchFn.mock.calls[0];
+    expect(url).toBe('/api/calendar/v123/reset');
+    expect(init?.method).toBe('POST');
+    expect(new Headers(init?.headers).get('authorization')).toBe('Bearer payload.sig');
+  });
+
+  it('throws an ApiError with the status when the reset is refused', async () => {
+    const fetchFn = vi.fn<typeof fetch>(async () => new Response('', { status: 429 }));
+    expect(statusOf(await resetCalendar(fetchFn, session).catch((e: unknown) => e))).toBe(429);
   });
 });
 

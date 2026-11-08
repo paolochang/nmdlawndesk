@@ -50,8 +50,10 @@ input, select { font: inherit; color: inherit; padding: 8px 10px; border-radius:
 .simulator { max-width: 1600px; margin: 0 auto; padding: 0 16px 24px; }
 .app-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 14px 4px; }
 .brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin-right: auto; }
-.who { color: var(--muted); font-size: 0.9rem; }
-.who b { color: var(--ink); }
+.who, .today { color: var(--muted); font-size: 0.9rem; }
+.who b, .today b { color: var(--ink); }
+.reset { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
+button.danger { background: var(--err); border-color: var(--err); color: var(--surface); }
 .app-header h1 { font-size: 1.4rem; }
 .subtitle { color: var(--muted); font-size: 0.9rem; }
 .stage { display: grid; height: 800px; transition: grid-template-columns 0.7s cubic-bezier(0.4, 0, 0.2, 1); }
@@ -170,6 +172,52 @@ input, select { font: inherit; color: inherit; padding: 8px 10px; border-radius:
 .send { width: 36px; height: 36px; min-height: 0; padding: 0; border-radius: 50%; border: 0; background: var(--accent); color: white; display: grid; place-items: center; flex: none; }
 .send svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 
+/* Dave panel: calendar, then his phone and the rules (side by side when wide) */
+.dave-body {
+  flex: 1; min-height: 0; overflow: auto; padding: 14px; display: grid; gap: 16px;
+  grid-template-columns: minmax(0, 1fr); align-content: start;
+}
+.dave-calendar { height: 360px; min-width: 0; font-size: 0.8rem; }
+.dave-side { display: flex; flex-wrap: wrap; gap: 14px; align-items: flex-start; }
+.dave-side .rules { flex: 1 1 220px; }
+@container (min-width: 760px) {
+  /* The calendar fills the panel height; the phone and rules scroll beside it. */
+  .dave-body { grid-template-columns: minmax(0, 1fr) 270px; grid-template-rows: minmax(0, 1fr); align-content: stretch; overflow: hidden; }
+  .dave-calendar { height: 100%; }
+  .dave-side { flex-direction: column; flex-wrap: nowrap; min-height: 0; overflow-y: auto; }
+  .dave-side .rules { flex: none; width: 100%; }
+}
+.dave-phone { --phone-w: 230px; padding: 8px; border-radius: 38px; }
+.dave-phone .phone-screen { border-radius: 30px; }
+.dave-phone .thread-head { padding-top: 16px; }
+.dave-phone .avatar { width: 34px; height: 34px; background: var(--muted); }
+.dave-phone .bubble { font-size: 0.82rem; max-width: 88%; }
+.read-only { margin: 0; padding: 8px 10px 14px; border-top: 1px solid #e5e8e5; text-align: center; font-size: 0.72rem; color: var(--muted); }
+.rules table { width: 100%; border-collapse: collapse; font-size: 0.85rem; }
+.rules :is(th, td) { text-align: left; padding: 4px 6px 4px 0; border-bottom: 1px solid var(--line); font-variant-numeric: tabular-nums; }
+.rules th { font-size: 0.7rem; font-weight: 600; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted); }
+.town-days, .legend { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 0.85rem; }
+.legend { flex-direction: row; flex-wrap: wrap; gap: 4px 14px; color: var(--muted); }
+:is(.town-days, .legend) i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: -1px; }
+
+/* The booking that just landed (build-plan §7 reveal) */
+.dave-calendar .landing { animation: land 1.8s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes land {
+  0% { opacity: 0; transform: translateY(-48px) scale(0.92); }
+  55% { opacity: 1; transform: none; box-shadow: 0 0 0 0 rgba(39, 122, 66, 0.6); }
+  100% { opacity: 1; transform: none; box-shadow: 0 0 0 7px rgba(39, 122, 66, 0); }
+}
+
+/* Town map */
+.town-map svg { width: 100%; height: auto; display: block; }
+.town-map .land { fill: #e7efe2; }
+.town-map .river { fill: none; stroke: #b7d3e6; stroke-width: 9; stroke-linecap: round; }
+.town-map .road { fill: none; stroke: #ffffff; stroke-width: 4; }
+.town-map .area { fill: none; stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; }
+.town-map text { font: 600 10px var(--font-phone); fill: var(--ink); paint-order: stroke; stroke: #e7efe2; stroke-width: 3px; }
+.town-map .halo { fill: none; stroke: var(--ink); stroke-width: 2; }
+.town-map .town circle:not(.halo) { stroke: white; stroke-width: 2; }
+
 /* Judgment log */
 .judgment-log { margin-top: 16px; height: 440px; display: flex; flex-direction: column; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; }
 .log-head { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 18px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
@@ -211,6 +259,7 @@ input, select { font: inherit; color: inherit; padding: 8px 10px; border-radius:
 
 @media (prefers-reduced-motion: reduce) {
   .stage, .panel-content { transition: none; }
+  .dave-calendar .landing { animation: none; outline: 3px solid var(--accent); outline-offset: 1px; }
   .bubble.typing i { animation: none; }
 }
 @media (max-width: 960px) {
