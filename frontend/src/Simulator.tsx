@@ -299,8 +299,10 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
 
   /** Leaves the current customer (remembered if they texted) for `next`. */
   function switchTo(next: Customer) {
-    // A reveal still in its pause belongs to the customer being left.
+    // A reveal still in its pause belongs to the customer being left. Its Dave
+    // refresh does not: the handoff it would reveal still texted Dave.
     cancelReveals();
+    refreshDave();
     if (texted && generation !== undefined) setRoster((old) => rememberCustomer(old, rosterEntry(customer, generation, status)));
     currentPhone.current = next.phone;
     setCustomer(next);
