@@ -93,6 +93,7 @@ describe('acceptSnapshot (Reset all vs an in-flight calendar load)', () => {
     bookings: [],
     today: '2026-12-03',
     timeZone: 'America/New_York',
+    daveTexts: [],
   });
 
   it('never lets a calendar loaded before a reset replace the reset one', () => {

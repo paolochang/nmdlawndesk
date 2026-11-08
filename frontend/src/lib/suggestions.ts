@@ -1,9 +1,12 @@
 // Suggested replies (build-plan §7): fixed templates, never written by a model.
-// The stage comes from the customer conversation's tool results and the desk's
-// last text; the templates are filled from the customer card and findSlots.
+// The stage comes from what the desk's texts told the customer (build-plan §13):
+// a booking or handoff once a text confirmed it, and only the offered times a
+// text stated. The templates are filled from the customer card (the customer's
+// own details) and those stated times.
 import type { FlueConversationMessage } from '@flue/react';
 import type { Customer } from './persona.ts';
-import { bookingStatus } from './status.ts';
+import { textedStatus } from './status.ts';
+import { statesTime } from './texted.ts';
 
 export interface Slot {
   start: string;
@@ -13,6 +16,7 @@ export interface Slot {
 export type Stage =
   | { kind: 'start' }
   | { kind: 'details' }
+  /** `slots`: the offered times the desk's text stated; empty when it stated none. */
   | { kind: 'slots'; slots: Slot[]; searchedAgain: boolean }
   /** `slots` when the desk asked for the name in the same text that offered them, before any pick. */
   | { kind: 'name'; slots?: Slot[] }
@@ -35,13 +39,14 @@ export function conversationStage(messages: readonly FlueConversationMessage[]):
   const visible = messages.filter((message) => message.display === 'visible');
   if (!visible.some((message) => message.role === 'user')) return { kind: 'start' };
 
-  const status = bookingStatus(messages);
+  const status = textedStatus(messages);
   if (status.kind === 'booked') return { kind: 'booked' };
   if (status.kind === 'with-dave') return { kind: 'handed-off' };
 
   let offers = 0;
   let slots: Slot[] = [];
   let deskTextAfterOffer = '';
+  let deskTextsSinceOffer = '';
   let customerTextAfterOffer = false;
   for (const message of visible) {
     if (message.role === 'user' && offers > 0) customerTextAfterOffer = true;
@@ -52,16 +57,19 @@ export function conversationStage(messages: readonly FlueConversationMessage[]):
           offers++;
           slots = found;
           deskTextAfterOffer = '';
+          deskTextsSinceOffer = '';
           customerTextAfterOffer = false;
         }
       } else if (part.type === 'text' && message.role === 'assistant' && offers > 0) {
         deskTextAfterOffer = part.text;
+        deskTextsSinceOffer += `\n${part.text}`;
       }
     }
   }
   if (!offers) return { kind: 'details' };
-  if (/\bname\b/i.test(deskTextAfterOffer)) return customerTextAfterOffer ? { kind: 'name' } : { kind: 'name', slots };
-  return { kind: 'slots', slots, searchedAgain: offers > 1 };
+  const stated = slots.filter((slot) => statesTime(deskTextsSinceOffer, slot.start));
+  if (/\bname\b/i.test(deskTextAfterOffer)) return customerTextAfterOffer ? { kind: 'name' } : { kind: 'name', slots: stated };
+  return { kind: 'slots', slots: stated, searchedAgain: offers > 1 };
 }
 
 const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
@@ -118,11 +126,10 @@ export function suggestReplies(stage: Stage, customer: Customer): string[] {
         : [`About ${acresWords(acres)}, ${place}`, `Not sure how big it is. ${place}`];
     case 'slots': {
       const [first, second] = stage.slots;
-      return [
-        `${shortSlot(first.start)} works`,
-        ...(second ? [`${shortSlot(second.start)}, please`] : []),
-        ...(stage.searchedAgain ? [] : ['Neither works. Anything the week after?']),
-      ];
+      const later = stage.searchedAgain ? [] : ['Neither works. Anything the week after?'];
+      // The desk's text named no time the chips could repeat: refer to its offers instead.
+      if (!first) return ['The first time works', 'The second time, please', ...later];
+      return [`${shortSlot(first.start)} works`, ...(second ? [`${shortSlot(second.start)}, please`] : []), ...later];
     }
     case 'name': {
       if (!stage.slots?.length) return [`It's ${name}`, name.split(' ')[0]];

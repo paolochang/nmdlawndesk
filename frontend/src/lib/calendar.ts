@@ -2,6 +2,7 @@
 // `GET /api/calendar/<visitorId>`, turned into FullCalendar events and the
 // window the week view may show.
 import { GROUP_TINTS, INK, NEW_BOOKING_COLOR, townGroup, type DaveConfig } from './config.ts';
+import type { Bubble } from './transcript.ts';
 
 export interface CalendarBooking {
   id: string;
@@ -25,6 +26,8 @@ export interface CalendarSnapshot {
   today: string;
   /** Dave's time zone, an IANA name such as `America/New_York`. */
   timeZone: string;
+  /** The desk's texts to Dave in this generation, oldest first (build-plan §13). */
+  daveTexts: { id: string; text: string }[];
 }
 
 export interface CalendarEvent {
@@ -131,4 +134,9 @@ export function toEvents(bookings: readonly CalendarBooking[], config: DaveConfi
  */
 export function acceptSnapshot(current: CalendarSnapshot | undefined, incoming: CalendarSnapshot): boolean {
   return current === undefined || incoming.generation >= current.generation;
+}
+
+/** Dave's phone: one bubble per text the desk sent him (fixed templates, build-plan §13). */
+export function daveTextBubbles(texts: readonly { id: string; text: string }[]): Bubble[] {
+  return texts.map(({ id, text }) => ({ id, from: 'desk', text }));
 }

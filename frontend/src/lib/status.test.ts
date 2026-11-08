@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookingStatus, settledStatus } from './status.ts';
+import { bookingStatus, settledStatus, textedStatus } from './status.ts';
 import { done, message, running, text } from './test-messages.ts';
 
 const booked = done(
@@ -58,5 +58,42 @@ describe('settledStatus', () => {
 
   it('shows the outcome once the reply is in', () => {
     expect(settledStatus([ask, reply], false)).toEqual(bookingStatus([ask, reply]));
+  });
+});
+
+// build-plan §13: the customer's card shows only what the desk's texts stated.
+describe('textedStatus', () => {
+  const reply = (value: string) => message('m3', 'assistant', [booked, text(value)]);
+
+  it('shows a booking only once a desk text states its day and time', () => {
+    expect(textedStatus([message('m2', 'user', [text('Monday works')]), reply('All set, thanks!')])).toEqual({ kind: 'open' });
+    expect(textedStatus([reply("You're booked for Monday Nov 16 at 8 AM.")])).toEqual({
+      kind: 'booked',
+      when: 'Mon Nov 16, 8:00-9:00 AM',
+    });
+  });
+
+  it('fills where and price only when the text states them', () => {
+    expect(textedStatus([reply('Booked Mon Nov 16, 8:00-9:00 AM at 45 Oak Rd. $45 for 1 hour.')])).toEqual({
+      kind: 'booked',
+      when: 'Mon Nov 16, 8:00-9:00 AM',
+      where: '45 Oak Rd, Ashford',
+      price: '$45',
+      duration: '1 h',
+    });
+  });
+
+  it('says the customer is with Dave once the desk texts the handoff reply', () => {
+    const handoff = done('c4', 'handoffToDave', { reason: 'complaint' }, { ok: true, reply: 'He will contact you directly.' });
+    expect(textedStatus([message('m4', 'assistant', [handoff])])).toEqual({ kind: 'open' });
+    expect(textedStatus([message('m4', 'assistant', [handoff, text('He will contact you directly.')])])).toEqual({
+      kind: 'with-dave',
+      reason: 'complaint',
+    });
+  });
+
+  it('keeps what was settled before the last text while the desk replies', () => {
+    const first = reply('Booked for Nov 16 at 8 AM.');
+    expect(textedStatus([first, message('m5', 'user', [text('Can I move it?')])], true)).toMatchObject({ kind: 'booked' });
   });
 });

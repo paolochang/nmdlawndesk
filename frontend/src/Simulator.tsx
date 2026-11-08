@@ -9,9 +9,9 @@ import { JudgmentLog } from './JudgmentLog.tsx';
 import { BookingStatusCard, SuggestedReplies } from './SidePanels.tsx';
 import { TownMap } from './TownMap.tsx';
 import { fetchCalendar, fetchConfig, fetchGeneration, reportingUnauthorized, resetCalendar, statusOf } from './lib/api.ts';
-import { acceptSnapshot, todayLabel, type CalendarSnapshot } from './lib/calendar.ts';
+import { acceptSnapshot, daveTextBubbles, todayLabel, type CalendarSnapshot } from './lib/calendar.ts';
 import type { DaveConfig } from './lib/config.ts';
-import { customerConversationUrl, daveConversationUrl } from './lib/conversation.ts';
+import { customerConversationUrl } from './lib/conversation.ts';
 import { panelLayout, type Focus } from './lib/layout.ts';
 import { newCustomer, type Customer } from './lib/persona.ts';
 import { recoverStaleSend } from './lib/recover.ts';
@@ -26,7 +26,7 @@ import {
   type RosterEntry,
 } from './lib/roster.ts';
 import { failedSendView, sendFailure, type Session } from './lib/session.ts';
-import { bookingStatus, settledStatus, type BookingStatus } from './lib/status.ts';
+import { bookingStatus, settledStatus, textedStatus, type BookingStatus } from './lib/status.ts';
 import { conversationStage, repliesNow } from './lib/suggestions.ts';
 import { isTyping, replyFailed, toBubbles, toJudgmentLog } from './lib/transcript.ts';
 
@@ -143,17 +143,13 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
   }, [url, loadCalendar]);
   const { sendMessage, failedSends } = agent;
 
-  // Dave's phone: read-only, the desk's handoff alerts (build-plan §4, §7).
-  const daveUrl = generation === undefined ? undefined : daveConversationUrl(session.visitorId, generation);
-  const daveClient = useMemo(
-    () => (daveUrl ? createFlueClient({ url: daveUrl, token: session.token, fetch: authFetch }) : undefined),
-    [daveUrl, session.token, authFetch],
-  );
-  const dave = useFlueAgent({ client: daveClient });
-  const refreshDave = dave.refresh;
-  const daveBubbles = useMemo(() => toBubbles(dave.messages), [dave.messages]);
+  // Dave's phone: read-only, the desk's texts to Dave (build-plan §7, §13). They are
+  // fixed templates kept by the visitor's store and come with the calendar snapshot.
+  const daveKey = generation === undefined ? undefined : `${session.visitorId}:${generation}`;
+  const daveLoaded = calendar !== undefined && calendar.generation === generation;
+  const daveBubbles = useMemo(() => daveTextBubbles(daveLoaded ? calendar.daveTexts : []), [daveLoaded, calendar]);
   const [daveOpen, setDaveOpen] = useState(false);
-  // How many of Dave's texts the tester has seen, for this Dave conversation only.
+  // How many of Dave's texts the tester has seen, for this generation only.
   const [daveSeen, setDaveSeen] = useState<{ url: string; count: number }>();
 
   const bubbles = useMemo(
@@ -165,6 +161,8 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
   const stage = useMemo(() => conversationStage(agent.messages), [agent.messages]);
   const typing = isTyping(agent.status);
   const settled = useMemo(() => settledStatus(agent.messages, typing), [agent.messages, typing]);
+  // What the desk's texts told the customer: all the customer's card shows (build-plan §13).
+  const shownStatus = useMemo(() => textedStatus(agent.messages, typing), [agent.messages, typing]);
   const ready = client !== undefined;
   const earlier = generation === undefined ? [] : earlierCustomers(roster, generation, phone);
   // The card locks once this customer has texted in this generation.
@@ -203,8 +201,8 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
       later(() => {
         // Open Dave's side; a tester already on Dave's wide side keeps it.
         setFocus((current) => (current === 'customer' ? 'both' : current));
-        // A booking and a handoff both text Dave.
-        refreshDave();
+        // A booking and a handoff both text Dave; his texts come with the calendar.
+        loadCalendar();
       }, REVEAL_PAUSE_MS);
       if (!loaded) return;
       later(() => {
@@ -219,7 +217,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
         );
       }, REVEAL_PAUSE_MS + PANELS_OPEN_MS);
     },
-    [authFetch, session, refreshDave, showCalendar],
+    [authFetch, session, loadCalendar, showCalendar],
   );
 
   useEffect(() => {
@@ -238,20 +236,19 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
     // settled reply may still have changed the calendar or texted Dave.
     const after = settleReply(started, url, settled);
     if (after.reveal) startReveal(after.reveal);
-    if (after.loadCalendar) loadCalendar();
-    if (after.refreshDave) refreshDave();
-  }, [typing, settled, url, startReveal, loadCalendar, refreshDave, daveBubbles.length]);
+    if (after.loadCalendar || after.refreshDave) loadCalendar();
+  }, [typing, settled, url, startReveal, loadCalendar, daveBubbles.length]);
 
   // Dave's phone badge: texts shown since the phone was last opened. History that
   // loads with the conversation counts as seen.
   const shownDave = gatedBubbles(daveBubbles, daveHeld);
-  const daveSeenCount = daveSeen && daveSeen.url === daveUrl ? daveSeen.count : undefined;
+  const daveSeenCount = daveSeen && daveSeen.url === daveKey ? daveSeen.count : undefined;
   // Adjusted while rendering (React's pattern for state derived from props), not in an effect.
   // History counts as seen in full, even while a reply holds new texts back.
-  if (daveUrl && dave.historyReady && daveSeenCount === undefined) {
-    setDaveSeen({ url: daveUrl, count: daveBubbles.length });
-  } else if (daveUrl && daveOpen && daveSeenCount !== undefined && daveSeenCount < shownDave.length) {
-    setDaveSeen({ url: daveUrl, count: shownDave.length });
+  if (daveKey && daveLoaded && daveSeenCount === undefined) {
+    setDaveSeen({ url: daveKey, count: daveBubbles.length });
+  } else if (daveKey && daveOpen && daveSeenCount !== undefined && daveSeenCount < shownDave.length) {
+    setDaveSeen({ url: daveKey, count: shownDave.length });
   }
 
   // A 401 already went back to sign-in (reportingUnauthorized); after the customer
@@ -299,10 +296,10 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
 
   /** Leaves the current customer (remembered if they texted) for `next`. */
   function switchTo(next: Customer) {
-    // A reveal still in its pause belongs to the customer being left. Its Dave
-    // refresh does not: the handoff it would reveal still texted Dave.
+    // A reveal still in its pause belongs to the customer being left. Its calendar
+    // load does not: the booking or handoff it would reveal still texted Dave.
     cancelReveals();
-    refreshDave();
+    loadCalendar();
     if (texted && generation !== undefined) setRoster((old) => rememberCustomer(old, rosterEntry(customer, generation, status)));
     currentPhone.current = next.phone;
     setCustomer(next);
@@ -342,10 +339,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
     setFocus(next);
     // Dave's side is veiled on the customer side, so his phone closes with it.
     if (next === 'customer') setDaveOpen(false);
-    if (next !== 'customer') {
-      loadCalendar();
-      refreshDave();
-    }
+    if (next !== 'customer') loadCalendar();
   }
 
   const layout = panelLayout(focus);
@@ -436,7 +430,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
                     disabled={!ready}
                     onPick={(text) => void send(text)}
                   />
-                  <BookingStatusCard status={settled} />
+                  <BookingStatusCard status={shownStatus} />
                 </div>
               </div>
             </div>
@@ -486,11 +480,11 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
                 today={calendar?.today}
                 landingId={landingId}
                 daveBubbles={shownDave}
-                daveTyping={daveHeld === undefined && isTyping(dave.status)}
+                daveTyping={false}
                 daveOpen={daveOpen}
                 daveUnread={unreadCount(shownDave.length, daveSeenCount)}
                 onToggleDave={() => {
-                  if (!daveOpen) refreshDave();
+                  if (!daveOpen) loadCalendar();
                   setDaveOpen(!daveOpen);
                 }}
               />

@@ -1,4 +1,4 @@
-import type { BookingStatus } from './lib/status.ts';
+import type { TextedStatus } from './lib/status.ts';
 
 interface SuggestedProps {
   replies: string[];
@@ -40,9 +40,13 @@ const REASON: Record<string, string> = {
   other: 'needs Dave',
 };
 const reason = (key: string) => REASON[key] ?? key;
+/** A booking detail the desk's texts did not state. */
+const NOT_TEXTED = '—';
 
-// The current customer's booking, or that the desk handed them to Dave.
-export function BookingStatusCard({ status }: { status: BookingStatus }) {
+// The current customer's booking, or that the desk handed them to Dave, as far as
+// the desk's texts told the customer (build-plan §13). A detail the texts did not
+// state stays empty.
+export function BookingStatusCard({ status }: { status: TextedStatus }) {
   return (
     <div className="card booking">
       <div className="card-top">
@@ -57,11 +61,9 @@ export function BookingStatusCard({ status }: { status: BookingStatus }) {
             <dt>When</dt>
             <dd>{status.when}</dd>
             <dt>Where</dt>
-            <dd>{status.address}</dd>
+            <dd>{status.where ?? NOT_TEXTED}</dd>
             <dt>Price</dt>
-            <dd>
-              {status.price} · {status.duration}
-            </dd>
+            <dd>{[status.price, status.duration].filter(Boolean).join(' · ') || NOT_TEXTED}</dd>
           </dl>
           <p className="hint">
             {status.handedOff && `Also passed to Dave (${reason(status.handedOff)}). `}The final price may change on site.

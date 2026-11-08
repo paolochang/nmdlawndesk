@@ -12,7 +12,7 @@ const hi = message('m1', 'user', [text('Hi! How much?')]);
 const quoted = message('m2', 'assistant', [done('c1', 'quoteJob', { acres: null }, { price: '$45' }), text('How big is your yard?')]);
 const offered = message('m4', 'assistant', [
   done('c2', 'findSlots', { town: 'Ashford', acres: 0.5 }, { town: 'Ashford', slots }),
-  text('I can come Mon or Thu. Which works?'),
+  text('$45. I can come Mon Nov 16, 8:00-9:00 AM or Thu Nov 19, 9:30-10:30 AM. Which works?'),
 ]);
 
 describe('conversationStage (build-plan §7)', () => {
@@ -27,7 +27,10 @@ describe('conversationStage (build-plan §7)', () => {
 
   it('offers the slots of the last findSlots, and notes a second search', () => {
     expect(conversationStage([hi, quoted, offered])).toEqual({ kind: 'slots', slots, searchedAgain: false });
-    const later = message('m6', 'assistant', [done('c3', 'findSlots', { from: '2026-11-22' }, { slots: [slots[1]] })]);
+    const later = message('m6', 'assistant', [
+      done('c3', 'findSlots', { from: '2026-11-22' }, { slots: [slots[1]] }),
+      text('Thu Nov 19 at 9:30 AM is still open.'),
+    ]);
     expect(conversationStage([hi, quoted, offered, later])).toEqual({ kind: 'slots', slots: [slots[1]], searchedAgain: true });
   });
 
@@ -39,16 +42,47 @@ describe('conversationStage (build-plan §7)', () => {
   it('keeps the slots when the desk asks for the name in the same text that offers them', () => {
     const both = message('m4', 'assistant', [
       done('c2', 'findSlots', { town: 'Ashford', acres: 0.5 }, { town: 'Ashford', slots }),
-      text('I can come Mon or Thu. What is your name so I can book it?'),
+      text('I can come Nov 16 at 8 AM or Nov 19 at 9:30 AM. What is your name so I can book it?'),
     ]);
     expect(conversationStage([hi, both])).toEqual({ kind: 'name', slots });
   });
 
   it('follows the outcome: booked, or handed to Dave', () => {
-    const booked = message('m8', 'assistant', [done('c4', 'bookSlot', {}, { ok: true, when: 'Mon' })]);
+    const booked = message('m8', 'assistant', [
+      done('c4', 'bookSlot', { start: '2026-11-16T08:00' }, { ok: true, when: 'Mon Nov 16, 8:00-9:00 AM' }),
+      text("You're booked for Monday Nov 16 at 8 AM."),
+    ]);
     expect(conversationStage([hi, offered, booked])).toEqual({ kind: 'booked' });
-    const handoff = message('m8', 'assistant', [done('c4', 'handoffToDave', { reason: 'out-of-area' }, { ok: true })]);
+    const reply = "I'm sorry to hear that. I've passed this to Dave, and he will contact you directly.";
+    const handoff = message('m8', 'assistant', [done('c4', 'handoffToDave', { reason: 'complaint' }, { ok: true, reply }), text(reply)]);
     expect(conversationStage([hi, handoff])).toEqual({ kind: 'handed-off' });
+  });
+
+  // build-plan §13: chips repeat only what the desk's text told the customer.
+  it('offers only the times the desk texted, and none when its text named no time', () => {
+    const vague = message('m4', 'assistant', [
+      done('c2', 'findSlots', { town: 'Ashford', acres: 0.5 }, { town: 'Ashford', slots }),
+      text('I have a couple of openings next week. Which day suits you?'),
+    ]);
+    expect(conversationStage([hi, vague])).toEqual({ kind: 'slots', slots: [], searchedAgain: false });
+    expect(suggestReplies({ kind: 'slots', slots: [], searchedAgain: false }, maya)).toEqual([
+      'The first time works',
+      'The second time, please',
+      'Neither works. Anything the week after?',
+    ]);
+    const one = message('m4', 'assistant', [
+      done('c2', 'findSlots', { town: 'Ashford', acres: 0.5 }, { town: 'Ashford', slots }),
+      text('The earliest is Monday Nov 16 at 8 AM.'),
+    ]);
+    expect(conversationStage([hi, one])).toEqual({ kind: 'slots', slots: [slots[0]], searchedAgain: false });
+  });
+
+  it('is not booked until a desk text states the booking', () => {
+    const silent = message('m8', 'assistant', [
+      done('c4', 'bookSlot', { start: '2026-11-16T08:00' }, { ok: true, when: 'Mon Nov 16, 8:00-9:00 AM' }),
+      text('All set, thanks!'),
+    ]);
+    expect(conversationStage([hi, offered, silent]).kind).not.toBe('booked');
   });
 });
 
