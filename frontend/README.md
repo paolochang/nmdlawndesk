@@ -1,12 +1,14 @@
 # Dave's Lawn Desk — frontend
 
-Cloudflare Worker `dave-lawn-desk-web`. It serves a React chat page (the walking
-skeleton of the web SMS simulator) and runs a thin proxy worker (`worker/index.ts`)
-that forwards `/api/*` to the backend through the `API` service binding, so the
-browser talks to one origin and needs no CORS.
+Cloudflare Worker `dave-lawn-desk-web`. It serves the web SMS simulator (React) and
+runs a thin proxy worker (`worker/index.ts`) that forwards `/api/*` to the backend
+through the `API` service binding, so the browser talks to one origin and needs no
+CORS.
 
-Later PRs replace the chat page with the simulator (sign-in, customer phone, Dave's
-panel) and extend this README with each.
+The simulator has a sign-in screen, the customer's side (a phone that texts the
+lawn-desk agent, a customer card, suggested replies, booking status), and a judgment
+log of the agent's tool calls and reasoning. Dave's side of the screen is a
+placeholder until a later PR fills it (calendar, Dave's phone, price table).
 
 Backend: [../backend/README.md](../backend/README.md).
 
@@ -38,17 +40,32 @@ npx vite dev --port 5180 --strictPort
 Open http://localhost:5180. In local dev the Cloudflare Vite plugin connects the `API`
 service binding to the backend dev server.
 
-The chat page cannot reach the agent right now: the backend requires a sign-in token
-on `/api/agents/*`, and this page has no sign-in screen yet, so a message gets 401. The
-sign-in screen comes in a later PR. Until then, use the API through the proxy with
-curl, as in [../backend/README.md](../backend/README.md) "Try it with curl" with
-`localhost:5180` in place of `localhost:8787`:
+## Use the simulator
+
+1. Sign in with the backend's `ACCESS_CODE` and a nickname from the local allowlist
+   (see [../backend/README.md](../backend/README.md) "Setup"). A wrong code or an
+   unknown nickname gets the same error, which does not say which one was wrong.
+2. The customer's side opens with a made-up customer. Until the first text you can
+   change the street, town, and yard size on the customer card; after it they lock.
+3. Text from the phone, or tap a suggested reply. While the agent works the phone
+   shows "typing…", and the reply appears once it is complete. The judgment log at the
+   bottom shows each tool call (input and output) and the reasoning.
+4. **New customer** starts a new conversation with a new number; the calendar stays.
+   Customers who texted can be reopened from the drop-down at the top of the panel.
+5. The switch in the middle widens the customer side, Dave's side, or both.
+
+The nickname stays in `localStorage` to prefill the form; the token stays in this
+tab's `sessionStorage` until it expires (2 hours). The access code is not stored. A
+401 from any call (expired or altered token) returns to sign-in with the nickname
+filled in, and signing in again reopens the same calendar and conversations. If the
+calendar was reset elsewhere, the next text goes to a new conversation and the phone
+says so.
+
+The API also works through the proxy, as in [../backend/README.md](../backend/README.md)
+"Try it with curl" with `localhost:5180` in place of `localhost:8787`:
 
 ```sh
 curl http://localhost:5180/api/health   # {"ok":true}, answered by the backend
-curl -s -X POST http://localhost:5180/api/auth \
-  -H 'content-type: application/json' \
-  -d '{"accessCode":"<ACCESS_CODE>","nickname":"my-test-nickname"}'
 ```
 
 `npm run dev` also works, but both projects default to Vite's port 5173, so pass
@@ -67,7 +84,7 @@ explicit ports when running them together.
 
 | Command | What it does |
 | --- | --- |
-| `npm test` | Vitest: proxy worker tests |
+| `npm test` | Vitest: proxy worker tests and the simulator's pure UI logic in `src/lib/` (Node, no DOM) |
 | `npm run lint` | oxlint |
 | `npm run build` | Type check (`tsc -b`) and production build |
 | `npm run deploy` | Build and deploy the Worker (deploy the backend first) |
@@ -76,6 +93,14 @@ explicit ports when running them together.
 ## Layout
 
 ```
-src/              React chat page (App.tsx, main.tsx)
+src/
+├─ App.tsx        sign-in ↔ simulator
+├─ SignIn.tsx     access code + nickname form
+├─ Simulator.tsx  panels, layout switch, customer conversation (useFlueAgent)
+├─ CustomerPhone.tsx, CustomerCard.tsx, CustomerSwitcher.tsx, SidePanels.tsx
+├─ JudgmentLog.tsx  tool calls and reasoning
+└─ lib/           pure logic with tests: API calls, session, conversation ids,
+                  transcript, 409 recovery, layout, customer card, roster,
+                  suggested replies, booking status, log formatting
 worker/index.ts   serves the SPA, forwards /api/* to the backend binding
 ```
