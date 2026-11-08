@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { PRESETS, pickPreset, presetBookings } from '../../src/domain/presets.ts';
 import { quote } from '../../src/domain/quote.ts';
-import { RULES, TOWNS, townWeekdays } from '../../src/domain/rules.ts';
+import { TOWNS, townWeekdays } from '../../src/domain/rules.ts';
 import { checkSlot, findSlots } from '../../src/domain/slots.ts';
 import { addDays, weekdayOf } from '../../src/domain/time.ts';
 
-const from = RULES.demoDate;
+// An anchor Sunday, and the start of that day on Dave's wall clock.
+const from = '2026-11-15';
+const now = `${from}T00:00`;
 const twoWeeks = Array.from({ length: 14 }, (_, d) => addDays(from, d));
 
 describe('seed presets', () => {
@@ -16,7 +18,7 @@ describe('seed presets', () => {
 	});
 
 	describe.each(PRESETS.map((p) => [p.id, p] as const))('preset %s', (_id, preset) => {
-		const bookings = presetBookings(preset);
+		const bookings = presetBookings(preset, from);
 
 		it('has unique booking ids', () => {
 			expect(new Set(bookings.map((b) => b.id)).size).toBe(bookings.length);
@@ -25,7 +27,7 @@ describe('seed presets', () => {
 		it('only holds bookings the rules allow, within two weeks', () => {
 			for (const b of bookings) {
 				const others = bookings.filter((o) => o !== b);
-				const check = checkSlot({ town: b.town, start: b.start, durationMinutes: b.durationMinutes, bookings: others });
+				const check = checkSlot({ now, town: b.town, start: b.start, durationMinutes: b.durationMinutes, bookings: others });
 				expect(check, `${b.id} ${b.start}`).toEqual({ ok: true, slot: { start: b.start, end: b.end } });
 				expect(twoWeeks).toContain(b.start.slice(0, 10));
 			}
@@ -33,7 +35,7 @@ describe('seed presets', () => {
 
 		it.each(TOWNS)('leaves 1 h and 1.5 h slots open for %s within two weeks', (town) => {
 			for (const durationMinutes of [60, 90]) {
-				expect(findSlots({ town, durationMinutes, from, bookings }), `${durationMinutes} min`).not.toHaveLength(0);
+				expect(findSlots({ now, town, durationMinutes, from, bookings }), `${durationMinutes} min`).not.toHaveLength(0);
 			}
 		});
 
@@ -41,9 +43,24 @@ describe('seed presets', () => {
 			const tight = TOWNS.some((town) =>
 				twoWeeks
 					.filter((date) => townWeekdays(town).includes(weekdayOf(date)))
-					.some((date) => findSlots({ town, durationMinutes: 90, from: date, days: 1, bookings }).length === 0),
+					.some((date) => findSlots({ now, town, durationMinutes: 90, from: date, days: 1, bookings }).length === 0),
 			);
 			expect(tight).toBe(true);
+		});
+
+		it('has a seed in each of its two weeks, so neither week ahead is empty', () => {
+			expect(preset.bookings.some((b) => b.dayOffset < 7)).toBe(true);
+			expect(preset.bookings.some((b) => b.dayOffset > 7)).toBe(true);
+		});
+
+		// build-plan §12: a reset on Thu 2026-12-03 10:40 anchors on the coming Sunday, 12-06.
+		it.each(TOWNS)('reset mid-week, leaves 1 h and 1.5 h slots for %s through next week', (town) => {
+			const live = presetBookings(preset, '2026-12-06');
+			for (const durationMinutes of [60, 90]) {
+				// Thu 12-03 through Fri 12-11.
+				const slots = findSlots({ now: '2026-12-03T10:40', town, durationMinutes, from: '2026-12-03', days: 9, bookings: live });
+				expect(slots, `${durationMinutes} min`).not.toHaveLength(0);
+			}
 		});
 
 		it('prices each booking with quote and records the basis', () => {
@@ -60,6 +77,10 @@ describe('seed presets', () => {
 			}
 		});
 	});
+});
+
+it('refuses an anchor that is not a Sunday', () => {
+	expect(() => presetBookings(PRESETS[0], '2026-12-03')).toThrow(RangeError);
 });
 
 describe('pickPreset', () => {

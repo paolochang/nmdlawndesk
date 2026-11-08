@@ -4,9 +4,10 @@ import type { DaveConfig } from './config.ts';
 
 /** `GET /api/config` as the backend serves it (backend `RULES`). */
 export const config: DaveConfig = {
-  demoDate: '2026-11-15',
+  timeZone: 'America/New_York',
   hours: { open: '08:00', close: '13:00' },
   slotStepMinutes: 30,
+  minNoticeMinutes: 60,
   searchDays: 14,
   townGroups: [
     { weekdays: [1, 4], towns: ['Ashford', 'Clearwater'] },

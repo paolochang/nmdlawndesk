@@ -1,10 +1,12 @@
 import { describe, expect, it } from 'vitest';
 import { resolveTown } from '../../src/domain/rules.ts';
 import { checkSlot, findSlots } from '../../src/domain/slots.ts';
+import { localDateTime } from '../../src/domain/time.ts';
 import type { TimeRange } from '../../src/domain/types.ts';
 
-// RULES.demoDate 2026-11-15 is a Sunday: Mon 16, Tue 17, Thu 19, Fri 20, Mon 23 …
+// Now is Sun 2026-11-15 09:00, Dave's wall clock: Mon 16, Tue 17, Thu 19, Fri 20, Mon 23 …
 const from = '2026-11-15';
+const now = `${from}T09:00`;
 const weekdayOf = (dateTime: string) => new Date(`${dateTime.slice(0, 10)}T00:00Z`).getUTCDay();
 
 describe('resolveTown', () => {
@@ -19,7 +21,7 @@ describe('resolveTown', () => {
 
 describe('findSlots', () => {
 	it('offers the earliest open slot on each of the next town days', () => {
-		expect(findSlots({ town: 'Ashford', durationMinutes: 60, from, bookings: [] })).toEqual([
+		expect(findSlots({ now, town: 'Ashford', durationMinutes: 60, from, bookings: [] })).toEqual([
 			{ start: '2026-11-16T08:00', end: '2026-11-16T09:00' },
 			{ start: '2026-11-19T08:00', end: '2026-11-19T09:00' },
 		]);
@@ -31,50 +33,50 @@ describe('findSlots', () => {
 		['Birchwood', [2, 5]],
 		['Dunmore', [2, 5]],
 	] as const)('%s only gets its weekdays', (town, weekdays) => {
-		const slots = findSlots({ town, durationMinutes: 60, from, bookings: [], limit: 99 });
+		const slots = findSlots({ now, town, durationMinutes: 60, from, bookings: [], limit: 99 });
 		expect(slots).toHaveLength(4);
 		for (const slot of slots) expect(weekdays).toContain(weekdayOf(slot.start));
 	});
 
 	it('never offers a 1.5 h job at 12 PM, so it ends by 1 PM', () => {
 		const bookings: TimeRange[] = [{ start: '2026-11-16T08:00', end: '2026-11-16T12:00' }];
-		expect(findSlots({ town: 'Ashford', durationMinutes: 60, from, bookings, limit: 1 })).toEqual([
+		expect(findSlots({ now, town: 'Ashford', durationMinutes: 60, from, bookings, limit: 1 })).toEqual([
 			{ start: '2026-11-16T12:00', end: '2026-11-16T13:00' },
 		]);
-		expect(findSlots({ town: 'Ashford', durationMinutes: 90, from, bookings, limit: 1 })).toEqual([
+		expect(findSlots({ now, town: 'Ashford', durationMinutes: 90, from, bookings, limit: 1 })).toEqual([
 			{ start: '2026-11-19T08:00', end: '2026-11-19T09:30' },
 		]);
 	});
 
 	it('avoids existing bookings and allows back-to-back jobs', () => {
 		const first = (bookings: TimeRange[]) =>
-			findSlots({ town: 'Birchwood', durationMinutes: 60, from, bookings, limit: 1 })[0];
+			findSlots({ now, town: 'Birchwood', durationMinutes: 60, from, bookings, limit: 1 })[0];
 		expect(first([{ start: '2026-11-17T08:00', end: '2026-11-17T09:00' }]).start).toBe('2026-11-17T09:00');
 		expect(first([{ start: '2026-11-17T08:30', end: '2026-11-17T09:30' }]).start).toBe('2026-11-17T09:30');
 	});
 
 	it('starts searching on the from date', () => {
-		const slots = findSlots({ town: 'Ashford', durationMinutes: 60, from: '2026-11-17', bookings: [] });
+		const slots = findSlots({ now, town: 'Ashford', durationMinutes: 60, from: '2026-11-17', bookings: [] });
 		expect(slots[0].start).toBe('2026-11-19T08:00');
 	});
 
 	it('never offers a slot before today, and every offer passes checkSlot', () => {
 		const bookings: TimeRange[] = [{ start: '2026-11-16T08:00', end: '2026-11-16T12:00' }];
-		const slots = findSlots({ town: 'Ashford', durationMinutes: 60, from: '2026-11-04', bookings, limit: 99 });
+		const slots = findSlots({ now, town: 'Ashford', durationMinutes: 60, from: '2026-11-04', bookings, limit: 99 });
 		expect(slots[0].start).toBe('2026-11-16T12:00');
 		for (const slot of slots) {
-			expect(checkSlot({ town: 'Ashford', start: slot.start, durationMinutes: 60, bookings })).toEqual({ ok: true, slot });
+			expect(checkSlot({ now, town: 'Ashford', start: slot.start, durationMinutes: 60, bookings })).toEqual({ ok: true, slot });
 		}
 	});
 
 	it('returns no slots when the town days in range are full', () => {
 		const bookings: TimeRange[] = [{ start: '2026-11-16T08:00', end: '2026-11-16T13:00' }];
-		expect(findSlots({ town: 'Ashford', durationMinutes: 60, from: '2026-11-16', days: 1, bookings })).toEqual([]);
+		expect(findSlots({ now, town: 'Ashford', durationMinutes: 60, from: '2026-11-16', days: 1, bookings })).toEqual([]);
 	});
 });
 
 describe('checkSlot', () => {
-	const ok = { town: 'Ashford', bookings: [] } as const;
+	const ok = { town: 'Ashford', bookings: [], now } as const;
 
 	it('accepts an open slot on a town day and returns its end', () => {
 		expect(checkSlot({ ...ok, start: '2026-11-16T11:30', durationMinutes: 90 })).toEqual({
@@ -93,8 +95,8 @@ describe('checkSlot', () => {
 		expect(checkSlot({ ...ok, start, durationMinutes })).toEqual({ ok: false, reason });
 	});
 
-	it('treats days before an explicit today as past', () => {
-		expect(checkSlot({ ...ok, today: '2026-11-17', start: '2026-11-16T08:00', durationMinutes: 60 })).toEqual({
+	it('treats days before now as past', () => {
+		expect(checkSlot({ ...ok, now: '2026-11-17T09:00', start: '2026-11-16T08:00', durationMinutes: 60 })).toEqual({
 			ok: false,
 			reason: 'past',
 		});
@@ -113,5 +115,32 @@ describe('checkSlot', () => {
 		expect(() => checkSlot({ ...ok, start: 'Monday 9am', durationMinutes: 60 })).toThrow(RangeError);
 		expect(() => checkSlot({ ...ok, start: '2026-11-31T08:00', durationMinutes: 60 })).toThrow(RangeError);
 		expect(() => checkSlot({ ...ok, start: '2026-11-16T08:00', durationMinutes: 0 })).toThrow(RangeError);
+	});
+});
+
+describe('live dates (build-plan §12)', () => {
+	// Thu 2026-12-03 10:40 in New York is 15:40 UTC (EST).
+	const thursday = localDateTime(Date.parse('2026-12-03T15:40:00Z'), 'America/New_York');
+
+	it("reads the clock in Dave's time zone, daylight saving included", () => {
+		expect(thursday).toBe('2026-12-03T10:40');
+		expect(localDateTime(Date.parse('2026-07-02T14:40:00Z'), 'America/New_York')).toBe('2026-07-02T10:40');
+	});
+
+	it('offers nothing earlier today than an hour from now', () => {
+		expect(findSlots({ now: thursday, town: 'Ashford', durationMinutes: 60, from: '2026-12-03', bookings: [] })).toEqual([
+			{ start: '2026-12-03T12:00', end: '2026-12-03T13:00' },
+			{ start: '2026-12-07T08:00', end: '2026-12-07T09:00' },
+		]);
+		// A 1.5 h job no longer fits today; a `from` in the past searches from today.
+		expect(findSlots({ now: thursday, town: 'Ashford', durationMinutes: 90, from: '2026-11-15', bookings: [], limit: 1 })).toEqual([
+			{ start: '2026-12-07T08:00', end: '2026-12-07T09:30' },
+		]);
+	});
+
+	it('refuses a start less than an hour from now as past', () => {
+		const job = { now: thursday, town: 'Ashford', durationMinutes: 60, bookings: [] } as const;
+		expect(checkSlot({ ...job, start: '2026-12-03T11:30' })).toEqual({ ok: false, reason: 'past' });
+		expect(checkSlot({ ...job, start: '2026-12-03T12:00' }).ok).toBe(true);
 	});
 });

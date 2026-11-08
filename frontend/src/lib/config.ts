@@ -3,10 +3,12 @@
 // of each weekday group (shared by the calendar and the town map).
 
 export interface DaveConfig {
-  /** The simulator's fixed "today", `YYYY-MM-DD` (a Sunday). */
-  demoDate: string;
+  /** Dave's time zone (IANA); "today" comes with each calendar snapshot. */
+  timeZone: string;
   hours: { open: string; close: string };
   slotStepMinutes: number;
+  /** A job starts at least this long after now. */
+  minNoticeMinutes: number;
   searchDays: number;
   /** `weekdays`: 0 = Sunday … 6 = Saturday. */
   townGroups: { weekdays: number[]; towns: string[] }[];

@@ -66,7 +66,7 @@ Public routes need no token:
 
 ```sh
 curl http://localhost:8787/api/health   # {"ok":true}
-curl http://localhost:8787/api/config   # hours, town weekdays, prices, demo date
+curl http://localhost:8787/api/config   # hours, town weekdays, prices, time zone
 ```
 
 Sign in with the access code and an allowlisted nickname. The answer holds your
@@ -116,10 +116,10 @@ All routes are under `/api` (`src/app.ts`).
 | Route | Auth | Purpose |
 | --- | --- | --- |
 | `GET /api/health` | public | Liveness check |
-| `GET /api/config` | public | Dave's rules (`src/domain/rules.ts`): hours, town weekdays, prices, demo date |
+| `GET /api/config` | public | Dave's rules (`src/domain/rules.ts`): hours, town weekdays, prices, time zone |
 | `POST /api/auth` | public | `{ accessCode, nickname }` → `{ visitorId, token, expiresAt }`; 401 for a wrong code or a nickname not in the allowlist |
-| `GET /api/calendar/<visitorId>` | token | The visitor's generation, seed preset, customers, and bookings |
-| `POST /api/calendar/<visitorId>/reset` | token | New generation, no customers, a different seed preset |
+| `GET /api/calendar/<visitorId>` | token | The visitor's generation, seed preset, customers, and bookings, plus `today` and `timeZone` (Dave's date, build-plan §12) |
+| `POST /api/calendar/<visitorId>/reset` | token | New generation, no customers, a different seed preset dated from this week |
 | `/api/agents/lawn-desk/<visitorId>:<generation>:<phone>` | token | A customer conversation with the Flue agent `LawnDesk` |
 | `/api/agents/dave-phone/<visitorId>:<generation>:dave` | token | Dave's phone (`DavePhone`): booking and handoff texts for that generation |
 

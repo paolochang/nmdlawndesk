@@ -21,6 +21,10 @@ export interface CalendarSnapshot {
   presetId: string;
   customers: { phone: string; name?: string }[];
   bookings: CalendarBooking[];
+  /** Today in Dave's time zone, `YYYY-MM-DD` (build-plan §12). */
+  today: string;
+  /** Dave's time zone, an IANA name such as `America/New_York`. */
+  timeZone: string;
 }
 
 export interface CalendarEvent {
@@ -37,9 +41,9 @@ export interface CalendarEvent {
 }
 
 export interface CalendarWindow {
-  /** First day shown, `YYYY-MM-DD` (the Monday after the demo date). */
+  /** First day shown, `YYYY-MM-DD`: the Monday of today's week (the next one on a weekend). */
   start: string;
-  /** Exclusive end, `YYYY-MM-DD` (the demo date plus the search window). */
+  /** Exclusive end, `YYYY-MM-DD` (today plus the search window). */
   end: string;
   slotMinTime: string;
   slotMaxTime: string;
@@ -52,23 +56,40 @@ function addDays(date: string, days: number): string {
 }
 
 /**
- * The weeks the calendar may show: the Monday after the demo date to the end of
- * the default search window, stretched to the latest booking (the desk can search
- * from a later date when a customer asks for one).
+ * The weeks the calendar may show: the Monday of `today`'s week (the next Monday
+ * on a Saturday or Sunday, when the work week is over) to the end of the default
+ * search window, stretched to the latest booking (the desk can search from a
+ * later date when a customer asks for one).
  */
-export function calendarWindow(config: DaveConfig, bookings: readonly CalendarBooking[]): CalendarWindow {
-  const weekday = new Date(`${config.demoDate}T00:00:00Z`).getUTCDay();
-  let end = addDays(config.demoDate, config.searchDays + 1);
+export function calendarWindow(config: DaveConfig, today: string, bookings: readonly CalendarBooking[]): CalendarWindow {
+  const weekday = new Date(`${today}T00:00:00Z`).getUTCDay();
+  let end = addDays(today, config.searchDays + 1);
   for (const booking of bookings) {
     const after = addDays(booking.start.slice(0, 10), 1);
     if (after > end) end = after;
   }
   return {
-    start: addDays(config.demoDate, (8 - weekday) % 7 || 7),
+    start: weekday === 0 ? addDays(today, 1) : weekday === 6 ? addDays(today, 2) : addDays(today, 1 - weekday),
     end,
     slotMinTime: config.hours.open,
     slotMaxTime: config.hours.close,
   };
+}
+
+/**
+ * The header's "Today": `2026-12-03`, `America/New_York` → `Thu, Dec 3, 2026 · New York time`.
+ * Dave's date, which a reviewer in another zone may not share.
+ */
+export function todayLabel(today: string, timeZone: string): string {
+  const date = new Date(`${today}T00:00:00Z`).toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+    timeZone: 'UTC',
+  });
+  const place = (timeZone.split('/').at(-1) ?? timeZone).replaceAll('_', ' ');
+  return `${date} · ${place} time`;
 }
 
 /** What a weekday column says under its date: its towns, or that Dave does not work. */

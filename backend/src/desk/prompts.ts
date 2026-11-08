@@ -1,7 +1,7 @@
 import type { DeliveredMessage } from '@flue/runtime';
 import { dollars } from '../domain/quote.ts';
 import { RULES, WEEKDAY_NAMES } from '../domain/rules.ts';
-import { weekdayOf } from '../domain/time.ts';
+import { addDays, weekdayOf } from '../domain/time.ts';
 import type { DaveAlert, DaveBookingNotice } from './tools.ts';
 
 /** Both agents' model (build-plan §2, 🟡 until Day 10-11 tuning). */
@@ -11,9 +11,11 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 
 /**
  * The lawn-desk system prompt (build-plan §4), written from RULES so the prompt and
- * the tools never disagree. Static on purpose: dynamic text would bust the prompt cache.
+ * the tools never disagree. Only `now`'s date changes it (build-plan §12), so the
+ * prompt cache holds for a day. The dates of the next two weeks let the model turn
+ * "next Tuesday" into a date; the tools still check every date against the clock.
  */
-export function lawnDeskPrompt(): string {
+export function lawnDeskPrompt(now: string): string {
 	const hour = (time: string) => {
 		const h = Number(time.slice(0, 2));
 		return `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`;
@@ -28,8 +30,13 @@ export function lawnDeskPrompt(): string {
 		lower = row.maxAcres;
 		return line;
 	});
-	const today = `${DAY_NAMES[weekdayOf(RULES.demoDate)]} ${RULES.demoDate}`;
-	return `You answer text messages for Dave's Lawn Desk. Dave is a one-person lawn-mowing business, and you book his jobs. Today is ${today}.
+	const date = now.slice(0, 10);
+	const today = `${DAY_NAMES[weekdayOf(date)]} ${date}`;
+	const coming = Array.from({ length: RULES.searchDays }, (_, i) => {
+		const day = addDays(date, i + 1);
+		return `${WEEKDAY_NAMES[weekdayOf(day)]} ${day}`;
+	}).join(', ');
+	return `You answer text messages for Dave's Lawn Desk. Dave is a one-person lawn-mowing business, and you book his jobs. Today is ${today} in Dave's time zone. The next days are ${coming}.
 
 Rules:
 - Hours: ${hour(RULES.hours.open)}-${hour(RULES.hours.close)}. A job must end by ${hour(RULES.hours.close)}.

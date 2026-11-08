@@ -12,6 +12,8 @@ import { useStickToBottom } from './useStickToBottom.ts';
 
 interface CalendarProps {
   config: DaveConfig;
+  /** Today in Dave's time zone, from the calendar snapshot. */
+  today: string;
   bookings: readonly CalendarBooking[];
   /** The booking that just landed: the calendar moves to its week and animates it. */
   landingId: string | undefined;
@@ -27,9 +29,9 @@ function weekTitle(start: Date | undefined): string {
 
 // Dave's week (build-plan §7): Mon-Fri, opening hours only, within the weeks the
 // desk can book into. Each day says which towns Dave mows; Wednesday is off.
-function DaveCalendar({ config, bookings, landingId }: CalendarProps) {
+function DaveCalendar({ config, today, bookings, landingId }: CalendarProps) {
   const calendar = useRef<CalendarRef>(null);
-  const range = useMemo(() => calendarWindow(config, bookings), [config, bookings]);
+  const range = useMemo(() => calendarWindow(config, today, bookings), [config, today, bookings]);
   const events = useMemo(() => toEvents(bookings, config, landingId), [bookings, config, landingId]);
   const landingStart = bookings.find((booking) => booking.id === landingId)?.start;
   const [shown, setShown] = useState<{ start: Date; end: Date }>();
@@ -207,6 +209,8 @@ interface Props {
   /** /config or the calendar could not be loaded. */
   failed: boolean;
   bookings: readonly CalendarBooking[] | undefined;
+  /** Today in Dave's time zone, from the same snapshot as `bookings`. */
+  today: string | undefined;
   landingId: string | undefined;
   daveBubbles: readonly Bubble[];
   daveTyping: boolean;
@@ -217,8 +221,8 @@ interface Props {
   onToggleDave: () => void;
 }
 
-export function DavePanel({ config, failed, bookings, landingId, daveBubbles, daveTyping, daveOpen, daveUnread, onToggleDave }: Props) {
-  if (!config || !bookings) {
+export function DavePanel({ config, failed, bookings, today, landingId, daveBubbles, daveTyping, daveOpen, daveUnread, onToggleDave }: Props) {
+  if (!config || !bookings || !today) {
     return (
       <p className="placeholder dave-placeholder">
         {failed ? "Could not load Dave's side. Reload the page to try again." : "Loading Dave's calendar…"}
@@ -229,7 +233,7 @@ export function DavePanel({ config, failed, bookings, landingId, daveBubbles, da
   return (
     <>
       <div className="dave-body">
-        <DaveCalendar config={config} bookings={bookings} landingId={landingId} />
+        <DaveCalendar config={config} today={today} bookings={bookings} landingId={landingId} />
         <RulesTables config={config} />
       </div>
       {daveOpen && <DavePhone bubbles={daveBubbles} typing={daveTyping} />}

@@ -9,7 +9,7 @@ import { JudgmentLog } from './JudgmentLog.tsx';
 import { BookingStatusCard, SuggestedReplies } from './SidePanels.tsx';
 import { TownMap } from './TownMap.tsx';
 import { fetchCalendar, fetchConfig, fetchGeneration, reportingUnauthorized, resetCalendar, statusOf } from './lib/api.ts';
-import { acceptSnapshot, type CalendarSnapshot } from './lib/calendar.ts';
+import { acceptSnapshot, todayLabel, type CalendarSnapshot } from './lib/calendar.ts';
 import type { DaveConfig } from './lib/config.ts';
 import { customerConversationUrl, daveConversationUrl } from './lib/conversation.ts';
 import { panelLayout, type Focus } from './lib/layout.ts';
@@ -42,17 +42,6 @@ interface Props {
   session: Session;
   onUnauthorized: () => void;
   onSignOut: () => void;
-}
-
-/** `2026-11-15` → `Sun, Nov 15, 2026`. */
-function demoDay(date: string): string {
-  return new Date(`${date}T00:00:00Z`).toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
 }
 
 function rosterEntry(customer: Customer, generation: number, status: BookingStatus): RosterEntry {
@@ -374,9 +363,9 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
           <h1>Dave's Lawn Desk</h1>
           <span className="subtitle">Text-message booking simulator</span>
         </div>
-        {config && (
+        {calendar && (
           <div className="today">
-            Today <b>{demoDay(config.demoDate)}</b>
+            Today <b>{todayLabel(calendar.today, calendar.timeZone)}</b>
           </div>
         )}
         <div className="reset">
@@ -494,6 +483,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
                 config={config}
                 failed={daveFailed}
                 bookings={calendar?.bookings}
+                today={calendar?.today}
                 landingId={landingId}
                 daveBubbles={shownDave}
                 daveTyping={daveHeld === undefined && isTyping(dave.status)}

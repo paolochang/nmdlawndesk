@@ -10,6 +10,11 @@ function memoryKv(): KvStorage {
 	};
 }
 
+// Sun 2026-11-15 09:00 in Dave's time zone (14:00 UTC); the seeds anchor on that Sunday.
+const SUNDAY = () => Date.parse('2026-11-15T14:00:00Z');
+const ANCHOR = '2026-11-15';
+const LIVE = { today: ANCHOR, timeZone: 'America/New_York' };
+
 /** Returns the given values in turn, then repeats the last one. */
 const sequence = (...values: number[]) => () => values.length > 1 ? values.shift()! : values[0];
 
@@ -24,24 +29,25 @@ const request: BookingRequest = {
 
 describe('VisitorLedger', () => {
 	it('starts a first visit at generation 1 with a random preset and no customers', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		expect(ledger.list()).toEqual({
 			generation: 1,
 			presetId: PRESETS[0].id,
 			customers: [],
-			bookings: presetBookings(PRESETS[0]),
+			bookings: presetBookings(PRESETS[0], ANCHOR),
+			...LIVE,
 		});
 	});
 
 	it('keeps the same state for a returning visitor', () => {
 		const kv = memoryKv();
-		const first = new VisitorLedger(kv, sequence(0.99));
+		const first = new VisitorLedger(kv, sequence(0.99), SUNDAY);
 		first.add(request);
-		expect(new VisitorLedger(kv, sequence(0)).list()).toEqual(first.list());
+		expect(new VisitorLedger(kv, sequence(0), SUNDAY).list()).toEqual(first.list());
 	});
 
 	it('adds a valid booking priced from the yard size', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		const result = ledger.add({ ...request, acres: 1 });
 		expect(result).toEqual({
 			ok: true,
@@ -61,7 +67,7 @@ describe('VisitorLedger', () => {
 	});
 
 	it('ignores a caller-supplied id, price, or other extra fields', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		const forged = { ...request, id: 'seed-A-1', priceCents: 1, durationMinutes: 5, note: 'x' } as BookingRequest;
 		const result = ledger.add(forged);
 		expect(result.ok && result.booking).toEqual({
@@ -78,12 +84,12 @@ describe('VisitorLedger', () => {
 	});
 
 	it('hands off a yard over 1 acre instead of booking it', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		expect(ledger.add({ ...request, acres: 2 })).toEqual({ ok: false, reason: 'handoff' });
 	});
 
 	it('rejects a double booking against the preset and against an earlier booking', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		expect(ledger.add({ ...request, start: '2026-11-17T09:30' })).toEqual({ ok: false, reason: 'overlap' });
 		expect(ledger.add(request).ok).toBe(true);
 		expect(ledger.add({ ...request, name: 'Other', start: '2026-11-17T10:30' })).toEqual({
@@ -94,7 +100,7 @@ describe('VisitorLedger', () => {
 	});
 
 	it('rejects a booking the rules do not allow', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		expect(ledger.add({ ...request, start: '2026-11-17T12:00', acres: 1 })).toEqual({
 			ok: false,
 			reason: 'outside-hours',
@@ -102,7 +108,7 @@ describe('VisitorLedger', () => {
 	});
 
 	it('rejects a booking without a customer name', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		expect(ledger.add({ ...request, name: '  ' })).toEqual({ ok: false, reason: 'missing-name' });
 	});
 
@@ -112,13 +118,13 @@ describe('VisitorLedger', () => {
 		['a malformed start', { start: 'Tuesday 10am' }],
 		['a non-positive size', { acres: -1 }],
 	])('rejects a request with %s as invalid', (_case, patch) => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		expect(ledger.add({ ...request, ...patch } as BookingRequest)).toEqual({ ok: false, reason: 'invalid-request' });
-		expect(ledger.list().bookings).toEqual(presetBookings(PRESETS[0]));
+		expect(ledger.list().bookings).toEqual(presetBookings(PRESETS[0], ANCHOR));
 	});
 
 	it('gives every booking a distinct id', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		ledger.add(request);
 		ledger.add({ ...request, start: '2026-11-17T11:00' });
 		const ids = ledger.list().bookings.map((b) => b.id);
@@ -126,14 +132,14 @@ describe('VisitorLedger', () => {
 	});
 
 	it('adds a customer once per phone number', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		ledger.addCustomer('+15550101');
 		expect(ledger.addCustomer('+15550101')).toEqual([{ phone: '+15550101' }]);
 		expect(ledger.addCustomer('+15550102')).toHaveLength(2);
 	});
 
 	it('resets to a new generation with no customers and exactly the new preset', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0, 0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0, 0), SUNDAY);
 		ledger.addCustomer('+15550101');
 		ledger.add(request);
 		const after = ledger.reset();
@@ -141,13 +147,14 @@ describe('VisitorLedger', () => {
 			generation: 2,
 			presetId: PRESETS[1].id,
 			customers: [],
-			bookings: presetBookings(PRESETS[1]),
+			bookings: presetBookings(PRESETS[1], ANCHOR),
+			...LIVE,
 		});
 		expect(ledger.list()).toEqual(after);
 	});
 
 	it('never resets to the current preset', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0.5));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0.5), SUNDAY);
 		for (let i = 0; i < 6; i++) {
 			const before = ledger.list().presetId;
 			expect(ledger.reset().presetId).not.toBe(before);
@@ -155,7 +162,7 @@ describe('VisitorLedger', () => {
 	});
 
 	it('records the customer’s name with the booking, in the same call', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		ledger.addCustomer('+15550101');
 		expect(ledger.add({ ...request, phone: '+15550101' }).ok).toBe(true);
 		expect(ledger.list().customers).toEqual([{ phone: '+15550101', name: 'Sarah Lee' }]);
@@ -164,20 +171,20 @@ describe('VisitorLedger', () => {
 	});
 
 	it('records no customer for a refused booking', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		expect(ledger.add({ ...request, phone: '+15550101', start: '2026-11-17T09:00' }).ok).toBe(false);
 		expect(ledger.list().customers).toEqual([]);
 	});
 
 	it('ignores a customer phone from an older generation', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0, 0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0, 0), SUNDAY);
 		ledger.reset();
 		expect(ledger.addCustomer('+15550101', 1)).toEqual([]);
 		expect(ledger.addCustomer('+15550101', 2)).toEqual([{ phone: '+15550101' }]);
 	});
 
 	it('refuses a booking made for an older generation', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0, 0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0, 0), SUNDAY);
 		ledger.reset();
 		expect(ledger.add({ ...request, start: '2026-11-24T10:00', generation: 1 })).toEqual({
 			ok: false,
@@ -190,18 +197,81 @@ describe('VisitorLedger', () => {
 		const kv = memoryKv();
 		// Shape written before the schema version existed (Day 5).
 		kv.put('state', { generation: 4, presetId: 'A', customers: [], bookings: [], nextBookingNo: 1 });
-		const after = new VisitorLedger(kv, sequence(0)).list();
+		const after = new VisitorLedger(kv, sequence(0), SUNDAY).list();
 		expect(after.generation).toBe(5);
 		expect(after.presetId).not.toBe('A');
-		expect(after.bookings).toEqual(presetBookings(PRESETS.find((p) => p.id === after.presetId)!));
+		expect(after.bookings).toEqual(presetBookings(PRESETS.find((p) => p.id === after.presetId)!, ANCHOR));
 	});
 
 	it('starts ids for a new generation without reusing old ones', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		const first = ledger.add(request);
 		ledger.reset();
 		const second = ledger.add({ ...request, start: '2026-11-24T10:00' });
 		expect(first.ok && second.ok && first.booking.id !== second.booking.id).toBe(true);
+	});
+});
+
+describe('VisitorLedger live dates (build-plan §12)', () => {
+	// Thu 2026-12-03 10:40 in Dave's time zone (15:40 UTC); the coming Sunday is 12-06.
+	const THURSDAY = Date.parse('2026-12-03T15:40:00Z');
+	const overlapping = (bookings: { id: string; start: string; end: string }[]) =>
+		bookings.flatMap((a) => bookings.filter((b) => a !== b && a.start < b.end && b.start < a.end).map((b) => `${a.id} × ${b.id}`));
+
+	it("anchors a reset's seeds on the coming Sunday and says today", () => {
+		const ledger = new VisitorLedger(memoryKv(), sequence(0, 0), () => THURSDAY);
+		const after = ledger.reset();
+		expect(after.bookings).toEqual(presetBookings(PRESETS[1], '2026-12-06'));
+		expect(after).toMatchObject({ today: '2026-12-03', timeZone: 'America/New_York' });
+	});
+
+	// Holistic review P2-1: from Tuesday on, a this-week anchor left the preset's tight day in the past.
+	it.each(['11-29', '11-30', '12-01', '12-02', '12-03', '12-04', '12-05'])(
+		'puts every seed of every preset after today for a reset on 2026-%s',
+		(day) => {
+			const now = Date.parse(`2026-${day}T19:00:00Z`); // 14:00 ET
+			for (const r of [0, 0.3, 0.6, 0.9]) {
+				const { bookings, today, presetId } = new VisitorLedger(memoryKv(), sequence(r), () => now).list();
+				expect(bookings.filter((b) => b.start.slice(0, 10) <= today).map((b) => b.id), presetId).toEqual([]);
+			}
+		},
+	);
+
+	it('resets a state stored before live dates (schema 1) once', () => {
+		const kv = memoryKv();
+		kv.put('state', { schemaVersion: 1, generation: 3, presetId: 'A', customers: [], bookings: [], nextBookingNo: 1 });
+		const ledger = new VisitorLedger(kv, sequence(0), () => THURSDAY);
+		expect(ledger.list()).toMatchObject({ generation: 4, presetId: 'B', bookings: presetBookings(PRESETS[1], '2026-12-06') });
+		expect(ledger.list().generation).toBe(4);
+	});
+
+	it('tops up the next two weeks of seeds once the first week is over, around desk bookings', () => {
+		let now = SUNDAY(); // seeds of preset A for 11-16 … 11-27
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), () => now);
+		ledger.addCustomer('+15550101');
+		// A desk booking where preset A's first seed of the 11-29 block lands (Mon 11-30 08:00-09:30).
+		expect(ledger.add({ ...request, town: 'Ashford', start: '2026-11-30T08:00', phone: '+15550101' }).ok).toBe(true);
+		const before = ledger.list();
+
+		now = Date.parse('2026-11-21T19:00:00Z'); // Sat 11-21: still the first week
+		expect(ledger.list().bookings).toEqual(before.bookings);
+
+		now = Date.parse('2026-11-22T15:00:00Z'); // Sun 11-22: the second week begins
+		const after = ledger.list();
+		const topped = presetBookings(PRESETS[0], '2026-11-29').filter((seed) => seed.start !== '2026-11-30T08:00');
+		expect(after).toMatchObject({ generation: 1, presetId: 'A', customers: before.customers, today: '2026-11-22' });
+		expect(after.bookings).toEqual([...before.bookings, ...topped]);
+		expect(overlapping(after.bookings)).toEqual([]);
+		// Reading again adds nothing.
+		expect(ledger.list()).toEqual(after);
+	});
+
+	it('anchors the top-up on the coming Sunday after a long absence, so no new seed is in the past', () => {
+		let now = SUNDAY();
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), () => now);
+		const before = ledger.list().bookings;
+		now = Date.parse('2027-01-07T15:40:00Z'); // Thu 2027-01-07
+		expect(ledger.list().bookings).toEqual([...before, ...presetBookings(PRESETS[0], '2027-01-10')]);
 	});
 });
 
@@ -215,7 +285,7 @@ describe('VisitorLedger.hit (per-visitor rate limit)', () => {
 	});
 
 	it('is not cleared by reset', () => {
-		const ledger = new VisitorLedger(memoryKv(), sequence(0));
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		ledger.hit(t0, 1, 60_000);
 		ledger.reset();
 		expect(ledger.hit(t0 + 1, 1, 60_000)).toBe(false);
