@@ -16,8 +16,8 @@ export interface Reveal {
 export const REVEAL_PAUSE_MS = 900;
 /** The panels' width transition (`.stage` in index.css); the booking lands after it. */
 export const PANELS_OPEN_MS = 700;
-/** How long the new booking keeps its landing animation. */
-export const LANDING_MS = 2600;
+/** How long the new booking keeps its landing animation (drop 1.6 s, then two 1.2 s glows; index.css). */
+export const LANDING_MS = 4200;
 
 function handoffOf(status: BookingStatus): string | undefined {
   if (status.kind === 'with-dave') return status.reason;
@@ -55,4 +55,30 @@ export function gatedBubbles(bubbles: readonly Bubble[], held: number | undefine
  */
 export function unreadCount(shown: number, seen: number | undefined): number {
   return seen === undefined ? 0 : Math.max(0, shown - seen);
+}
+
+export interface SettledReply {
+  reveal: Reveal | undefined;
+  /** Reload Dave's calendar now (a reveal with a booking loads it itself). */
+  loadCalendar: boolean;
+  /**
+   * Re-read Dave's conversation now: the hook does not follow one that did not
+   * exist yet. A handoff reveal does this itself, after its pause.
+   */
+  refreshDave: boolean;
+}
+
+/**
+ * What to do when a reply settles (`isTyping` true → false). `started` is the
+ * conversation and status when the customer texted; a reply that settles after a
+ * customer switch reveals nothing, but may still have changed the calendar or
+ * texted Dave.
+ */
+export function settleReply(
+  started: { url: string | undefined; before: BookingStatus },
+  url: string | undefined,
+  settled: BookingStatus,
+): SettledReply {
+  const reveal = started.url === url ? revealOnSettle(started.before, settled) : undefined;
+  return { reveal, loadCalendar: !reveal?.bookingId, refreshDave: !reveal?.handoff };
 }

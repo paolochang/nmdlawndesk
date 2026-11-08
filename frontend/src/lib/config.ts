@@ -29,9 +29,15 @@ export interface TownDays {
 }
 
 const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-/** One colour per weekday group, in `townGroups` order; outside towns are grey. */
-export const GROUP_COLORS = ['#2f6db3', '#b8590f'];
-export const OUTSIDE_COLOR = '#8f9992';
+/** One colour per weekday group, in `townGroups` order (Mon/Thu, Tue/Fri); outside towns are grey. */
+export const GROUP_COLORS = ['#9a5410', '#245a9c'];
+/** Light fills of the group colours, for bookings in Dave's calendar. */
+export const GROUP_TINTS = ['#fbecd9', '#dde9f8'];
+export const OUTSIDE_COLOR = '#56615a';
+/** The customer's own town on the map, and bookings the desk made. */
+export const HERE_COLOR = '#277a42';
+export const NEW_BOOKING_COLOR = HERE_COLOR;
+export const INK = '#18201a';
 
 export function money(cents: number): string {
   return `$${(cents / 100).toFixed(cents % 100 === 0 ? 0 : 2)}`;
@@ -75,6 +81,17 @@ export function priceRows(config: DaveConfig): PriceRow[] {
   return rows;
 }
 
+/** `$45 an hour. The final price may change on site.` */
+export function priceNote(config: DaveConfig): string {
+  return `${money(config.hourlyRateCents)} an hour. The final price may change on site.`;
+}
+
+/** When jobs may start and must end, from the slot grid and opening hours. */
+export function hoursNote(config: DaveConfig): string {
+  const step = config.slotStepMinutes === 30 ? 'on the half hour' : `every ${config.slotStepMinutes} minutes`;
+  return `Jobs start ${step} from ${clock(config.hours.open)} and end by ${clock(config.hours.close)}. Other towns go to Dave.`;
+}
+
 /** Which towns Dave mows on which weekdays, with the group's colour. */
 export function townDays(config: DaveConfig): TownDays[] {
   return config.townGroups.map((group, index) => ({
@@ -84,8 +101,16 @@ export function townDays(config: DaveConfig): TownDays[] {
   }));
 }
 
+/** The index of the weekday group serving `town`, or undefined outside Dave's area. */
+export function townGroup(config: DaveConfig, town: string): number | undefined {
+  const index = config.townGroups.findIndex((group) => group.towns.includes(town));
+  return index < 0 ? undefined : index;
+}
+
 /** The colour of the weekday group serving `town`, or grey outside Dave's area. */
 export function townColor(config: DaveConfig, town: string): string {
-  const index = config.townGroups.findIndex((group) => group.towns.includes(town));
-  return index < 0 ? OUTSIDE_COLOR : GROUP_COLORS[index % GROUP_COLORS.length];
+  const index = townGroup(config, town);
+  return index === undefined ? OUTSIDE_COLOR : GROUP_COLORS[index % GROUP_COLORS.length];
 }
+
+export const WEEKDAYS = WEEKDAY_NAMES;

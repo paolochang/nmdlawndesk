@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { gatedBubbles, revealOnSettle, unreadCount } from './reveal.ts';
+import { gatedBubbles, revealOnSettle, settleReply, unreadCount } from './reveal.ts';
 import type { BookingStatus } from './status.ts';
 
 const open: BookingStatus = { kind: 'open' };
@@ -47,5 +47,26 @@ describe("unreadCount (Dave's phone badge)", () => {
     expect(unreadCount(3, 1)).toBe(2);
     expect(unreadCount(3, 3)).toBe(0);
     expect(unreadCount(0, 2)).toBe(0);
+  });
+});
+
+describe('settleReply (what a settled reply does)', () => {
+  const a = '/api/agents/lawn-desk/v1:1:+15550000001';
+  const b = '/api/agents/lawn-desk/v1:1:+15550000002';
+
+  it('reveals a booking in the conversation on screen; the reveal loads the calendar', () => {
+    expect(settleReply({ url: a, before: open }, a, booked('g1-1'))).toEqual({
+      reveal: { bookingId: 'g1-1', handoff: false },
+      loadCalendar: false,
+      refreshDave: true,
+    });
+  });
+
+  it('after a customer switch reveals nothing, but still reloads the calendar and Dave\'s phone', () => {
+    expect(settleReply({ url: a, before: open }, b, withDave)).toEqual({
+      reveal: undefined,
+      loadCalendar: true,
+      refreshDave: true,
+    });
   });
 });

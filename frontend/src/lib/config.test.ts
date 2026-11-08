@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { GROUP_COLORS, OUTSIDE_COLOR, priceRows, townColor, townDays } from './config.ts';
+import { GROUP_COLORS, hoursNote, OUTSIDE_COLOR, priceNote, priceRows, townColor, townDays } from './config.ts';
 import { config } from './test-messages.ts';
 
 describe("Dave's rules from /config (build-plan §4)", () => {
@@ -10,6 +10,7 @@ describe("Dave's rules from /config (build-plan §4)", () => {
       { yard: 'over 1 acre', duration: '—', price: 'Dave decides' },
       { yard: 'not sure', duration: '1 h', price: '$45, adjusted on site' },
     ]);
+    expect(priceNote(config)).toBe('$45 an hour. The final price may change on site.');
   });
 
   it('shows the town days, each group in the colour the calendar and map use', () => {
@@ -19,5 +20,6 @@ describe("Dave's rules from /config (build-plan §4)", () => {
     ]);
     expect(townColor(config, 'Dunmore')).toBe(GROUP_COLORS[1]);
     expect(townColor(config, 'Fernhill')).toBe(OUTSIDE_COLOR);
+    expect(hoursNote(config)).toBe('Jobs start on the half hour from 8 AM and end by 1 PM. Other towns go to Dave.');
   });
 });

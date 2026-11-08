@@ -1,23 +1,22 @@
 import { describe, expect, it } from 'vitest';
-import { GROUP_COLORS, OUTSIDE_COLOR } from './config.ts';
+import { GROUP_COLORS, HERE_COLOR, OUTSIDE_COLOR } from './config.ts';
 import { config } from './test-messages.ts';
-import { townMap } from './town-map.ts';
+import { mapCaption, townMap } from './town-map.ts';
+
+const customer = { street: '45 Oak Rd', town: 'Ashford' };
 
 describe('townMap (build-plan §7)', () => {
-  it('shows every town on the customer side, neutral, with the customer\'s own town marked', () => {
+  it("shows every town on the customer side, neutral, with the customer's own town marked", () => {
     const view = townMap('customer', 'Birchwood', config);
     expect(view.daveView).toBe(false);
-    expect(view.markers.map((m) => m.town)).toEqual([
-      'Ashford',
-      'Clearwater',
-      'Birchwood',
-      'Dunmore',
-      'Kestrel Bay',
-      'Fernhill',
-      'Oakmere',
-    ]);
-    expect(new Set(view.markers.map((m) => m.color))).toEqual(new Set([OUTSIDE_COLOR]));
+    expect(view.markers.map((m) => m.town).sort()).toEqual(
+      ['Ashford', 'Birchwood', 'Clearwater', 'Dunmore', 'Fernhill', 'Kestrel Bay', 'Oakmere'],
+    );
+    const color = Object.fromEntries(view.markers.map((m) => [m.town, m.color]));
+    expect(color.Birchwood).toBe(HERE_COLOR);
+    expect(color.Ashford).toBe(OUTSIDE_COLOR);
     expect(view.markers.filter((m) => m.customer).map((m) => m.town)).toEqual(['Birchwood']);
+    expect(mapCaption(customer, config, false)).toBe('45 Oak Rd, Ashford');
   });
 
   it("colours every town by Dave's weekday group once his side is open, outside towns grey", () => {
@@ -34,5 +33,7 @@ describe('townMap (build-plan §7)', () => {
       Oakmere: OUTSIDE_COLOR,
     });
     expect(view.markers.filter((m) => m.customer).map((m) => m.town)).toEqual(['Fernhill']);
+    expect(mapCaption(customer, config, true)).toBe('45 Oak Rd, Ashford · Dave mows here on Mon, Thu');
+    expect(mapCaption({ street: '2 Hill Ct', town: 'Fernhill' }, config, true)).toBe("2 Hill Ct, Fernhill · not one of Dave's towns");
   });
 });

@@ -4,9 +4,9 @@ import timeGridPlugin from '@fullcalendar/react/timegrid';
 import '@fullcalendar/react/skeleton.css';
 import '@fullcalendar/react/themes/classic/theme.css';
 import '@fullcalendar/react/themes/classic/palette.css';
-import { useEffect, useMemo, useRef } from 'react';
-import { calendarWindow, toEvents, type CalendarBooking } from './lib/calendar.ts';
-import { clock, money, priceRows, townDays, type DaveConfig } from './lib/config.ts';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { calendarWindow, dayLabel, toEvents, type CalendarBooking } from './lib/calendar.ts';
+import { hoursNote, priceNote, priceRows, townDays, type DaveConfig } from './lib/config.ts';
 import type { Bubble } from './lib/transcript.ts';
 import { useStickToBottom } from './useStickToBottom.ts';
 
@@ -17,93 +17,141 @@ interface CalendarProps {
   landingId: string | undefined;
 }
 
+const GROUP_CLASS = ['group-a', 'group-b'];
+
+/** `2026-11-16` (a Date at local midnight) → `Week of Nov 16`. */
+function weekTitle(start: Date | undefined): string {
+  if (!start) return '';
+  return `Week of ${start.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+}
+
 // Dave's week (build-plan §7): Mon-Fri, opening hours only, within the weeks the
-// desk can book into.
+// desk can book into. Each day says which towns Dave mows; Wednesday is off.
 function DaveCalendar({ config, bookings, landingId }: CalendarProps) {
   const calendar = useRef<CalendarRef>(null);
-  const range = useMemo(() => calendarWindow(config), [config]);
+  const range = useMemo(() => calendarWindow(config, bookings), [config, bookings]);
   const events = useMemo(() => toEvents(bookings, config, landingId), [bookings, config, landingId]);
   const landingStart = bookings.find((booking) => booking.id === landingId)?.start;
+  const [shown, setShown] = useState<{ start: Date; end: Date }>();
 
   useEffect(() => {
     if (landingStart) calendar.current?.getApi().gotoDate(landingStart.slice(0, 10));
   }, [landingStart]);
 
+  const iso = (date: Date | undefined) =>
+    date ? `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}` : '';
+  const atStart = !shown || iso(shown.start) <= range.start;
+  const atEnd = !shown || iso(shown.end) >= range.end;
+
   return (
     <div className="dave-calendar">
-      <FullCalendar
-        ref={calendar}
-        plugins={[timeGridPlugin, classicThemePlugin]}
-        initialView="timeGridWeek"
-        initialDate={range.start}
-        validRange={{ start: range.start, end: range.end }}
-        firstDay={1}
-        weekends={false}
-        allDaySlot={false}
-        slotMinTime={range.slotMinTime}
-        slotMaxTime={range.slotMaxTime}
-        expandRows
-        height="100%"
-        nowIndicator={false}
-        headerToolbar={{ start: 'title', end: 'prev,next' }}
-        dayHeaderFormat={{ weekday: 'short', month: 'numeric', day: 'numeric' }}
-        eventTimeFormat={{ hour: 'numeric', minute: '2-digit', meridiem: 'short' }}
-        events={events}
-        eventDidMount={(info) => {
-          info.el.title = String(info.event.extendedProps.basis ?? info.event.title);
-        }}
-      />
+      <div className="cal-top">
+        <h3>{weekTitle(shown?.start)}</h3>
+        <button type="button" aria-label="Previous week" disabled={atStart} onClick={() => calendar.current?.getApi().prev()}>
+          ‹
+        </button>
+        <button type="button" aria-label="Next week" disabled={atEnd} onClick={() => calendar.current?.getApi().next()}>
+          ›
+        </button>
+      </div>
+      <div className="cal-body">
+        <FullCalendar
+          ref={calendar}
+          plugins={[timeGridPlugin, classicThemePlugin]}
+          initialView="timeGridWeek"
+          initialDate={range.start}
+          validRange={{ start: range.start, end: range.end }}
+          firstDay={1}
+          weekends={false}
+          allDaySlot={false}
+          slotMinTime={range.slotMinTime}
+          slotMaxTime={range.slotMaxTime}
+          slotHeaderFormat={{ hour: 'numeric', meridiem: 'short' }}
+          expandRows
+          height="100%"
+          nowIndicator={false}
+          headerToolbar={false}
+          datesSet={(info) => setShown({ start: info.start, end: info.end })}
+          dayHeaderClass={(info) => {
+            const group = dayLabel(config, info.dow).group;
+            return group === undefined ? '' : GROUP_CLASS[group % GROUP_CLASS.length];
+          }}
+          dayHeaderContent={(info) => (
+            <div className="day-head">
+              <b>
+                {info.date.toLocaleDateString('en-US', { weekday: 'short' })} {info.date.getDate()}
+              </b>
+              <small>{dayLabel(config, info.dow).towns}</small>
+            </div>
+          )}
+          dayLaneClass={(info) => (dayLabel(config, info.dow).group === undefined ? 'day-off' : '')}
+          events={events}
+          eventContent={(info) => (
+            <div className="booking-block">
+              <b>{String(info.event.extendedProps.name)}</b>
+              <span>
+                {info.timeText} · {String(info.event.extendedProps.town)}
+              </span>
+            </div>
+          )}
+          eventDidMount={(info) => {
+            info.el.title = String(info.event.extendedProps.basis ?? info.event.title);
+          }}
+        />
+      </div>
     </div>
   );
 }
 
-// Work hours and town days, then the price table, straight from /config.
+// Town days and prices, straight from /config, each with its note.
 function RulesTables({ config }: { config: DaveConfig }) {
-  const hours = `${clock(config.hours.open)}–${clock(config.hours.close)}`;
   return (
-    <div className="rules">
-      <table>
-        <caption>Work hours and towns</caption>
-        <thead>
-          <tr>
-            <th scope="col">Days</th>
-            <th scope="col">Towns</th>
-            <th scope="col">Hours</th>
-          </tr>
-        </thead>
-        <tbody>
-          {townDays(config).map((group) => (
-            <tr key={group.days}>
-              <td>
-                <i style={{ background: group.color }} aria-hidden="true" />
-                {group.days}
-              </td>
-              <td>{group.towns}</td>
-              <td>{hours}</td>
+    <div className="facts">
+      <section className="fact">
+        <h3>Town days</h3>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Days</th>
+              <th scope="col">Towns</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <table>
-        <caption>Prices ({money(config.hourlyRateCents)}/hour)</caption>
-        <thead>
-          <tr>
-            <th scope="col">Yard</th>
-            <th scope="col">Time</th>
-            <th scope="col">Price</th>
-          </tr>
-        </thead>
-        <tbody>
-          {priceRows(config).map((row) => (
-            <tr key={row.yard}>
-              <td>{row.yard}</td>
-              <td>{row.duration}</td>
-              <td>{row.price}</td>
+          </thead>
+          <tbody>
+            {townDays(config).map((group) => (
+              <tr key={group.days}>
+                <td>
+                  <i style={{ background: group.color }} aria-hidden="true" />
+                  {group.days}
+                </td>
+                <td>{group.towns}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p>{hoursNote(config)}</p>
+      </section>
+      <section className="fact">
+        <h3>Prices</h3>
+        <table>
+          <thead>
+            <tr>
+              <th scope="col">Yard</th>
+              <th scope="col">Time</th>
+              <th scope="col">Price</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
-      <p className="hint">Other towns are handed to Dave. The final price may change on site.</p>
+          </thead>
+          <tbody>
+            {priceRows(config).map((row) => (
+              <tr key={row.yard}>
+                <td>{row.yard}</td>
+                <td>{row.duration}</td>
+                <td>{row.price}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p>{priceNote(config)}</p>
+      </section>
     </div>
   );
 }
@@ -151,6 +199,8 @@ function DavePhone({ bubbles, typing }: PhoneProps) {
 
 interface Props {
   config: DaveConfig | undefined;
+  /** /config or the calendar could not be loaded. */
+  failed: boolean;
   bookings: readonly CalendarBooking[] | undefined;
   landingId: string | undefined;
   daveBubbles: readonly Bubble[];
@@ -162,8 +212,14 @@ interface Props {
   onToggleDave: () => void;
 }
 
-export function DavePanel({ config, bookings, landingId, daveBubbles, daveTyping, daveOpen, daveUnread, onToggleDave }: Props) {
-  if (!config || !bookings) return <p className="placeholder dave-placeholder">Loading Dave's calendar…</p>;
+export function DavePanel({ config, failed, bookings, landingId, daveBubbles, daveTyping, daveOpen, daveUnread, onToggleDave }: Props) {
+  if (!config || !bookings) {
+    return (
+      <p className="placeholder dave-placeholder">
+        {failed ? "Could not load Dave's side. Reload the page to try again." : "Loading Dave's calendar…"}
+      </p>
+    );
+  }
   const label = daveOpen ? "Hide Dave's phone" : daveUnread ? `Dave's phone, ${daveUnread} new` : "Dave's phone";
   return (
     <>

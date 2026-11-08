@@ -15,7 +15,7 @@ import { customerConversationUrl, daveConversationUrl } from './lib/conversation
 import { panelLayout, type Focus } from './lib/layout.ts';
 import { CUSTOMER_KEY, newCustomer, restoreCustomer, type Customer } from './lib/persona.ts';
 import { recoverStaleSend } from './lib/recover.ts';
-import { gatedBubbles, LANDING_MS, PANELS_OPEN_MS, REVEAL_PAUSE_MS, revealOnSettle, unreadCount, type Reveal } from './lib/reveal.ts';
+import { gatedBubbles, LANDING_MS, PANELS_OPEN_MS, REVEAL_PAUSE_MS, settleReply, unreadCount, type Reveal } from './lib/reveal.ts';
 import { earlierCustomers, loadRoster, rememberCustomer, rememberRecovered, ROSTER_KEY, type RosterEntry } from './lib/roster.ts';
 import { failedSendView, sendFailure, type Session } from './lib/session.ts';
 import { bookingStatus, settledStatus, type BookingStatus } from './lib/status.ts';
@@ -82,6 +82,8 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
 
   const [calendar, setCalendar] = useState<CalendarSnapshot>();
   const [config, setConfig] = useState<DaveConfig>();
+  // Dave's side could not load (/config or the first calendar); it says so instead of "Loading…".
+  const [daveFailed, setDaveFailed] = useState(false);
 
   useEffect(() => {
     let current = true;
@@ -92,7 +94,10 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
         setGeneration(loaded.generation);
       },
       (caught: unknown) => {
-        if (current && statusOf(caught) !== 401) setNotice(LOAD_FAILED);
+        if (current && statusOf(caught) !== 401) {
+          setNotice(LOAD_FAILED);
+          setDaveFailed(true);
+        }
       },
     );
     return () => {
@@ -108,7 +113,7 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
         if (current) setConfig(loaded);
       },
       () => {
-        if (current) setNotice(LOAD_FAILED);
+        if (current) setDaveFailed(true);
       },
     );
     return () => {
@@ -188,15 +193,17 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
   const startReveal = useCallback(
     (reveal: Reveal) => {
       const epoch = revealEpoch.current;
-      const later = (run: () => void, ms: number) =>
-        timers.current.push(
-          window.setTimeout(() => {
-            if (revealEpoch.current === epoch) run();
-          }, ms),
-        );
+      const later = (run: () => void, ms: number) => {
+        const timer = window.setTimeout(() => {
+          timers.current = timers.current.filter((t) => t !== timer);
+          if (revealEpoch.current === epoch) run();
+        }, ms);
+        timers.current.push(timer);
+      };
       const loaded = reveal.bookingId ? fetchCalendar(authFetch, session) : undefined;
       later(() => {
-        setFocus('both');
+        // Open Dave's side; a tester already on Dave's wide side keeps it.
+        setFocus((current) => (current === 'customer' ? 'both' : current));
         if (reveal.handoff) refreshDave();
       }, REVEAL_PAUSE_MS);
       if (!loaded) return;
@@ -206,7 +213,7 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
             if (revealEpoch.current !== epoch) return;
             showCalendar(snapshot);
             setLandingId(reveal.bookingId);
-            later(() => setLandingId(undefined), LANDING_MS);
+            later(() => setLandingId((id) => (id === reveal.bookingId ? undefined : id)), LANDING_MS);
           },
           () => undefined,
         );
@@ -228,18 +235,22 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
     replying.current = undefined;
     setDaveHeld(undefined);
     // Only a reply in the conversation still on screen reveals anything; any
-    // other settled reply may still have changed the calendar.
-    const reveal = started.url === url ? revealOnSettle(started.before, settled) : undefined;
-    if (reveal) startReveal(reveal);
-    if (!reveal?.bookingId) loadCalendar();
-  }, [typing, settled, url, startReveal, loadCalendar, daveBubbles.length]);
+    // settled reply may still have changed the calendar or texted Dave.
+    const after = settleReply(started, url, settled);
+    if (after.reveal) startReveal(after.reveal);
+    if (after.loadCalendar) loadCalendar();
+    if (after.refreshDave) refreshDave();
+  }, [typing, settled, url, startReveal, loadCalendar, refreshDave, daveBubbles.length]);
 
   // Dave's phone badge: texts shown since the phone was last opened. History that
   // loads with the conversation counts as seen.
   const shownDave = gatedBubbles(daveBubbles, daveHeld);
   const daveSeenCount = daveSeen && daveSeen.url === daveUrl ? daveSeen.count : undefined;
   // Adjusted while rendering (React's pattern for state derived from props), not in an effect.
-  if (daveUrl && dave.historyReady && (daveSeenCount === undefined || (daveOpen && daveSeenCount !== shownDave.length))) {
+  // History counts as seen in full, even while a reply holds new texts back.
+  if (daveUrl && dave.historyReady && daveSeenCount === undefined) {
+    setDaveSeen({ url: daveUrl, count: daveBubbles.length });
+  } else if (daveUrl && daveOpen && daveSeenCount !== undefined && daveSeenCount < shownDave.length) {
     setDaveSeen({ url: daveUrl, count: shownDave.length });
   }
 
@@ -288,6 +299,8 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
 
   /** Leaves the current customer (remembered if they texted) for `next`. */
   function switchTo(next: Customer) {
+    // A reveal still in its pause belongs to the customer being left.
+    cancelReveals();
     if (texted && generation !== undefined) setRoster((old) => rememberCustomer(old, rosterEntry(customer, generation, status)));
     currentPhone.current = next.phone;
     setCustomer(next);
@@ -326,7 +339,10 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
   /** The tester changes the layout; opening Dave's side shows a fresh calendar. */
   function openFocus(next: Focus) {
     setFocus(next);
-    if (next !== 'customer') loadCalendar();
+    if (next !== 'customer') {
+      loadCalendar();
+      refreshDave();
+    }
   }
 
   const layout = panelLayout(focus);
@@ -404,7 +420,7 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
                     locked={texted}
                     onChange={(patch) => setCustomer((old) => ({ ...old, ...patch }))}
                     onNewCustomer={onNewCustomer}
-                    map={<TownMap focus={focus} customerTown={customer.town} config={config} />}
+                    map={<TownMap focus={focus} customer={customer} config={config} />}
                   />
                   <SuggestedReplies
                     replies={repliesNow(stage, customer, typing)}
@@ -457,13 +473,17 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
             <div className="panel-content" inert={layout.veiled === 'dave'}>
               <DavePanel
                 config={config}
+                failed={daveFailed}
                 bookings={calendar?.bookings}
                 landingId={landingId}
                 daveBubbles={shownDave}
                 daveTyping={daveHeld === undefined && isTyping(dave.status)}
                 daveOpen={daveOpen}
                 daveUnread={unreadCount(shownDave.length, daveSeenCount)}
-                onToggleDave={() => setDaveOpen((open) => !open)}
+                onToggleDave={() => {
+                  if (!daveOpen) refreshDave();
+                  setDaveOpen(!daveOpen);
+                }}
               />
             </div>
             {layout.veiled === 'dave' && (

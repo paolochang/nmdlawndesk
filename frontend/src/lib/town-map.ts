@@ -3,19 +3,31 @@
 // While the customer side is focused every town is neutral, since a customer does
 // not know Dave's schedule; once Dave's side is open, every town takes its weekday
 // group's colour.
-import { OUTSIDE_COLOR, townColor, type DaveConfig } from './config.ts';
+import { HERE_COLOR, OUTSIDE_COLOR, townColor, WEEKDAYS, type DaveConfig } from './config.ts';
 import type { Focus } from './layout.ts';
 
-/** Map coordinates in a 320 × 200 view box. */
+/** Map coordinates in a 320 × 214 view box. */
 export const TOWN_POSITIONS: Record<string, { x: number; y: number }> = {
-  Ashford: { x: 118, y: 62 },
-  Clearwater: { x: 196, y: 54 },
-  Birchwood: { x: 110, y: 134 },
-  Dunmore: { x: 204, y: 140 },
-  'Kestrel Bay': { x: 282, y: 104 },
-  Fernhill: { x: 34, y: 40 },
-  Oakmere: { x: 44, y: 176 },
+  Ashford: { x: 74, y: 64 },
+  Clearwater: { x: 190, y: 46 },
+  Birchwood: { x: 96, y: 146 },
+  Dunmore: { x: 210, y: 130 },
+  'Kestrel Bay': { x: 274, y: 190 },
+  Fernhill: { x: 28, y: 190 },
+  Oakmere: { x: 300, y: 92 },
 };
+
+/** Roads between towns, drawn under the markers. */
+export const ROADS: [string, string][] = [
+  ['Fernhill', 'Birchwood'],
+  ['Birchwood', 'Ashford'],
+  ['Ashford', 'Clearwater'],
+  ['Clearwater', 'Oakmere'],
+  ['Birchwood', 'Dunmore'],
+  ['Dunmore', 'Kestrel Bay'],
+  ['Ashford', 'Dunmore'],
+  ['Clearwater', 'Dunmore'],
+];
 
 export interface TownMarker {
   town: string;
@@ -37,8 +49,17 @@ export function townMap(focus: Focus, customerTown: string, config: DaveConfig |
   const markers: TownMarker[] = [];
   for (const [town, position] of Object.entries(TOWN_POSITIONS)) {
     const customer = town === customerTown;
-    const color = daveView ? townColor(config, town) : OUTSIDE_COLOR;
+    const color = daveView ? townColor(config, town) : customer ? HERE_COLOR : OUTSIDE_COLOR;
     markers.push({ town, ...position, color, customer });
   }
   return { markers, daveView };
+}
+
+/** Under the map: the address, and once Dave's side is open, whether he mows there. */
+export function mapCaption(customer: { street: string; town: string }, config: DaveConfig | undefined, daveView: boolean): string {
+  const address = `${customer.street}, ${customer.town}`;
+  if (!daveView || !config) return address;
+  const group = config.townGroups.find((g) => g.towns.includes(customer.town));
+  if (!group) return `${address} · not one of Dave's towns`;
+  return `${address} · Dave mows here on ${group.weekdays.map((day) => WEEKDAYS[day]).join(', ')}`;
 }

@@ -53,15 +53,16 @@ service binding to the backend dev server.
 4. **New customer** starts a new conversation with a new number; the calendar stays.
    Customers who texted can be reopened from the drop-down at the top of the panel.
 5. The switch in the middle widens the customer side, Dave's side, or both. Dave's
-   side shows his calendar for the two bookable weeks, and below it his work hours,
-   town days, and prices from `/api/config`. The round button at the bottom right
+   side shows his calendar (each day with its towns; Wednesday is off), and below it
+   his town days, work hours, and prices from `/api/config`. The round button at the bottom right
    opens his phone (read-only); a red badge counts new texts.
 6. When the desk's reply confirms a booking, both sides open after a short pause and
    the new booking lands in Dave's calendar. After a handoff, the alert arrives in
    Dave's phone and its button shows a badge. Both wait for the desk's text to reach the customer phone; only the
    judgment log updates while the desk is still working.
-7. The town map in the customer card shows every town and marks where the customer
-   lives; with Dave's side open it also colours each town by Dave's weekdays.
+7. The "Your location" map in the customer card shows every town and marks where the
+   customer lives; with Dave's side open it also colours each town by Dave's weekdays
+   and says whether Dave mows there.
 8. **Reset all** (top right, asks first) gives Dave a new schedule and starts fresh
    conversations with a new customer.
 
