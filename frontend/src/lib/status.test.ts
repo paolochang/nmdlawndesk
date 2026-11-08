@@ -106,6 +106,13 @@ describe('textedStatus', () => {
     });
   });
 
+  // Codex round 2: "$450" and "$45.50" are not "$45".
+  it('takes the price only as a whole amount', () => {
+    expect(textedStatus([reply('Booked Nov 16 at 8 AM. It costs $450.')])).toEqual({ kind: 'booked', when: 'Mon Nov 16, 8:00 AM' });
+    expect(textedStatus([reply('Booked Nov 16 at 8 AM, $45.50.')])).toEqual({ kind: 'booked', when: 'Mon Nov 16, 8:00 AM' });
+    expect(textedStatus([reply('Booked Nov 16 at 8 AM for $45.00.')])).toMatchObject({ price: '$45' });
+  });
+
   it('does not take a different meridiem for the booked time', () => {
     expect(textedStatus([reply('Booked Nov 16 at 8 PM.')])).toEqual({ kind: 'open' });
   });

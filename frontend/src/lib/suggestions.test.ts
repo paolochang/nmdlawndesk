@@ -77,6 +77,14 @@ describe('conversationStage (build-plan §7)', () => {
     expect(conversationStage([hi, one])).toEqual({ kind: 'slots', slots: [slots[0]], searchedAgain: false });
   });
 
+  it('reads times written before their date, each with the date after it', () => {
+    const timeFirst = message('m4', 'assistant', [
+      done('c2', 'findSlots', { town: 'Ashford', acres: 0.5 }, { slots }),
+      text('8-9 AM on Monday, Nov 16, or 9:30-10:30 AM on Thursday, Nov 19.'),
+    ]);
+    expect(conversationStage([hi, timeFirst])).toEqual({ kind: 'slots', slots, searchedAgain: false });
+  });
+
   // Browser check: the model wrote the range with a non-breaking hyphen (U+2011).
   it('reads a time range written with any dash', () => {
     const dashes = message('m4', 'assistant', [
@@ -101,6 +109,8 @@ describe('conversationStage (build-plan §7)', () => {
     ['swapped times', 'Nov 16 at 9:30 AM or Nov 19 at 8 AM'],
     ['a range end on another day', 'Mon Nov 16, 7:00-9:30 AM is open. Thu Nov 19 is full.'],
     ['the wrong meridiem', 'Nov 16 at 8 PM or Nov 19 at 9:30 PM'],
+    // Codex round 2: a date introduces every time listed after it.
+    ['two times under the first date', 'Nov 16 at 7 AM and 9:30 AM, or Nov 19 at 8 AM'],
   ])('offers no time the desk did not state: %s', (_case, said) => {
     const offer = message('m4', 'assistant', [done('c2', 'findSlots', { town: 'Ashford', acres: 0.5 }, { slots }), text(said)]);
     expect(conversationStage([hi, offer])).toEqual({ kind: 'slots', slots: [], searchedAgain: false });

@@ -76,14 +76,23 @@ function timeMentions(text: string, dates: readonly DateMention[]): TimeMention[
   return found;
 }
 
-/** Each time with the date mention nearest to it (ties go to the date before it). */
+/**
+ * Each time with the date it belongs to. A text that names a date first ("Nov 16 at
+ * 8 AM and 9:30 AM, or Nov 19 at 11 AM") gives each time the last date before it; a
+ * text that starts with a time ("8-9 AM on Monday, Nov 16, or …") gives each time the
+ * first date after it. A time with no date on its side takes the nearest one.
+ */
 function pairs(text: string): { date: DateMention; time: TimeMention }[] {
   const lower = text.toLowerCase();
-  const dates = dateMentions(lower);
+  const dates = dateMentions(lower).sort((a, b) => a.at - b.at);
   if (!dates.length) return [];
-  return timeMentions(lower, dates).map((time) => {
-    const gap = (d: DateMention) => (d.end <= time.at ? time.at - d.end : d.at - time.end + 0.5);
-    const date = dates.reduce((best, d) => (gap(d) < gap(best) ? d : best));
+  const times = timeMentions(lower, dates);
+  if (!times.length) return [];
+  const timeFirst = times[0].at < dates[0].at;
+  return times.map((time) => {
+    const before = dates.filter((d) => d.end <= time.at).at(-1);
+    const after = dates.find((d) => d.at >= time.end);
+    const date = (timeFirst ? (after ?? before) : (before ?? after)) as DateMention;
     return { date, time };
   });
 }
@@ -153,11 +162,14 @@ export function statesTown(text: string, town: string): boolean {
   return town.length > 0 && words(text).includes(town.toLowerCase());
 }
 
-/** Whether `text` states the price, e.g. `$67.50` (or `$67.5`). */
+/**
+ * Whether `text` states the price as a whole amount: `$67.50`, `$67.5`, or `$45.00`
+ * for `$45`, but never `$450` or `$45.50` for `$45`.
+ */
 export function statesPrice(text: string, price: string): boolean {
-  if (!price) return false;
-  const short = price.replace(/\.(\d)0$/, '.$1').replace(/\.0+$/, '');
-  return text.includes(price) || text.includes(short);
+  const value = Number(price.replace(/[$,]/g, ''));
+  if (!price || !Number.isFinite(value)) return false;
+  return [...text.matchAll(/\$\s?(\d[\d,]*(?:\.\d+)?)(?![\d.]*\d)/g)].some((m) => Number(m[1].replaceAll(',', '')) === value);
 }
 
 /** Whether `text` states the job length, e.g. `1 h` as "1 hour" or "1 h". */
