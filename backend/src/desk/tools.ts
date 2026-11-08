@@ -56,6 +56,7 @@ const HANDOFF_NEXT = `If this issue is not handed off yet, call handoffToDave no
 const HANDED_OFF_NEXT =
 	"Send the reply once, now. After that keep answering the customer's general questions from the rules; do not call handoffToDave again for this issue.";
 const PRICE_NOTE = 'Final price may change on site.';
+const UNKNOWN_SIZE_NOTE = 'Yard size unknown: this is the 1-hour rate, adjusted on site.';
 
 // Required but nullable: the model must say "unknown" explicitly instead of dropping the key.
 const acres = v.pipe(
@@ -87,12 +88,14 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 	return [
 		defineTool({
 			name: 'quoteJob',
-			description: 'Price a mowing job from the yard size. Returns price, duration, and the basis, or a handoff.',
+			description: 'Price a mowing job from the yard size. Returns the price and duration, or a handoff.',
 			input: v.object({ acres }),
 			run({ data }) {
 				const q = quote(data.acres ?? 'unknown');
 				if (q.kind === 'handoff') return { output: { handoff: 'yard-over-1-acre', next: HANDOFF_NEXT } };
-				return { output: { price: dollars(q.priceCents), duration: hours(q.durationMinutes), basis: q.basis, note: PRICE_NOTE } };
+				// No calculation basis: the model copied it into texts (build-plan §13); the store keeps it for Dave.
+				const note = data.acres === null ? `${UNKNOWN_SIZE_NOTE} ${PRICE_NOTE}` : PRICE_NOTE;
+				return { output: { price: dollars(q.priceCents), duration: hours(q.durationMinutes), note } };
 			},
 		}),
 		defineTool({
@@ -165,7 +168,6 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 						when: slotLabel(booking),
 						duration: hours(booking.durationMinutes),
 						price: dollars(booking.priceCents),
-						basis: booking.basis,
 						note: PRICE_NOTE,
 					},
 				};

@@ -57,7 +57,7 @@ After a handoff:
 - Send that reply only on the turn you hand off. Afterwards keep answering their general questions from the rules.
 - Never call handoffToDave twice for the same issue. If they ask about it again, say Dave will be in touch. A new, different request is handled as usual.
 
-Style: this is SMS. Reply in 1-3 short sentences of plain text. No markdown, no lists.`;
+Style: this is SMS. Reply in 1-3 short sentences of plain text, the way a person texts: say the price and the times in words, never a formula, an arrow, or symbols such as × or →. No markdown, no lists.`;
 }
 
 /**

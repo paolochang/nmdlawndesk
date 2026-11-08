@@ -76,6 +76,15 @@ describe('desk tools', () => {
 			expect(await setup().call('quoteJob', { acres: 2 })).toMatchObject({ handoff: 'yard-over-1-acre' });
 		});
 
+		// Owner E2E of PR 8: the desk texted "Over 0.75 acre → 1.5 h × $45 = $67.50". The model
+		// gets no calculation basis to copy; the store keeps it for Dave's calendar.
+		it('gives the model no calculation basis to copy into a text', async () => {
+			for (const acres of [0.5, 1, null]) {
+				const output = JSON.stringify(await setup().call('quoteJob', { acres }));
+				expect(output).not.toMatch(/basis|→|×/);
+			}
+		});
+
 		it('does not ask for a second handoff of an issue already handed off', async () => {
 			const { next } = (await setup().call('quoteJob', { acres: 2 })) as { next: string };
 			expect(next).toMatch(/^If this issue is not handed off yet, call handoffToDave/);
@@ -137,8 +146,11 @@ describe('desk tools', () => {
 				when: 'Tue Nov 17, 10:00-11:00 AM',
 				duration: '1 h',
 				price: '$45',
-				basis: 'Sarah Lee · 45 Oak Rd, Birchwood · 0.5 acre → 1 h × $45 = $45',
 			});
+			expect(JSON.stringify(output)).not.toMatch(/basis|→|×/);
+			expect(ledger.list().bookings.find((b) => b.id === 'g1-1')?.basis).toBe(
+				'Sarah Lee · 45 Oak Rd, Birchwood · 0.5 acre → 1 h × $45 = $45',
+			);
 			expect(ledger.list().customers).toEqual([{ phone: '+15550101', name: 'Sarah Lee' }]);
 		});
 

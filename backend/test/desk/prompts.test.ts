@@ -27,6 +27,10 @@ describe('lawnDeskPrompt', () => {
 		expect(prompt).not.toContain('2026-12-18');
 	});
 
+	it('asks for texts a person would write: no formulas, arrows, or calculation symbols (build-plan §13)', () => {
+		expect(lawnDeskPrompt(NOW)).toContain('never a formula, an arrow, or symbols such as × or →');
+	});
+
 	// build-plan §4 "Conversation": not every text is a booking.
 	it('answers greetings and general questions from the rules, without intake questions', () => {
 		const prompt = lawnDeskPrompt(NOW);
