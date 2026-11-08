@@ -20,7 +20,10 @@ export function SuggestedReplies({ replies, waiting, disabled, onPick }: Suggest
       <div className="chip-list">
         {replies.map((reply) => (
           <button key={reply} type="button" className="chip" disabled={disabled} onClick={() => onPick(reply)}>
-            {reply}
+            <span>{reply}</span>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <path d="M3 8h10M9 4l4 4-4 4" />
+            </svg>
           </button>
         ))}
       </div>
@@ -59,8 +62,6 @@ export function BookingStatusCard({ status }: { status: BookingStatus }) {
             <dd>
               {status.price} · {status.duration}
             </dd>
-            <dt>Booking</dt>
-            <dd>{status.bookingId}</dd>
           </dl>
           <p className="hint">
             {status.handedOff && `Also passed to Dave (${reason(status.handedOff)}). `}The final price may change on site.

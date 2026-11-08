@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { daveAlertMessage, lawnDeskPrompt } from '../../src/desk/prompts.ts';
-import { HANDOFF_REPLY } from '../../src/desk/tools.ts';
+import { DAVE_PHONE_PROMPT, daveAlertMessage, daveBookingMessage, lawnDeskPrompt } from '../../src/desk/prompts.ts';
 
 describe('lawnDeskPrompt', () => {
 	it('states the rules from the config (build-plan §4)', () => {
@@ -12,7 +11,6 @@ describe('lawnDeskPrompt', () => {
 			'$45/hour',
 			'1.5 h, $67.50',
 			'may change on site',
-			'Dave will contact you directly.',
 		]) {
 			expect(prompt).toContain(fact);
 		}
@@ -47,7 +45,8 @@ describe('lawnDeskPrompt', () => {
 
 	it('says the handoff line once, then keeps answering without handing off the same issue again', () => {
 		const prompt = lawnDeskPrompt();
-		expect(prompt).toContain(`Say "${HANDOFF_REPLY}" only on the turn you hand off`);
+		expect(prompt).toContain('send the reply it returns, word for word');
+		expect(prompt).toContain('Send that reply only on the turn you hand off');
 		expect(prompt).toContain('keep answering their general questions');
 		expect(prompt).toContain('Never call handoffToDave twice for the same issue');
 	});
@@ -64,5 +63,28 @@ describe('daveAlertMessage', () => {
 			body: 'Ann, 9 Hill Rd, Riverside',
 			attributes: { reason: 'out-of-area', customerPhone: '+15550102' },
 		});
+	});
+});
+
+describe('daveBookingMessage', () => {
+	it("is a booking signal Dave's phone turns into one text: who, when, where, price", () => {
+		expect(
+			daveBookingMessage({
+				customerPhone: '+15550101',
+				bookingId: 'g1-1',
+				name: 'Sarah Lee',
+				when: 'Tue Nov 17, 10:00-11:00 AM',
+				place: '45 Oak Rd, Birchwood',
+				price: '$45',
+				duration: '1 h',
+			}),
+		).toEqual({
+			kind: 'signal',
+			type: 'lawn-desk.booking',
+			tagName: 'booking',
+			body: 'Sarah Lee · Tue Nov 17, 10:00-11:00 AM · 45 Oak Rd, Birchwood · $45 (1 h)',
+			attributes: { bookingId: 'g1-1', customerPhone: '+15550101' },
+		});
+		expect(DAVE_PHONE_PROMPT).toMatch(/<booking>/);
 	});
 });

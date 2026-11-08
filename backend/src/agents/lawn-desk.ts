@@ -1,7 +1,7 @@
 'use agent';
 import { type AgentProps, dispatch, useAgentStart, useModel, useTool } from '@flue/runtime';
 import { daveConversationId, parseConversationId } from '../domain/conversation.ts';
-import { DESK_MODEL, daveAlertMessage, lawnDeskPrompt } from '../desk/prompts.ts';
+import { DESK_MODEL, daveAlertMessage, daveBookingMessage, lawnDeskPrompt } from '../desk/prompts.ts';
 import { deskTools } from '../desk/tools.ts';
 import { visitorStore } from '../store/stub.ts';
 import { DavePhone } from './dave-phone.ts';
@@ -24,14 +24,15 @@ export function LawnDesk({ id }: AgentProps) {
 		await store.addCustomer(conversation.phone, conversation.generation);
 	});
 
+	const daveId = daveConversationId(conversation.visitorId, conversation.generation);
 	const tools = deskTools({
 		conversation,
 		store,
 		async alertDave(alert) {
-			await dispatch(DavePhone, {
-				id: daveConversationId(conversation.visitorId, conversation.generation),
-				message: daveAlertMessage(alert),
-			});
+			await dispatch(DavePhone, { id: daveId, message: daveAlertMessage(alert) });
+		},
+		async tellDaveBooked(notice) {
+			await dispatch(DavePhone, { id: daveId, message: daveBookingMessage(notice) });
 		},
 	});
 	for (const tool of tools) useTool(tool);

@@ -1,7 +1,8 @@
-// Customers this tab has texted as (build-plan §7), so the tester can go back
+// Customers this browser has texted as (build-plan §7), so the tester can go back
 // to one from the customer panel head. Each entry belongs to one generation:
 // after a reset, the old conversations are never opened again (§6).
-import { parseCustomer, type Customer } from './persona.ts';
+import { CUSTOMER_KEY, parseCustomer, restoreCustomer, type Customer } from './persona.ts';
+import type { KeyValueStorage } from './session.ts';
 
 export type CustomerStatus = 'open' | 'booked' | 'with-dave';
 
@@ -56,4 +57,53 @@ export function loadRoster(stored: string | null): RosterEntry[] {
   } catch {
     return [];
   }
+}
+
+/**
+ * The visitor's open customer and earlier customers, as this browser kept them
+ * (`localStorage`, one pair of keys per visitor). A new tab or a restarted browser
+ * reopens the same conversations; another nickname starts with a new customer.
+ */
+export function loadCustomers(
+  storage: KeyValueStorage,
+  visitorId: string,
+  random: () => number = Math.random,
+): { customer: Customer; roster: RosterEntry[] } {
+  return {
+    customer: restoreCustomer(storage.getItem(`${CUSTOMER_KEY}:${visitorId}`), random),
+    roster: loadRoster(storage.getItem(`${ROSTER_KEY}:${visitorId}`)),
+  };
+}
+
+/**
+ * Saves this tab's customers. Other tabs of the same visitor share the keys, so the
+ * stored roster is merged in, not replaced: an entry this tab knows wins, and the
+ * customers only another tab has texted as are kept after it.
+ */
+export function saveCustomers(storage: KeyValueStorage, visitorId: string, customer: Customer, roster: readonly RosterEntry[]): void {
+  const key = `${ROSTER_KEY}:${visitorId}`;
+  const known = new Set(roster.map((entry) => `${entry.generation}:${entry.customer.phone}`));
+  const others = loadRoster(storage.getItem(key)).filter((entry) => !known.has(`${entry.generation}:${entry.customer.phone}`));
+  storage.setItem(`${CUSTOMER_KEY}:${visitorId}`, JSON.stringify(customer));
+  storage.setItem(key, JSON.stringify([...roster, ...others].slice(0, MAX_ENTRIES)));
+}
+
+/**
+ * Names and phones New customer must not draw: the current customer, everyone this
+ * browser has texted as, and everyone Dave's calendar already knows (other tabs and
+ * devices share it), so a new customer never looks like a booked one.
+ */
+export function takenDetails(
+  current: Customer,
+  roster: readonly RosterEntry[],
+  calendar: { customers: readonly { phone: string; name?: string }[]; bookings: readonly { name: string }[] } | undefined,
+): { names: string[]; phones: string[] } {
+  const names = [current.name, ...roster.map((entry) => entry.customer.name)];
+  const phones = [current.phone, ...roster.map((entry) => entry.customer.phone)];
+  for (const known of calendar?.customers ?? []) {
+    phones.push(known.phone);
+    if (known.name) names.push(known.name);
+  }
+  for (const booking of calendar?.bookings ?? []) names.push(booking.name);
+  return { names, phones };
 }

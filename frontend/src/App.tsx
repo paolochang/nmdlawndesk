@@ -12,6 +12,7 @@ export default function App() {
   );
   useEffect(() => saveAuth(auth, localStorage, sessionStorage), [auth]);
   const onUnauthorized = useCallback(() => dispatch({ type: 'unauthorized' }), []);
+  const onSignOut = useCallback(() => dispatch({ type: 'signed-out' }), []);
 
   if (auth.status === 'signed-out') {
     return (
@@ -22,5 +23,6 @@ export default function App() {
       />
     );
   }
-  return <Simulator nickname={auth.nickname} session={auth.session} onUnauthorized={onUnauthorized} />;
+  // Keyed by visitor: another nickname opens its own customers.
+  return <Simulator key={auth.session.visitorId} nickname={auth.nickname} session={auth.session} onUnauthorized={onUnauthorized} onSignOut={onSignOut} />;
 }

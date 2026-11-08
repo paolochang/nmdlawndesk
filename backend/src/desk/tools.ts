@@ -27,17 +27,50 @@ export interface DaveAlert {
 	customerPhone: string;
 }
 
+/** A booking the desk made, as Dave's phone is told about it. */
+export interface DaveBookingNotice {
+	customerPhone: string;
+	bookingId: string;
+	name: string;
+	when: string;
+	/** Street address and town, e.g. `45 Oak Rd, Birchwood`. */
+	place: string;
+	price: string;
+	duration: string;
+}
+
 export interface DeskDeps {
 	conversation: CustomerConversation;
 	store: DeskStore;
 	/** Posts the alert into this visitor's Dave conversation of the same generation. */
 	alertDave(alert: DaveAlert): Promise<void>;
+	/** Posts a new booking into the same Dave conversation. */
+	tellDaveBooked(notice: DaveBookingNotice): Promise<void>;
 }
 
-/** The customer reply the prompt asks for on every handoff (build-plan §4). */
-export const HANDOFF_REPLY = 'Dave will contact you directly.';
+/** `Ashford, Clearwater, Birchwood, and Dunmore`. */
+const TOWN_LIST = `${TOWNS.slice(0, -1).join(', ')}, and ${TOWNS[TOWNS.length - 1]}`;
+const LARGEST = RULES.priceTable[RULES.priceTable.length - 1].maxAcres;
 
-const HANDOFF_NEXT = `If this issue is not handed off yet, call handoffToDave now, then reply: "${HANDOFF_REPLY}" Otherwise do not hand it off again; answer the customer's question from the rules.`;
+/**
+ * The customer's reply on a handoff (build-plan §4): why the desk cannot take it,
+ * then that Dave will contact them directly. Fixed text, so the model never
+ * invents a reason or a promise.
+ */
+const HANDOFF_REPLIES: Record<HandoffReason, string> = {
+	'out-of-area': `Sorry, Dave doesn't work in your area; he only mows in ${TOWN_LIST}. I've passed your request to Dave, and he will contact you directly to talk it over.`,
+	'yard-over-1-acre': `Sorry, I can't book yards over ${LARGEST} acre; Dave prices those himself. I've asked Dave to contact you directly to talk it over.`,
+	complaint: "I'm sorry to hear that. I've passed this to Dave, and he will contact you directly.",
+	refund: "I'm sorry to hear that. Refunds are handled by Dave himself, so I've passed this to him, and he will contact you directly.",
+	haggling: "Sorry, I can't change Dave's prices. I've passed your request to Dave, and he will contact you directly.",
+	other: "I can't settle that here, so I've passed it to Dave, and he will contact you directly.",
+};
+
+export function handoffReply(reason: HandoffReason): string {
+	return HANDOFF_REPLIES[reason];
+}
+
+const HANDOFF_NEXT = `If this issue is not handed off yet, call handoffToDave now, then send the reply it returns, word for word. Otherwise do not hand it off again; answer the customer's question from the rules.`;
 const HANDED_OFF_NEXT =
 	"Send the reply once, now. After that keep answering the customer's general questions from the rules; do not call handoffToDave again for this issue.";
 const PRICE_NOTE = 'Final price may change on site.';
@@ -135,13 +168,30 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 				});
 				if (!result.ok) return { output: { ok: false, reason: result.reason, next: REJECTION_NEXT[result.reason] } };
 				const { booking } = result;
+				const when = slotLabel(booking);
+				const price = dollars(booking.priceCents);
+				const duration = hours(booking.durationMinutes);
+				try {
+					await deps.tellDaveBooked({
+						customerPhone: deps.conversation.phone,
+						bookingId: booking.id,
+						name: booking.name,
+						when,
+						place: `${booking.address}, ${booking.town}`,
+						price,
+						duration,
+					});
+				} catch (error) {
+					// The booking is stored either way; only Dave's text about it is lost.
+					console.error('Could not tell Dave about booking', booking.id, error);
+				}
 				return {
 					output: {
 						ok: true,
 						bookingId: booking.id,
-						when: slotLabel(booking),
-						duration: hours(booking.durationMinutes),
-						price: dollars(booking.priceCents),
+						when,
+						duration,
+						price,
 						basis: booking.basis,
 						note: PRICE_NOTE,
 					},
@@ -161,7 +211,7 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 			}),
 			async run({ data }) {
 				await deps.alertDave({ reason: data.reason, details: data.details, customerPhone: deps.conversation.phone });
-				return { output: { ok: true, reply: HANDOFF_REPLY, next: HANDED_OFF_NEXT } };
+				return { output: { ok: true, reply: handoffReply(data.reason), next: HANDED_OFF_NEXT } };
 			},
 		}),
 	];

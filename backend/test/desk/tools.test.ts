@@ -1,12 +1,12 @@
 import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
 import { PRESETS, presetBookings } from '../../src/domain/presets.ts';
-import { type DaveAlert, type DeskStore, deskTools, HANDOFF_REPLY } from '../../src/desk/tools.ts';
+import { type DaveAlert, type DaveBookingNotice, type DeskStore, deskTools, handoffReply } from '../../src/desk/tools.ts';
 import { type KvStorage, VisitorLedger } from '../../src/store/ledger.ts';
 
 // A ledger on an in-memory KV stands in for the Durable Object. Random 0 picks
 // preset A: Mon 2026-11-16 is full, Tue 17 09:00-10:00 and Thu 19 10:00-11:30 are booked.
-function setup(generation = 1) {
+function setup(generation = 1, tellDaveBooked?: (notice: DaveBookingNotice) => Promise<void>) {
 	const map = new Map<string, unknown>();
 	const kv: KvStorage = { get: <T>(k: string) => structuredClone(map.get(k)) as T, put: (k, v) => void map.set(k, structuredClone(v)) };
 	const ledger = new VisitorLedger(kv, () => 0);
@@ -16,10 +16,12 @@ function setup(generation = 1) {
 		addCustomer: async (phone, generation) => ledger.addCustomer(phone, generation),
 	};
 	const alerts: DaveAlert[] = [];
+	const notices: DaveBookingNotice[] = [];
 	const tools = deskTools({
 		conversation: { kind: 'customer', visitorId: 'v1', generation, phone: '+15550101' },
 		store,
 		alertDave: async (alert) => void alerts.push(alert),
+		tellDaveBooked: tellDaveBooked ?? (async (notice) => void notices.push(notice)),
 	});
 	const call = async (name: string, data: unknown) => {
 		const tool = tools.find((t) => t.name === name);
@@ -29,7 +31,7 @@ function setup(generation = 1) {
 		const result = await tool.run({ data, toolCallId: 'call-1', log: console } as never);
 		return typeof result === 'object' && result && 'output' in result ? result.output : result;
 	};
-	return { ledger, alerts, call };
+	return { ledger, alerts, notices, call };
 }
 
 describe('desk tools', () => {
@@ -124,11 +126,36 @@ describe('desk tools', () => {
 			expect(ledger.list().customers).toEqual([{ phone: '+15550101', name: 'Sarah Lee' }]);
 		});
 
+		it('texts Dave the new booking: who, when, where, and the price', async () => {
+			const { call, notices } = setup();
+			await call('bookSlot', booking);
+			expect(notices).toEqual([
+				{
+					customerPhone: '+15550101',
+					bookingId: 'g1-1',
+					name: 'Sarah Lee',
+					when: 'Tue Nov 17, 10:00-11:00 AM',
+					place: '45 Oak Rd, Birchwood',
+					price: '$45',
+					duration: '1 h',
+				},
+			]);
+		});
+
+		it('keeps the booking when the text to Dave fails', async () => {
+			const { call, ledger } = setup(1, async () => {
+				throw new Error('dispatch failed');
+			});
+			expect(await call('bookSlot', booking)).toMatchObject({ ok: true, bookingId: 'g1-1' });
+			expect(ledger.list().bookings.map((b) => b.id)).toContain('g1-1');
+		});
+
 		it('returns the rejection reason for a taken slot and books nothing', async () => {
-			const { call, ledger } = setup();
+			const { call, ledger, notices } = setup();
 			const output = await call('bookSlot', { ...booking, start: '2026-11-17T09:00' });
 			expect(output).toMatchObject({ ok: false, reason: 'overlap' });
 			expect(ledger.list().bookings).toEqual(presetBookings(PRESETS[0]));
+			expect(notices).toEqual([]);
 		});
 
 		it('refuses a booking without a name', async () => {
@@ -155,7 +182,20 @@ describe('desk tools', () => {
 			expect(alerts).toEqual([
 				{ reason: 'yard-over-1-acre', details: 'Ann, 9 Hill Rd, Ashford, 2 acres', customerPhone: '+15550101' },
 			]);
-			expect(output).toMatchObject({ ok: true, reply: HANDOFF_REPLY });
+			expect(output).toMatchObject({ ok: true, reply: handoffReply('yard-over-1-acre') });
+		});
+
+		it('tells the customer why the desk cannot take it, then that Dave will contact them', () => {
+			expect(handoffReply('out-of-area')).toBe(
+				"Sorry, Dave doesn't work in your area; he only mows in Ashford, Clearwater, Birchwood, and Dunmore. I've passed your request to Dave, and he will contact you directly to talk it over.",
+			);
+			expect(handoffReply('yard-over-1-acre')).toBe(
+				"Sorry, I can't book yards over 1 acre; Dave prices those himself. I've asked Dave to contact you directly to talk it over.",
+			);
+			for (const reason of ['complaint', 'refund', 'haggling', 'other'] as const) {
+				expect(handoffReply(reason)).toMatch(/contact you directly/);
+				expect(handoffReply(reason)).not.toBe('Dave will contact you directly.');
+			}
 		});
 
 		it('says to send the reply once and keep answering, without handing off again', async () => {

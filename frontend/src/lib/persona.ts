@@ -47,7 +47,7 @@ export interface Customer {
   acres: number | null;
 }
 
-/** The tab keeps the open customer, so a reload or a re-sign-in reopens the same conversation. */
+/** The browser keeps the open customer per visitor (`lib/roster.ts`), so a reload, a new tab, or a re-sign-in reopens the same conversation. */
 export const CUSTOMER_KEY = 'lawn-desk.customer';
 
 /** `+15556212802` → `+1 555-621-2802`; the stored form stays the conversation key. */
