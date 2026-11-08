@@ -69,6 +69,23 @@ describe('customers kept in the browser (build-plan §7)', () => {
     expect(other.customer.phone).not.toBe(maya.phone);
     expect(other.roster).toEqual([]);
   });
+
+  it('keeps the customers another tab of the same visitor saved', () => {
+    const data = new Map<string, string>();
+    const storage = {
+      getItem: (key: string) => data.get(key) ?? null,
+      setItem: (key: string, value: string) => void data.set(key, value),
+      removeItem: (key: string) => void data.delete(key),
+    };
+    // Tab A texted Ben; tab B, loaded before that, still only knows Maya and saves.
+    saveCustomers(storage, 'visitor-a', ben, [{ customer: ben, generation: 1, status: 'open' }]);
+    saveCustomers(storage, 'visitor-a', maya, [{ customer: maya, generation: 1, status: 'booked' }]);
+
+    expect(loadCustomers(storage, 'visitor-a').roster).toEqual([
+      { customer: maya, generation: 1, status: 'booked' },
+      { customer: ben, generation: 1, status: 'open' },
+    ]);
+  });
 });
 
 describe('takenDetails (New customer)', () => {

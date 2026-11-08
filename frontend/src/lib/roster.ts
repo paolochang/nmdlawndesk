@@ -75,9 +75,17 @@ export function loadCustomers(
   };
 }
 
+/**
+ * Saves this tab's customers. Other tabs of the same visitor share the keys, so the
+ * stored roster is merged in, not replaced: an entry this tab knows wins, and the
+ * customers only another tab has texted as are kept after it.
+ */
 export function saveCustomers(storage: KeyValueStorage, visitorId: string, customer: Customer, roster: readonly RosterEntry[]): void {
+  const key = `${ROSTER_KEY}:${visitorId}`;
+  const known = new Set(roster.map((entry) => `${entry.generation}:${entry.customer.phone}`));
+  const others = loadRoster(storage.getItem(key)).filter((entry) => !known.has(`${entry.generation}:${entry.customer.phone}`));
   storage.setItem(`${CUSTOMER_KEY}:${visitorId}`, JSON.stringify(customer));
-  storage.setItem(`${ROSTER_KEY}:${visitorId}`, JSON.stringify(roster));
+  storage.setItem(key, JSON.stringify([...roster, ...others].slice(0, MAX_ENTRIES)));
 }
 
 /**
