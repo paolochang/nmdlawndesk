@@ -1,9 +1,40 @@
 'use agent';
-import { useModel } from '@flue/runtime';
+import { type AgentProps, dispatch, useAgentStart, useModel, useTool } from '@flue/runtime';
+import { daveConversationId, parseConversationId } from '../domain/conversation.ts';
+import { DESK_MODEL, daveAlertMessage, lawnDeskPrompt } from '../desk/prompts.ts';
+import { deskTools } from '../desk/tools.ts';
+import { visitorStore } from '../store/stub.ts';
+import { DavePhone } from './dave-phone.ts';
 
-// Walking-skeleton version of Dave's booking agent. Tools, rules, and the real
-// system prompt arrive in later PRs (build-plan §5).
-export function LawnDesk() {
-	useModel('cloudflare/@cf/zai-org/glm-4.7-flash');
-	return "You answer text messages for Dave's Lawn Desk, a one-person lawn-mowing business. Keep replies short, like an SMS.";
+/**
+ * Dave's booking agent: one conversation per customer phone
+ * (`<visitorId>:<generation>:<customerPhone>`, build-plan §3). The tools' logic
+ * lives in src/desk/ and is tested in Node; this module only wires it to the
+ * visitor's store and to Dave's phone.
+ */
+export function LawnDesk({ id }: AgentProps) {
+	useModel(DESK_MODEL);
+	const conversation = parseConversationId(id);
+	if (conversation?.kind !== 'customer') throw new Error(`LawnDesk serves customer conversations only, got ${id}`);
+	const store = visitorStore(conversation.visitorId);
+
+	// Every delivered message records the phone; the store ignores a known one
+	// and one from a generation a reset has left behind.
+	useAgentStart(async () => {
+		await store.addCustomer(conversation.phone, conversation.generation);
+	});
+
+	const tools = deskTools({
+		conversation,
+		store,
+		async alertDave(alert) {
+			await dispatch(DavePhone, {
+				id: daveConversationId(conversation.visitorId, conversation.generation),
+				message: daveAlertMessage(alert),
+			});
+		},
+	});
+	for (const tool of tools) useTool(tool);
+
+	return lawnDeskPrompt();
 }
