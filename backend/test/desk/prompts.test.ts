@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { daveAlertMessage, lawnDeskPrompt } from '../../src/desk/prompts.ts';
+import { DAVE_PHONE_PROMPT, daveAlertMessage, daveBookingMessage, lawnDeskPrompt } from '../../src/desk/prompts.ts';
 import { HANDOFF_REPLY } from '../../src/desk/tools.ts';
 
 describe('lawnDeskPrompt', () => {
@@ -64,5 +64,28 @@ describe('daveAlertMessage', () => {
 			body: 'Ann, 9 Hill Rd, Riverside',
 			attributes: { reason: 'out-of-area', customerPhone: '+15550102' },
 		});
+	});
+});
+
+describe('daveBookingMessage', () => {
+	it("is a booking signal Dave's phone turns into one text: who, when, where, price", () => {
+		expect(
+			daveBookingMessage({
+				customerPhone: '+15550101',
+				bookingId: 'g1-1',
+				name: 'Sarah Lee',
+				when: 'Tue Nov 17, 10:00-11:00 AM',
+				place: '45 Oak Rd, Birchwood',
+				price: '$45',
+				duration: '1 h',
+			}),
+		).toEqual({
+			kind: 'signal',
+			type: 'lawn-desk.booking',
+			tagName: 'booking',
+			body: 'Sarah Lee · Tue Nov 17, 10:00-11:00 AM · 45 Oak Rd, Birchwood · $45 (1 h)',
+			attributes: { bookingId: 'g1-1', customerPhone: '+15550101' },
+		});
+		expect(DAVE_PHONE_PROMPT).toMatch(/<booking>/);
 	});
 });

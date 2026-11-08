@@ -27,11 +27,25 @@ export interface DaveAlert {
 	customerPhone: string;
 }
 
+/** A booking the desk made, as Dave's phone is told about it. */
+export interface DaveBookingNotice {
+	customerPhone: string;
+	bookingId: string;
+	name: string;
+	when: string;
+	/** Street address and town, e.g. `45 Oak Rd, Birchwood`. */
+	place: string;
+	price: string;
+	duration: string;
+}
+
 export interface DeskDeps {
 	conversation: CustomerConversation;
 	store: DeskStore;
 	/** Posts the alert into this visitor's Dave conversation of the same generation. */
 	alertDave(alert: DaveAlert): Promise<void>;
+	/** Posts a new booking into the same Dave conversation. */
+	tellDaveBooked(notice: DaveBookingNotice): Promise<void>;
 }
 
 /** The customer reply the prompt asks for on every handoff (build-plan §4). */
@@ -135,13 +149,30 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 				});
 				if (!result.ok) return { output: { ok: false, reason: result.reason, next: REJECTION_NEXT[result.reason] } };
 				const { booking } = result;
+				const when = slotLabel(booking);
+				const price = dollars(booking.priceCents);
+				const duration = hours(booking.durationMinutes);
+				try {
+					await deps.tellDaveBooked({
+						customerPhone: deps.conversation.phone,
+						bookingId: booking.id,
+						name: booking.name,
+						when,
+						place: `${booking.address}, ${booking.town}`,
+						price,
+						duration,
+					});
+				} catch (error) {
+					// The booking is stored either way; only Dave's text about it is lost.
+					console.error('Could not tell Dave about booking', booking.id, error);
+				}
 				return {
 					output: {
 						ok: true,
 						bookingId: booking.id,
-						when: slotLabel(booking),
-						duration: hours(booking.durationMinutes),
-						price: dollars(booking.priceCents),
+						when,
+						duration,
+						price,
 						basis: booking.basis,
 						note: PRICE_NOTE,
 					},

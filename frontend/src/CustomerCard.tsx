@@ -75,7 +75,8 @@ export function CustomerCard({ customer, locked, onChange, onNewCustomer, map }:
                     <path d="M4 5.5V4a2 2 0 0 1 4 0v1.5" />
                   </svg>
                   Locked after the first text.
-                </span>{' '}
+                </span>
+                <br />
                 Start a New customer to try other details.
               </>
             ) : (

@@ -176,7 +176,7 @@ function DavePhone({ bubbles, typing }: PhoneProps) {
         </div>
         <ol className="thread" aria-label="Dave's texts" ref={thread}>
           {bubbles.length === 0 && !typing && (
-            <li className="empty-thread">When the desk hands a customer to Dave, the alert arrives here.</li>
+            <li className="empty-thread">When the desk books a job or hands a customer to Dave, the text arrives here.</li>
           )}
           {bubbles.map((bubble) => (
             <li key={bubble.id} className="bubble desk">

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Customer } from './persona.ts';
-import { earlierCustomers, loadRoster, rememberCustomer, rememberRecovered, type RosterEntry } from './roster.ts';
+import { earlierCustomers, loadRoster, rememberCustomer, rememberRecovered, takenDetails, type RosterEntry } from './roster.ts';
 
 const maya: Customer = { phone: '+15552841937', name: 'Maya Torres', town: 'Ashford', street: '45 Oak Rd', acres: 0.5 };
 const ben: Customer = { phone: '+15550000001', name: 'Ben Okafor', town: 'Fernhill', street: '2 Hill Ct', acres: 1 };
@@ -40,5 +40,18 @@ describe('earlier customers (build-plan §7)', () => {
     expect(loadRoster(JSON.stringify([good, { customer: { phone: 'x' }, generation: 1, status: 'open' }, 'junk']))).toEqual([good]);
     expect(loadRoster(null)).toEqual([]);
     expect(loadRoster('{')).toEqual([]);
+  });
+});
+
+describe('takenDetails (New customer)', () => {
+  it("never draws a name that is already on Dave's calendar or a phone the store knows, from any tab", () => {
+    const current = { phone: '+15550000001', name: 'Theo Grant', town: 'Ashford', street: '45 Oak Rd', acres: 0.5 };
+    const calendar = {
+      customers: [{ phone: '+15550000009', name: 'Priya Nair' }],
+      bookings: [{ name: 'Priya Nair' }, { name: 'Lena Park' }],
+    };
+    const taken = takenDetails(current, [], calendar);
+    expect(taken.names).toEqual(expect.arrayContaining(['Theo Grant', 'Priya Nair', 'Lena Park']));
+    expect(taken.phones).toEqual(expect.arrayContaining(['+15550000001', '+15550000009']));
   });
 });

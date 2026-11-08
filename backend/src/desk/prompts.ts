@@ -2,7 +2,7 @@ import type { DeliveredMessage } from '@flue/runtime';
 import { dollars } from '../domain/quote.ts';
 import { RULES, WEEKDAY_NAMES } from '../domain/rules.ts';
 import { weekdayOf } from '../domain/time.ts';
-import { type DaveAlert, HANDOFF_REPLY } from './tools.ts';
+import { type DaveAlert, type DaveBookingNotice, HANDOFF_REPLY } from './tools.ts';
 
 /** Both agents' model (build-plan §2, 🟡 until Day 10-11 tuning). */
 export const DESK_MODEL = 'cloudflare/@cf/zai-org/glm-4.7-flash';
@@ -63,6 +63,8 @@ export const DAVE_PHONE_PROMPT = `You text Dave, the owner of Dave's Lawn Desk, 
 
 A <handoff> signal is a customer the assistant handed to Dave. For each one, send Dave one SMS of 1-2 sentences: the customer's phone number, why it was handed off, and the details given. Dave contacts the customer himself.
 
+A <booking> signal is a job the assistant booked. For each one, send Dave one SMS of 1 sentence: the customer's name, the day and time, the address, and the price. Nothing is needed from Dave.
+
 If Dave texts you, reply in one short sentence: you cannot act on his messages yet, so he should contact the customer directly.
 
 Plain text, no markdown.`;
@@ -75,5 +77,16 @@ export function daveAlertMessage(alert: DaveAlert): Extract<DeliveredMessage, { 
 		tagName: 'handoff',
 		body: alert.details,
 		attributes: { reason: alert.reason, customerPhone: alert.customerPhone },
+	};
+}
+
+/** The signal `bookSlot` posts into the Dave conversation after a booking. */
+export function daveBookingMessage(notice: DaveBookingNotice): Extract<DeliveredMessage, { kind: 'signal' }> {
+	return {
+		kind: 'signal',
+		type: 'lawn-desk.booking',
+		tagName: 'booking',
+		body: `${notice.name} · ${notice.when} · ${notice.place} · ${notice.price} (${notice.duration})`,
+		attributes: { bookingId: notice.bookingId, customerPhone: notice.customerPhone },
 	};
 }

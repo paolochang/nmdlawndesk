@@ -63,7 +63,8 @@ export interface SettledReply {
   loadCalendar: boolean;
   /**
    * Re-read Dave's conversation now: the hook does not follow one that did not
-   * exist yet. A handoff reveal does this itself, after its pause.
+   * exist yet. A reveal does this itself, after its pause (bookings and handoffs
+   * both text Dave).
    */
   refreshDave: boolean;
 }
@@ -80,5 +81,5 @@ export function settleReply(
   settled: BookingStatus,
 ): SettledReply {
   const reveal = started.url === url ? revealOnSettle(started.before, settled) : undefined;
-  return { reveal, loadCalendar: !reveal?.bookingId, refreshDave: !reveal?.handoff };
+  return { reveal, loadCalendar: !reveal?.bookingId, refreshDave: !reveal };
 }

@@ -16,7 +16,7 @@ import { panelLayout, type Focus } from './lib/layout.ts';
 import { CUSTOMER_KEY, newCustomer, restoreCustomer, type Customer } from './lib/persona.ts';
 import { recoverStaleSend } from './lib/recover.ts';
 import { gatedBubbles, LANDING_MS, PANELS_OPEN_MS, REVEAL_PAUSE_MS, settleReply, unreadCount, type Reveal } from './lib/reveal.ts';
-import { earlierCustomers, loadRoster, rememberCustomer, rememberRecovered, ROSTER_KEY, type RosterEntry } from './lib/roster.ts';
+import { earlierCustomers, loadRoster, rememberCustomer, rememberRecovered, ROSTER_KEY, takenDetails, type RosterEntry } from './lib/roster.ts';
 import { failedSendView, sendFailure, type Session } from './lib/session.ts';
 import { bookingStatus, settledStatus, type BookingStatus } from './lib/status.ts';
 import { conversationStage, repliesNow } from './lib/suggestions.ts';
@@ -204,7 +204,8 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
       later(() => {
         // Open Dave's side; a tester already on Dave's wide side keeps it.
         setFocus((current) => (current === 'customer' ? 'both' : current));
-        if (reveal.handoff) refreshDave();
+        // A booking and a handoff both text Dave.
+        refreshDave();
       }, REVEAL_PAUSE_MS);
       if (!loaded) return;
       later(() => {
@@ -310,9 +311,8 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
     setNotice(undefined);
   }
 
-  function onNewCustomer() {
-    const taken = [customer, ...roster.map((entry) => entry.customer)];
-    switchTo(newCustomer(Math.random, { names: taken.map((c) => c.name), phones: taken.map((c) => c.phone) }));
+  function onNewCustomer(known: { customers: CalendarSnapshot['customers']; bookings: { name: string }[] } | undefined = calendar) {
+    switchTo(newCustomer(Math.random, takenDetails(customer, roster, known)));
   }
 
   const [confirmingReset, setConfirmingReset] = useState(false);
@@ -328,7 +328,7 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
       setGeneration(snapshot.generation);
       setDaveOpen(false);
       setFocus('customer');
-      onNewCustomer();
+      onNewCustomer(snapshot);
     } catch (caught) {
       const status = statusOf(caught);
       if (status !== 401) setNotice(status === 429 ? SLOW_DOWN : RESET_FAILED);
@@ -341,6 +341,8 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
   /** The tester changes the layout; opening Dave's side shows a fresh calendar. */
   function openFocus(next: Focus) {
     setFocus(next);
+    // Dave's side is veiled on the customer side, so his phone closes with it.
+    if (next === 'customer') setDaveOpen(false);
     if (next !== 'customer') {
       loadCalendar();
       refreshDave();
@@ -421,7 +423,7 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
                     customer={customer}
                     locked={texted}
                     onChange={(patch) => setCustomer((old) => ({ ...old, ...patch }))}
-                    onNewCustomer={onNewCustomer}
+                    onNewCustomer={() => onNewCustomer()}
                     map={<TownMap focus={focus} customer={customer} config={config} />}
                   />
                   <SuggestedReplies

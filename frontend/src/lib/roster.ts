@@ -57,3 +57,23 @@ export function loadRoster(stored: string | null): RosterEntry[] {
     return [];
   }
 }
+
+/**
+ * Names and phones New customer must not draw: the current customer, everyone this
+ * tab has texted as, and everyone Dave's calendar already knows (other tabs and
+ * devices share it), so a new customer never looks like a booked one.
+ */
+export function takenDetails(
+  current: Customer,
+  roster: readonly RosterEntry[],
+  calendar: { customers: readonly { phone: string; name?: string }[]; bookings: readonly { name: string }[] } | undefined,
+): { names: string[]; phones: string[] } {
+  const names = [current.name, ...roster.map((entry) => entry.customer.name)];
+  const phones = [current.phone, ...roster.map((entry) => entry.customer.phone)];
+  for (const known of calendar?.customers ?? []) {
+    phones.push(known.phone);
+    if (known.name) names.push(known.name);
+  }
+  for (const booking of calendar?.bookings ?? []) names.push(booking.name);
+  return { names, phones };
+}

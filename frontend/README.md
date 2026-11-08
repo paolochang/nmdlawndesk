@@ -50,12 +50,14 @@ service binding to the backend dev server.
 3. Text from the phone, or tap a suggested reply. While the agent works the phone
    shows "typing…", and the reply appears once it is complete. The judgment log at the
    bottom shows each tool call (input and output) and the reasoning.
-4. **New customer** starts a new conversation with a new number; the calendar stays.
+4. **New customer** starts a new conversation with a new number and a name that is
+   not already on Dave's calendar; the calendar stays.
    Customers who texted can be reopened from the drop-down at the top of the panel.
 5. The switch in the middle widens the customer side, Dave's side, or both. Dave's
    side shows his calendar (each day with its towns; Wednesday is off), and below it
    his town days, work hours, and prices from `/api/config`. The round button at the bottom right
-   opens his phone (read-only); a red badge counts new texts.
+   opens his phone (read-only): the desk texts Dave every booking and every handoff,
+   and a red badge counts new texts. Going back to the customer side closes it.
 6. When the desk's reply confirms a booking, both sides open after a short pause and
    the new booking lands in Dave's calendar. After a handoff, the alert arrives in
    Dave's phone and its button shows a badge. Both wait for the desk's text to reach the customer phone; only the

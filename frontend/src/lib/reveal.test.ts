@@ -54,11 +54,11 @@ describe('settleReply (what a settled reply does)', () => {
   const a = '/api/agents/lawn-desk/v1:1:+15550000001';
   const b = '/api/agents/lawn-desk/v1:1:+15550000002';
 
-  it('reveals a booking in the conversation on screen; the reveal loads the calendar', () => {
+  it("reveals a booking in the conversation on screen; the reveal loads the calendar and Dave's phone after its pause", () => {
     expect(settleReply({ url: a, before: open }, a, booked('g1-1'))).toEqual({
       reveal: { bookingId: 'g1-1', handoff: false },
       loadCalendar: false,
-      refreshDave: true,
+      refreshDave: false,
     });
   });
 
