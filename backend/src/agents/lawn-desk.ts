@@ -1,6 +1,8 @@
 'use agent';
 import { type AgentProps, dispatch, useAgentStart, useModel, useTool } from '@flue/runtime';
 import { daveConversationId, parseConversationId } from '../domain/conversation.ts';
+import { RULES } from '../domain/rules.ts';
+import { localDateTime } from '../domain/time.ts';
 import { DESK_MODEL, daveAlertMessage, daveBookingMessage, lawnDeskPrompt } from '../desk/prompts.ts';
 import { deskTools } from '../desk/tools.ts';
 import { visitorStore } from '../store/stub.ts';
@@ -37,5 +39,5 @@ export function LawnDesk({ id }: AgentProps) {
 	});
 	for (const tool of tools) useTool(tool);
 
-	return lawnDeskPrompt();
+	return lawnDeskPrompt(localDateTime(Date.now(), RULES.timeZone));
 }

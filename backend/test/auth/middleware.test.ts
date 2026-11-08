@@ -41,7 +41,7 @@ async function setup(env: Partial<AuthEnv> = {}) {
 			if (!ledgers.has(visitorId)) {
 				const map = new Map<string, unknown>();
 				const kv: KvStorage = { get: <T>(k: string) => map.get(k) as T, put: (k, v) => void map.set(k, v) };
-				ledgers.set(visitorId, new VisitorLedger(kv, () => 0));
+				ledgers.set(visitorId, new VisitorLedger(kv, () => 0, () => Date.parse('2026-11-15T14:00:00Z')));
 			}
 			return ledgers.get(visitorId)!;
 		}),

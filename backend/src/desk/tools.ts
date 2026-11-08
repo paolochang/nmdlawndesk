@@ -5,7 +5,7 @@ import type { Conversation } from '../domain/conversation.ts';
 import { dollars, quote } from '../domain/quote.ts';
 import { RULES, resolveTown, TOWNS, townWeekdays, WEEKDAY_NAMES } from '../domain/rules.ts';
 import { findSlots } from '../domain/slots.ts';
-import { splitDateTime, weekdayOf } from '../domain/time.ts';
+import { type Clock, localDateTime, splitDateTime, weekdayOf } from '../domain/time.ts';
 import type { TimeRange } from '../domain/types.ts';
 import type { AddResult, BookingRequest, Customer, VisitorSnapshot } from '../store/ledger.ts';
 
@@ -46,6 +46,8 @@ export interface DeskDeps {
 	alertDave(alert: DaveAlert): Promise<void>;
 	/** Posts a new booking into the same Dave conversation. */
 	tellDaveBooked(notice: DaveBookingNotice): Promise<void>;
+	/** The clock, read in Dave's time zone on every call (build-plan §12). Default `Date.now`. */
+	clock?: Clock;
 }
 
 /** `Ashford, Clearwater, Birchwood, and Dunmore`. */
@@ -97,6 +99,7 @@ const REJECTION_NEXT: Record<Rejection, string> = {
 
 /** `quoteJob`, `findSlots`, `bookSlot`, `handoffToDave` (build-plan §5) over one customer conversation. */
 export function deskTools(deps: DeskDeps): ToolDefinition[] {
+	const now = () => localDateTime((deps.clock ?? Date.now)(), RULES.timeZone);
 	return [
 		defineTool({
 			name: 'quoteJob',
@@ -117,7 +120,7 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 				acres,
 				from: v.pipe(
 					v.optional(v.pipe(v.string(), v.regex(/^\d{4}-\d{2}-\d{2}$/))),
-					v.description(`First day to search, YYYY-MM-DD. Omit to search from today (${RULES.demoDate}).`),
+					v.description(`First day to search, YYYY-MM-DD. Omit to search from today (${now().slice(0, 10)}).`),
 				),
 			}),
 			async run({ data }) {
@@ -126,11 +129,13 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 				const q = quote(data.acres ?? 'unknown');
 				if (q.kind === 'handoff') return { output: { handoff: 'yard-over-1-acre', next: HANDOFF_NEXT } };
 				const { bookings } = await deps.store.list();
+				const at = now();
 				const slots = findSlots({
 					town: resolved,
 					durationMinutes: q.durationMinutes,
-					from: data.from ?? RULES.demoDate,
+					from: data.from ?? at.slice(0, 10),
 					bookings,
+					now: at,
 				});
 				return {
 					output: {

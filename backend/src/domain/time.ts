@@ -49,3 +49,37 @@ export function joinDateTime(date: string, minutes: number): string {
 export function assertDate(date: string): void {
 	dateToUtc(date);
 }
+
+/** Minutes after `dateTime`, across midnight if needed. */
+export function addMinutes(dateTime: string, minutes: number): string {
+	const { date, minutes: start } = splitDateTime(dateTime);
+	const total = start + minutes;
+	const days = Math.floor(total / 1440);
+	return joinDateTime(addDays(date, days), total - days * 1440);
+}
+
+/** The Sunday on or before `date`. */
+export function sundayOf(date: string): string {
+	return addDays(date, -weekdayOf(date));
+}
+
+/** An epoch time (ms) as wall-clock `YYYY-MM-DDTHH:mm` in `timeZone`. */
+export function localDateTime(epochMs: number, timeZone: string): string {
+	const parts = Object.fromEntries(
+		new Intl.DateTimeFormat('en-CA', {
+			timeZone,
+			year: 'numeric',
+			month: '2-digit',
+			day: '2-digit',
+			hour: '2-digit',
+			minute: '2-digit',
+			hourCycle: 'h23',
+		})
+			.formatToParts(epochMs)
+			.map((p) => [p.type, p.value]),
+	);
+	return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+/** Epoch milliseconds, as `Date.now` returns. Injected so tests pin the date. */
+export type Clock = () => number;

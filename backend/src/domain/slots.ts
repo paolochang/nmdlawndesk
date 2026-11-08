@@ -1,5 +1,5 @@
 import { RULES, type Town, townWeekdays } from './rules.ts';
-import { addDays, assertDate, joinDateTime, splitDateTime, toMinutes, weekdayOf } from './time.ts';
+import { addDays, addMinutes, assertDate, joinDateTime, splitDateTime, toMinutes, weekdayOf } from './time.ts';
 import type { TimeRange } from './types.ts';
 
 export type SlotCheck =
@@ -13,30 +13,32 @@ const CLOSE = toMinutes(RULES.hours.close);
  * Open slots for a job in `town`: the earliest free start on each of the town's
  * weekdays, from `from` (inclusive) for `days` days, at most `limit` slots. A job
  * must end by closing time and must not overlap any booking (Dave is one person,
- * so bookings in every town count). Back-to-back jobs are fine. A `from` before
- * `today` searches from `today`, so every offer passes `checkSlot`.
+ * so bookings in every town count). Back-to-back jobs are fine. Nothing starts
+ * before `now` plus the notice (build-plan §12), and a `from` before today
+ * searches from today, so every offer passes `checkSlot`.
  */
 export function findSlots({
 	town,
 	durationMinutes,
 	from,
 	bookings,
+	now,
 	limit = 2,
 	days = RULES.searchDays,
-	today = RULES.demoDate,
 }: {
 	town: Town;
 	durationMinutes: number;
 	from: string;
 	bookings: readonly TimeRange[];
+	/** Dave's wall clock, `YYYY-MM-DDTHH:mm`. */
+	now: string;
 	limit?: number;
 	days?: number;
-	/** Days before this are past. Defaults to the simulator's fixed demo date. */
-	today?: string;
 }): TimeRange[] {
 	assertDuration(durationMinutes);
 	assertDate(from);
-	assertDate(today);
+	const earliest = earliestStart(now);
+	const today = now.slice(0, 10);
 	const first = from < today ? today : from;
 	const weekdays = townWeekdays(town);
 	const slots: TimeRange[] = [];
@@ -45,7 +47,7 @@ export function findSlots({
 		if (!weekdays.includes(weekdayOf(date))) continue;
 		for (let start = OPEN; start + durationMinutes <= CLOSE; start += RULES.slotStepMinutes) {
 			const slot = { start: joinDateTime(date, start), end: joinDateTime(date, start + durationMinutes) };
-			if (!bookings.some((b) => overlaps(b, slot))) {
+			if (slot.start >= earliest && !bookings.some((b) => overlaps(b, slot))) {
 				slots.push(slot);
 				break;
 			}
@@ -60,25 +62,30 @@ export function checkSlot({
 	start,
 	durationMinutes,
 	bookings,
-	today = RULES.demoDate,
+	now,
 }: {
 	town: Town;
 	start: string;
 	durationMinutes: number;
 	bookings: readonly TimeRange[];
-	/** Days before this are past. Defaults to the simulator's fixed demo date. */
-	today?: string;
+	/** Dave's wall clock, `YYYY-MM-DDTHH:mm`: a start before it plus the notice is past. */
+	now: string;
 }): SlotCheck {
 	assertDuration(durationMinutes);
-	assertDate(today);
+	const earliest = earliestStart(now);
 	const { date, minutes } = splitDateTime(start);
-	if (date < today) return { ok: false, reason: 'past' };
+	if (start < earliest) return { ok: false, reason: 'past' };
 	if (!townWeekdays(town).includes(weekdayOf(date))) return { ok: false, reason: 'wrong-weekday' };
 	if (minutes < OPEN || minutes + durationMinutes > CLOSE) return { ok: false, reason: 'outside-hours' };
 	if ((minutes - OPEN) % RULES.slotStepMinutes !== 0) return { ok: false, reason: 'off-grid' };
 	const slot = { start, end: joinDateTime(date, minutes + durationMinutes) };
 	if (bookings.some((b) => overlaps(b, slot))) return { ok: false, reason: 'overlap' };
 	return { ok: true, slot };
+}
+
+/** The first start Dave can still take: `now` plus the notice. Validates `now`. */
+function earliestStart(now: string): string {
+	return addMinutes(now, RULES.minNoticeMinutes);
 }
 
 /** Same-format date-time strings compare in time order. */

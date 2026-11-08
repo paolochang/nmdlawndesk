@@ -1,7 +1,8 @@
-import { bookingBasis, type Preset, pickPreset, presetBookings } from '../domain/presets.ts';
+import { bookingBasis, isSeed, type Preset, pickPreset, presetBookings, PRESETS } from '../domain/presets.ts';
 import { quote } from '../domain/quote.ts';
-import { resolveTown, type Town } from '../domain/rules.ts';
-import { checkSlot, type SlotCheck } from '../domain/slots.ts';
+import { RULES, resolveTown, type Town } from '../domain/rules.ts';
+import { checkSlot, overlaps, type SlotCheck } from '../domain/slots.ts';
+import { type Clock, localDateTime, sundayOf } from '../domain/time.ts';
 import type { Booking } from '../domain/types.ts';
 
 /** The synchronous key-value API of a SQLite-backed Durable Object (`ctx.storage.kv`). */
@@ -21,7 +22,13 @@ export interface VisitorSnapshot {
 	presetId: string;
 	customers: Customer[];
 	bookings: Booking[];
+	/** Today in Dave's time zone, `YYYY-MM-DD` (build-plan §12). */
+	today: string;
+	/** Dave's time zone, an IANA name. */
+	timeZone: string;
 }
+
+type CalendarState = Omit<VisitorSnapshot, 'today' | 'timeZone'>;
 
 /** What a caller books. The store prices the job itself from `acres` with `quote`. */
 export interface BookingRequest {
@@ -50,9 +57,11 @@ export type AddResult =
 				| 'invalid-request';
 	  };
 
-interface StoredState extends VisitorSnapshot {
+interface StoredState extends CalendarState {
 	/** Shape of this value; see STATE_VERSION. */
 	schemaVersion: number;
+	/** The Sunday the latest seeds are dated from (build-plan §12). */
+	anchor: string;
 	/** Next booking number in this generation. */
 	nextBookingNo: number;
 }
@@ -64,7 +73,7 @@ const KEY = 'state';
  * next generation: generations stay monotonic, so an old conversation id never
  * points into the new state.
  */
-export const STATE_VERSION = 1;
+export const STATE_VERSION = 2;
 const RATE_KEY = 'rate';
 
 interface RateWindow {
@@ -76,19 +85,23 @@ interface RateWindow {
  * One visitor's test environment (build-plan §6): generation, seed preset,
  * customers, and bookings. All state is one value under one key, and every
  * method is synchronous, so inside a Durable Object each call is atomic and two
- * bookings for the same slot cannot both pass the overlap check.
+ * bookings for the same slot cannot both pass the overlap check. "Today" is the
+ * clock read in Dave's time zone (§12).
  */
 export class VisitorLedger {
 	readonly #kv: KvStorage;
 	readonly #random: () => number;
+	readonly #clock: Clock;
 
-	constructor(kv: KvStorage, random: () => number = Math.random) {
+	constructor(kv: KvStorage, random: () => number = Math.random, clock: Clock = Date.now) {
 		this.#kv = kv;
 		this.#random = random;
+		this.#clock = clock;
 	}
 
 	list(): VisitorSnapshot {
-		return snapshot(this.#load());
+		const now = this.#now();
+		return snapshot(this.#load(now), now);
 	}
 
 	/**
@@ -102,14 +115,15 @@ export class VisitorLedger {
 			return { ok: false, reason: 'invalid-request' };
 		}
 		if (!name.trim()) return { ok: false, reason: 'missing-name' };
-		const state = this.#load();
+		const now = this.#now();
+		const state = this.#load(now);
 		if (generation !== undefined && generation !== state.generation) return { ok: false, reason: 'stale-generation' };
 		let q: ReturnType<typeof quote>;
 		let check: SlotCheck;
 		try {
 			q = quote(acres);
 			if (q.kind === 'handoff') return { ok: false, reason: 'handoff' };
-			check = checkSlot({ town, start, durationMinutes: q.durationMinutes, bookings: state.bookings });
+			check = checkSlot({ town, start, durationMinutes: q.durationMinutes, bookings: state.bookings, now });
 		} catch (error) {
 			if (error instanceof RangeError) return { ok: false, reason: 'invalid-request' };
 			throw error;
@@ -136,7 +150,7 @@ export class VisitorLedger {
 	 * A phone from another `generation` (a conversation left behind by a reset) is ignored.
 	 */
 	addCustomer(phone: string, generation?: number): Customer[] {
-		const state = this.#load();
+		const state = this.#load(this.#now());
 		if (generation !== undefined && generation !== state.generation) return state.customers;
 		if (state.customers.some((c) => c.phone === phone)) return state.customers;
 		const customers = [...state.customers, { phone }];
@@ -144,12 +158,13 @@ export class VisitorLedger {
 		return customers;
 	}
 
-	/** New generation, no customers, and a different random preset's bookings. */
+	/** New generation, no customers, and a different random preset's bookings for this week. */
 	reset(): VisitorSnapshot {
-		const current = this.#load();
-		const next = fresh(current.generation + 1, pickPreset(current.presetId, this.#random));
+		const now = this.#now();
+		const current = this.#load(now);
+		const next = fresh(current.generation + 1, pickPreset(current.presetId, this.#random), now);
 		this.#save(next);
-		return snapshot(next);
+		return snapshot(next, now);
 	}
 
 	/**
@@ -164,12 +179,21 @@ export class VisitorLedger {
 		return count <= limit;
 	}
 
-	#load(): StoredState {
+	/** Dave's wall clock now, `YYYY-MM-DDTHH:mm`. */
+	#now(): string {
+		return localDateTime(this.#clock(), RULES.timeZone);
+	}
+
+	#load(now: string): StoredState {
 		const stored = this.#kv.get<StoredState>(KEY);
-		if (stored?.schemaVersion === STATE_VERSION) return stored;
+		if (stored?.schemaVersion === STATE_VERSION) {
+			const topped = topUp(stored, now.slice(0, 10));
+			if (topped !== stored) this.#save(topped);
+			return topped;
+		}
 		const first = stored
-			? fresh(stored.generation + 1, pickPreset(stored.presetId, this.#random))
-			: fresh(1, pickPreset(undefined, this.#random));
+			? fresh(stored.generation + 1, pickPreset(stored.presetId, this.#random), now)
+			: fresh(1, pickPreset(undefined, this.#random), now);
 		this.#save(first);
 		return first;
 	}
@@ -187,17 +211,37 @@ function withCustomer(customers: Customer[], phone: string, name: string): Custo
 		: [...customers, customer];
 }
 
-function fresh(generation: number, preset: Preset): StoredState {
+function fresh(generation: number, preset: Preset, now: string): StoredState {
+	const anchor = sundayOf(now.slice(0, 10));
 	return {
 		schemaVersion: STATE_VERSION,
 		generation,
 		presetId: preset.id,
+		anchor,
 		customers: [],
-		bookings: presetBookings(preset),
+		bookings: presetBookings(preset, anchor),
 		nextBookingNo: 1,
 	};
 }
 
-function snapshot({ nextBookingNo: _, schemaVersion: __, ...state }: StoredState): VisitorSnapshot {
-	return state;
+/**
+ * A returning visitor (build-plan §12): when no seed is on or after `today`, the
+ * preset's seeds for this week's Sunday join the calendar. The generation,
+ * customers, and existing bookings stay; a seed that overlaps a booking already
+ * there is skipped. Returns `state` itself when nothing changes.
+ */
+function topUp(state: StoredState, today: string): StoredState {
+	if (state.bookings.some((b) => isSeed(b) && b.start.slice(0, 10) >= today)) return state;
+	const anchor = sundayOf(today);
+	const preset = PRESETS.find((p) => p.id === state.presetId);
+	if (!preset || anchor <= state.anchor) return state;
+	const seeds = presetBookings(preset, anchor).filter((seed) => !state.bookings.some((b) => overlaps(b, seed)));
+	return { ...state, anchor, bookings: [...state.bookings, ...seeds] };
+}
+
+function snapshot(
+	{ nextBookingNo: _, schemaVersion: __, anchor: ___, ...state }: StoredState,
+	now: string,
+): VisitorSnapshot {
+	return { ...state, today: now.slice(0, 10), timeZone: RULES.timeZone };
 }

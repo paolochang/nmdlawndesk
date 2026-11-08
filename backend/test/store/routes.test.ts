@@ -12,7 +12,7 @@ function fakeNamespace() {
 		if (!ledgers.has(visitorId)) {
 			const map = new Map<string, unknown>();
 			const kv: KvStorage = { get: <T>(k: string) => map.get(k) as T, put: (k, v) => void map.set(k, v) };
-			ledgers.set(visitorId, new VisitorLedger(kv, () => 0));
+			ledgers.set(visitorId, new VisitorLedger(kv, () => 0, () => Date.parse('2026-11-15T14:00:00Z')));
 		}
 		return ledgers.get(visitorId)!;
 	};
@@ -30,7 +30,13 @@ describe('store routes', () => {
 		const { app, requested } = fakeNamespace();
 		const res = await app.request('/calendar/v_abc-123');
 		expect(res.status).toBe(200);
-		expect(await res.json()).toMatchObject({ generation: 1, presetId: 'A', customers: [] });
+		expect(await res.json()).toMatchObject({
+			generation: 1,
+			presetId: 'A',
+			customers: [],
+			today: '2026-11-15',
+			timeZone: 'America/New_York',
+		});
 		expect(requested).toEqual(['v_abc-123']);
 	});
 

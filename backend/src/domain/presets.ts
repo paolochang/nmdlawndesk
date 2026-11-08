@@ -1,10 +1,10 @@
 import { quote } from './quote.ts';
-import { RULES, type Town } from './rules.ts';
-import { addDays, joinDateTime, toMinutes } from './time.ts';
+import type { Town } from './rules.ts';
+import { addDays, joinDateTime, toMinutes, weekdayOf } from './time.ts';
 import type { Booking } from './types.ts';
 
 export interface SeedBooking {
-	/** Days after the demo date (the demo date is a Sunday, so 1 = Monday). */
+	/** Days after the anchor Sunday: 1 = Monday, 8 = the next Monday. */
 	dayOffset: number;
 	/** `HH:mm` */
 	start: string;
@@ -21,10 +21,12 @@ export interface Preset {
 }
 
 // Seed schedules for Dave (build-plan §6). Every preset leaves open slots for
-// both weekday groups within two weeks and has one tight day the agent must
-// work around. Demo date 2026-11-15 is a Sunday: offsets 1 Mon 16, 2 Tue 17,
-// 4 Thu 19, 5 Fri 20, 8 Mon 23, 9 Tue 24, 11 Thu 26, 12 Fri 27. Names and
-// addresses are fictional.
+// both weekday groups within two weeks, has one tight day the agent must work
+// around, and has a seed in each of its two weeks (so a returning visitor's
+// top-up always adds future seeds, §12). Offsets count from an anchor Sunday:
+// 1 Mon, 2 Tue, 4 Thu, 5 Fri, 8 Mon, 9 Tue, 11 Thu, 12 Fri. With the anchor
+// 2026-11-15: Mon 16, Tue 17, Thu 19, Fri 20, Mon 23, Tue 24, Thu 26, Fri 27.
+// Names and addresses are fictional.
 export const PRESETS: Preset[] = [
 	{
 		id: 'A',
@@ -36,6 +38,7 @@ export const PRESETS: Preset[] = [
 			{ dayOffset: 1, start: '12:00', acres: 0.25, name: 'Ken Ito', address: '5 Mill Ln', town: 'Clearwater' },
 			{ dayOffset: 2, start: '09:00', acres: 0.5, name: 'Grace Kim', address: '77 Birch Ave', town: 'Birchwood' },
 			{ dayOffset: 4, start: '10:00', acres: 1, name: 'Owen Price', address: '19 Pine Rd', town: 'Ashford' },
+			{ dayOffset: 9, start: '11:00', acres: 0.5, name: 'Rosa Diaz', address: '12 Quarry Way', town: 'Dunmore' },
 		],
 	},
 	{
@@ -47,6 +50,7 @@ export const PRESETS: Preset[] = [
 			{ dayOffset: 2, start: '10:30', acres: 0.9, name: 'Ella Novak', address: '63 Birch Ave', town: 'Birchwood' },
 			{ dayOffset: 1, start: '10:00', acres: 0.5, name: 'Sam Carter', address: '14 Oak Rd', town: 'Ashford' },
 			{ dayOffset: 5, start: '08:00', acres: 1, name: 'Nadia Rahman', address: '9 Fen Ct', town: 'Dunmore' },
+			{ dayOffset: 11, start: '09:00', acres: 0.5, name: 'Mia Ford', address: '18 Shore Rd', town: 'Clearwater' },
 		],
 	},
 	{
@@ -74,15 +78,19 @@ export const PRESETS: Preset[] = [
 	},
 ];
 
-/** The preset's bookings as dated, priced calendar entries. */
-export function presetBookings(preset: Preset, demoDate: string = RULES.demoDate): Booking[] {
+/**
+ * The preset's bookings as dated, priced calendar entries for the two weeks after
+ * `anchor` (a Sunday). Ids carry the anchor, so a top-up never repeats one.
+ */
+export function presetBookings(preset: Preset, anchor: string): Booking[] {
+	if (weekdayOf(anchor) !== 0) throw new RangeError(`A preset anchor must be a Sunday, got ${anchor}`);
 	return preset.bookings.map((seed, i) => {
 		const q = quote(seed.acres);
 		if (q.kind !== 'quote') throw new Error(`Preset ${preset.id} booking ${i} cannot be quoted`);
-		const date = addDays(demoDate, seed.dayOffset);
+		const date = addDays(anchor, seed.dayOffset);
 		const start = toMinutes(seed.start);
 		return {
-			id: `seed-${preset.id}-${i + 1}`,
+			id: `seed-${preset.id}-${anchor}-${i + 1}`,
 			start: joinDateTime(date, start),
 			end: joinDateTime(date, start + q.durationMinutes),
 			name: seed.name,
@@ -109,4 +117,9 @@ export function pickPreset(currentId: string | undefined, random: () => number):
 	const i = Math.floor(random() * choices.length);
 	// Clamp out-of-range values from an injected source; NaN falls back to the first.
 	return choices[Math.min(Math.max(i, 0), choices.length - 1)] ?? choices[0];
+}
+
+/** Seed bookings come with a preset; every other booking was made by the desk. */
+export function isSeed(booking: Pick<Booking, 'id'>): boolean {
+	return booking.id.startsWith('seed-');
 }

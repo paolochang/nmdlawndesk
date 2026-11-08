@@ -4,12 +4,15 @@ import { PRESETS, presetBookings } from '../../src/domain/presets.ts';
 import { type DaveAlert, type DaveBookingNotice, type DeskStore, deskTools, handoffReply } from '../../src/desk/tools.ts';
 import { type KvStorage, VisitorLedger } from '../../src/store/ledger.ts';
 
-// A ledger on an in-memory KV stands in for the Durable Object. Random 0 picks
-// preset A: Mon 2026-11-16 is full, Tue 17 09:00-10:00 and Thu 19 10:00-11:30 are booked.
-function setup(generation = 1, tellDaveBooked?: (notice: DaveBookingNotice) => Promise<void>) {
+// A ledger on an in-memory KV stands in for the Durable Object. The clock is Sun
+// 2026-11-15 09:00 in Dave's time zone (14:00 UTC). Random 0 picks preset A:
+// Mon 2026-11-16 is full, Tue 17 09:00-10:00 and Thu 19 10:00-11:30 are booked.
+const SUNDAY = () => Date.parse('2026-11-15T14:00:00Z');
+
+function setup(generation = 1, tellDaveBooked?: (notice: DaveBookingNotice) => Promise<void>, clock = SUNDAY) {
 	const map = new Map<string, unknown>();
 	const kv: KvStorage = { get: <T>(k: string) => structuredClone(map.get(k)) as T, put: (k, v) => void map.set(k, structuredClone(v)) };
-	const ledger = new VisitorLedger(kv, () => 0);
+	const ledger = new VisitorLedger(kv, () => 0, clock);
 	const store: DeskStore = {
 		list: async () => ledger.list(),
 		add: async (request) => ledger.add(request),
@@ -22,6 +25,7 @@ function setup(generation = 1, tellDaveBooked?: (notice: DaveBookingNotice) => P
 		store,
 		alertDave: async (alert) => void alerts.push(alert),
 		tellDaveBooked: tellDaveBooked ?? (async (notice) => void notices.push(notice)),
+		clock,
 	});
 	const call = async (name: string, data: unknown) => {
 		const tool = tools.find((t) => t.name === name);
@@ -78,7 +82,7 @@ describe('desk tools', () => {
 	});
 
 	describe('findSlots', () => {
-		it('offers two open slots on the town’s weekdays from the demo date, around existing bookings', async () => {
+		it('offers two open slots on the town’s weekdays from today, around existing bookings', async () => {
 			const output = await setup().call('findSlots', { town: 'ashford', acres: 1 });
 			expect(output).toMatchObject({
 				town: 'Ashford',
@@ -87,6 +91,16 @@ describe('desk tools', () => {
 					{ start: '2026-11-23T08:00', label: 'Mon Nov 23, 8:00-9:30 AM' },
 				],
 			});
+		});
+
+		it("searches from the clock's today in Dave's time zone and names it in the tool text (build-plan §12)", async () => {
+			// Thu 2026-12-03 10:40 ET: preset A anchors on Sun 11-29 and books Thu 12-03 10:00-11:30.
+			const thursday = () => Date.parse('2026-12-03T15:40:00Z');
+			const { call } = setup(1, undefined, thursday);
+			const output = (await call('findSlots', { town: 'Ashford', acres: 0.5 })) as { slots: { start: string }[] };
+			expect(output.slots.map((s) => s.start)).toEqual(['2026-12-03T12:00', '2026-12-07T08:00']);
+			const tool = deskTools({ clock: thursday } as never).find((t) => t.name === 'findSlots')!;
+			expect(JSON.stringify(tool.input)).toContain('Omit to search from today (2026-12-03)');
 		});
 
 		it('searches from a later date when asked', async () => {
@@ -154,7 +168,7 @@ describe('desk tools', () => {
 			const { call, ledger, notices } = setup();
 			const output = await call('bookSlot', { ...booking, start: '2026-11-17T09:00' });
 			expect(output).toMatchObject({ ok: false, reason: 'overlap' });
-			expect(ledger.list().bookings).toEqual(presetBookings(PRESETS[0]));
+			expect(ledger.list().bookings).toEqual(presetBookings(PRESETS[0], '2026-11-15'));
 			expect(notices).toEqual([]);
 		});
 

@@ -2,7 +2,8 @@
 // the agent reads it through tools and the UI shows it on Dave's side (/config).
 //
 // Times are Dave's local wall-clock time. A date is `YYYY-MM-DD`, a date-time is
-// `YYYY-MM-DDTHH:mm`, with no time zone: Dave works in one place.
+// `YYYY-MM-DDTHH:mm`, with no time zone: Dave works in one place, `timeZone`, and
+// only the clock (`localDateTime`) is read there.
 
 export const TOWNS = ['Ashford', 'Clearwater', 'Birchwood', 'Dunmore'] as const;
 export type Town = (typeof TOWNS)[number];
@@ -13,11 +14,13 @@ export type Weekday = 0 | 1 | 2 | 3 | 4 | 5 | 6;
 export const WEEKDAY_NAMES = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'] as const;
 
 export const RULES = {
-	/** The simulator's fixed "today" (a Sunday): presets and slot search start here. */
-	demoDate: '2026-11-15',
+	/** Dave's time zone: "today" and "now" are the server's clock read here (build-plan §12). */
+	timeZone: 'America/New_York',
 	hours: { open: '08:00', close: '13:00' },
 	/** Bookings start on this grid, counted from opening time. */
 	slotStepMinutes: 30,
+	/** A job must start at least this long after now. */
+	minNoticeMinutes: 60,
 	/** How far ahead slot search looks. */
 	searchDays: 14,
 	townGroups: [
