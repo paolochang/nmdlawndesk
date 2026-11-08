@@ -8,11 +8,13 @@ import { type Conversation, parseConversationId } from '../domain/conversation.t
  * only from the server's dispatch()), and 409 when a message is posted to a
  * conversation of another generation than the visitor's current one. A reset
  * leaves old conversations behind; they stay readable and abortable, but never
- * talk to the new calendar.
+ * talk to the new calendar. `admitted` gets each text that passes, before the
+ * agent runs (the lawn desk records the customer's texts, build-plan §13).
  */
 export function conversationGuard(
 	kind: Conversation['kind'],
 	currentGeneration: (visitorId: string) => Promise<number>,
+	admitted?: (conversation: Conversation, text: string) => Promise<void>,
 ): MiddlewareHandler {
 	return async (c, next) => {
 		const id = c.req.param('id') ?? '';
@@ -30,6 +32,8 @@ export function conversationGuard(
 			if (conversation.generation !== generation) {
 				return c.json({ error: 'stale conversation', generation }, 409);
 			}
+			const text = (message as { body?: unknown } | undefined)?.body;
+			if (admitted && typeof text === 'string') await admitted(conversation, text);
 		}
 		await next();
 	};

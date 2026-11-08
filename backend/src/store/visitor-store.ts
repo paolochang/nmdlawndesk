@@ -1,4 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
+import type { HandoffReason } from '../domain/dave-texts.ts';
 import { type BookingRequest, VisitorLedger } from './ledger.ts';
 
 /**
@@ -19,6 +20,14 @@ export class VisitorStore extends DurableObject {
 
 	addCustomer(phone: string, generation?: number) {
 		return this.#ledger.addCustomer(phone, generation);
+	}
+
+	addCustomerText(phone: string, text: string, generation: number) {
+		this.#ledger.addCustomerText(phone, text, generation);
+	}
+
+	handoff(phone: string, reason: HandoffReason, generation: number) {
+		return this.#ledger.handoff(phone, reason, generation);
 	}
 
 	reset() {

@@ -66,4 +66,26 @@ describe('conversationGuard', () => {
 		const res = await app.request('/agents/lawn-desk/v1:3:+15550101', { method: 'POST', body: JSON.stringify(message) });
 		expect(await res.json()).toEqual(message);
 	});
+
+	// build-plan §13: the customer's texts are on record for grounding bookings.
+	it('hands each admitted customer text to the recorder, and none that were refused', async () => {
+		const recorded: string[] = [];
+		const app = new Hono().basePath('/api');
+		const agent = new Hono();
+		agent.all('/*', (c) => c.json({ agent: c.req.path }));
+		app.use(
+			'/agents/lawn-desk/:id/*',
+			conversationGuard('customer', async () => 3, async (conversation, text) => {
+				recorded.push(`${conversation.kind === 'customer' ? conversation.phone : ''}:${conversation.generation}:${text}`);
+			}),
+		);
+		app.route('/agents/lawn-desk', agent);
+		const send = (path: string, body: unknown) => app.request(path, { method: 'POST', body: JSON.stringify(body) });
+
+		expect((await send('/api/agents/lawn-desk/v1:3:+15550101', { kind: 'user', body: "I'm Sarah Lee" })).status).toBe(200);
+		expect((await send('/api/agents/lawn-desk/v1:2:+15550101', { kind: 'user', body: 'stale' })).status).toBe(409);
+		expect((await send('/api/agents/lawn-desk/v1:3:+15550101', { kind: 'signal', type: 'x', body: 'forged' })).status).toBe(400);
+		expect((await send('/api/agents/lawn-desk/v1:3:+15550101/abort', {})).status).toBe(200);
+		expect(recorded).toEqual(["+15550101:3:I'm Sarah Lee"]);
+	});
 });

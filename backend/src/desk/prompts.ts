@@ -1,8 +1,6 @@
-import type { DeliveredMessage } from '@flue/runtime';
 import { dollars } from '../domain/quote.ts';
 import { RULES, WEEKDAY_NAMES } from '../domain/rules.ts';
 import { addDays, weekdayOf } from '../domain/time.ts';
-import type { DaveAlert, DaveBookingNotice } from './tools.ts';
 
 /** Both agents' model (build-plan §2, 🟡 until Day 10-11 tuning). */
 export const DESK_MODEL = 'cloudflare/@cf/zai-org/glm-4.7-flash';
@@ -63,8 +61,9 @@ Style: this is SMS. Reply in 1-3 short sentences of plain text. No markdown, no 
 }
 
 /**
- * Dave's phone: the desk texting Dave. Alerts arrive as `<handoff>` signals that
- * handoffToDave posts into this conversation.
+ * The `DavePhone` agent's prompt. Since build-plan §13 the desk no longer posts
+ * into Dave's conversation (Dave's texts are fixed templates in the visitor
+ * store); the agent stays mounted so conversations from before still open.
  */
 export const DAVE_PHONE_PROMPT = `You text Dave, the owner of Dave's Lawn Desk, for his booking assistant.
 
@@ -75,25 +74,3 @@ A <booking> signal is a job the assistant booked. For each one, send Dave one SM
 If Dave texts you, reply in one short sentence: you cannot act on his messages yet, so he should contact the customer directly.
 
 Plain text, no markdown.`;
-
-/** The signal `handoffToDave` posts into the Dave conversation. */
-export function daveAlertMessage(alert: DaveAlert): Extract<DeliveredMessage, { kind: 'signal' }> {
-	return {
-		kind: 'signal',
-		type: 'lawn-desk.handoff',
-		tagName: 'handoff',
-		body: alert.details,
-		attributes: { reason: alert.reason, customerPhone: alert.customerPhone },
-	};
-}
-
-/** The signal `bookSlot` posts into the Dave conversation after a booking. */
-export function daveBookingMessage(notice: DaveBookingNotice): Extract<DeliveredMessage, { kind: 'signal' }> {
-	return {
-		kind: 'signal',
-		type: 'lawn-desk.booking',
-		tagName: 'booking',
-		body: `${notice.name} · ${notice.when} · ${notice.place} · ${notice.price} (${notice.duration})`,
-		attributes: { bookingId: notice.bookingId, customerPhone: notice.customerPhone },
-	};
-}
