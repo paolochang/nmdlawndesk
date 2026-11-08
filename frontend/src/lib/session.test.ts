@@ -49,6 +49,14 @@ describe('authReducer', () => {
     });
   });
 
+  it('signs out on request with the nickname prefilled and no expiry notice', () => {
+    expect(authReducer(signedIn, { type: 'signed-out' })).toEqual({
+      status: 'signed-out',
+      nickname: 'test-reviewer',
+      expired: false,
+    });
+  });
+
   it('keeps a signed-out state as it is on a stray 401', () => {
     const out: AuthState = { status: 'signed-out', nickname: 'x', expired: false };
     expect(authReducer(out, { type: 'unauthorized' })).toBe(out);

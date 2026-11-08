@@ -16,7 +16,9 @@ export type AuthState =
 export type AuthEvent =
   | { type: 'signed-in'; nickname: string; session: Session }
   /** Any API call answered 401: the token is missing, forged, or expired. */
-  | { type: 'unauthorized' };
+  | { type: 'unauthorized' }
+  /** The reviewer pressed Sign out: the tab forgets the token, the browser keeps the nickname and customers. */
+  | { type: 'signed-out' };
 
 export type KeyValueStorage = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 
@@ -29,6 +31,8 @@ export function authReducer(state: AuthState, event: AuthEvent): AuthState {
       return { status: 'signed-in', nickname: event.nickname, session: event.session };
     case 'unauthorized':
       return state.status === 'signed-in' ? { status: 'signed-out', nickname: state.nickname, expired: true } : state;
+    case 'signed-out':
+      return { status: 'signed-out', nickname: state.nickname, expired: false };
   }
 }
 

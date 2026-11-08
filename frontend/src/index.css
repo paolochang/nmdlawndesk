@@ -57,6 +57,7 @@ input, select { font: inherit; color: inherit; padding: 8px 10px; border-radius:
 .app-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 14px 4px; }
 .brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin-right: auto; }
 .who, .today { color: var(--muted); font-size: 0.9rem; }
+.who { display: flex; align-items: center; gap: 10px; }
 .who b, .today b { color: var(--ink); }
 .reset { display: flex; align-items: center; gap: 8px; font-size: 0.9rem; }
 button.danger { background: var(--err); border-color: var(--err); color: var(--surface); }

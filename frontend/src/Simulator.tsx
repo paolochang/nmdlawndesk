@@ -41,6 +41,7 @@ interface Props {
   nickname: string;
   session: Session;
   onUnauthorized: () => void;
+  onSignOut: () => void;
 }
 
 /** `2026-11-15` → `Sun, Nov 15, 2026`. */
@@ -70,7 +71,7 @@ function SwitchIcon({ focus }: { focus: Focus }) {
   );
 }
 
-export function Simulator({ nickname, session, onUnauthorized }: Props) {
+export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Props) {
   // Every request reports a 401, so an expired token anywhere returns to sign-in.
   const authFetch = useMemo(
     () => reportingUnauthorized((input, init) => fetch(input, init), onUnauthorized),
@@ -401,7 +402,12 @@ export function Simulator({ nickname, session, onUnauthorized }: Props) {
           )}
         </div>
         <div className="who">
-          Signed in as <b>{nickname}</b>
+          <span>
+            Signed in as <b>{nickname}</b>
+          </span>
+          <button type="button" onClick={onSignOut}>
+            Sign out
+          </button>
         </div>
       </header>
       <main className={`stage focus-${focus}`}>
