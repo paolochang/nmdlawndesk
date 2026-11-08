@@ -2,6 +2,7 @@
 // conversation books a slot, and a handoff reaches the Dave conversation. Then the
 // off-script turns of build-plan §4 "Conversation": a question after a handoff, a
 // greeting, a price question, haggling, and a complaint with no booking intent.
+// Last, live dates (build-plan §12): "next Tuesday" books on the real date.
 //
 //   npx vite dev --port 8787 --strictPort        # in another terminal
 //   ACCESS_CODE=... NICKNAME=... node scripts/m1.ts
@@ -197,3 +198,28 @@ const complaint = await text(unhappy, token, 'Your mowing yesterday damaged my f
 const reason = (toolOutputs(complaint, 'handoffToDave')[0]?.input as { reason?: string } | undefined)?.reason;
 expectThat(reason === 'complaint' || reason === 'refund', 'did not hand off a complaint', complaint);
 console.log('\n✓ Off-script turns passed.');
+
+// 5. Live dates (build-plan §12): in a fresh generation, "next Tuesday" books on
+// the first Tuesday after Dave's today, from the calendar snapshot.
+const fresh = await api<{ generation: number; today: string; timeZone: string; bookings: Booking[] }>(
+	`/calendar/${visitorId}/reset`,
+	{ method: 'POST', token },
+);
+const daysToTuesday = ((2 - new Date(`${fresh.today}T00:00:00Z`).getUTCDay() + 6) % 7) + 1;
+const tuesday = new Date(Date.parse(`${fresh.today}T00:00:00Z`) + daysToTuesday * 86_400_000).toISOString().slice(0, 10);
+const dated = `/agents/lawn-desk/${visitorId}:${fresh.generation}:+15550105`;
+console.log(`\n# Live dates: today ${fresh.today} (${fresh.timeZone}), next Tuesday ${tuesday}, in ${dated}`);
+const ask = await text(dated, token, 'Hi! Can you mow next Tuesday? It is half an acre at 8 Fen Ct, Dunmore.');
+const offered = toolOutputs(ask, 'findSlots')[0]?.output as { slots?: { start: string }[] } | undefined;
+expectThat(Boolean(offered?.slots?.some((s) => s.start.startsWith(tuesday))), `did not offer a time on ${tuesday}`, ask);
+let tuesdayBooking: Booking | undefined;
+for (const body of ['The Tuesday time works for me.', "I'm Lee Park.", 'Yes, please book the Tuesday time.']) {
+	await text(dated, token, body);
+	const { bookings } = await api<{ bookings: Booking[] }>(`/calendar/${visitorId}`, { token });
+	tuesdayBooking = bookings.find((b) => !fresh.bookings.some((p) => p.id === b.id));
+	if (tuesdayBooking) break;
+}
+if (!tuesdayBooking?.start.startsWith(tuesday)) {
+	throw new Error(`Live dates failed: booked ${tuesdayBooking?.start ?? 'nothing'}, expected ${tuesday}`);
+}
+console.log(`\n✓ Live dates: ${tuesdayBooking.id} ${tuesdayBooking.start} — ${tuesdayBooking.basis}`);
