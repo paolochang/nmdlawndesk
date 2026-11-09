@@ -18,7 +18,7 @@ describe('Google Calendar in Dave’s panel (build-plan §14)', () => {
     const window = { from: '2026-12-03', to: '2026-12-16' };
     expect(googleView({ connected: true, window, lastSync: 'ok' })).toEqual({
       kind: 'on',
-      label: 'Synced to your Google Calendar · Thu, Dec 3 – Wed, Dec 16',
+      label: 'Synced to Google Calendar · Thu, Dec 3 – Wed, Dec 16',
       syncing: false,
       failed: false,
     });

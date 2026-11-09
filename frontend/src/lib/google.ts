@@ -43,7 +43,7 @@ export function googleView(status: GoogleStatus | undefined): GoogleView {
   if (!status?.connected || !status.window) return { kind: 'off' };
   return {
     kind: 'on',
-    label: `Synced to your Google Calendar · ${shortDate(status.window.from)} – ${shortDate(status.window.to)}`,
+    label: `Synced to Google Calendar · ${shortDate(status.window.from)} – ${shortDate(status.window.to)}`,
     syncing: Boolean(status.syncing),
     failed: status.lastSync === 'failed',
   };

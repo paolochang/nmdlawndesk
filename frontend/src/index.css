@@ -346,12 +346,16 @@ button.danger { background: var(--err); border-color: var(--err); color: var(--s
   .arrow { display: none; }
 }
 
-/* Google Calendar sync above Dave's calendar (build-plan §14) */
-.google-sync { flex: none; border: 1px solid var(--line); border-radius: 12px; padding: 8px 10px; font-size: 0.85rem; display: flex; flex-direction: column; gap: 6px; }
-.google-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; }
-.google-row > span { margin-right: auto; color: var(--muted); }
-.google-row button, .google-actions button { min-height: 30px; padding: 2px 11px; }
-.google-notice p { margin: 0 0 8px; line-height: 1.4; }
-.google-actions { display: flex; gap: 8px; }
-.google-error { margin: 0; color: var(--err); }
-.google-message { margin: 0; color: var(--muted); }
+/* Google Calendar sync (build-plan §14): a header button with a popup, status beside the week title */
+.gcal-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 2px 10px; font-size: 0.85rem; }
+.gcal-icon { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; flex: none; }
+.gcal-icon text { fill: currentColor; stroke: none; font-size: 8px; font-weight: 700; font-family: inherit; }
+.gcal-dialog { max-width: min(440px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; background: var(--surface); color: var(--ink); }
+.gcal-dialog::backdrop { background: rgb(0 0 0 / 0.35); }
+.gcal-dialog h3 { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; font-size: 1rem; }
+.gcal-dialog p { margin: 0 0 14px; line-height: 1.45; font-size: 0.9rem; }
+.gcal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+.cal-top h3:has(+ .cal-sync) { margin-right: 0; }
+.cal-sync { margin-right: auto; font-size: 0.78rem; color: var(--muted); min-width: 0; }
+.cal-sync a { color: inherit; }
+.cal-sync-error { color: var(--err); font-weight: 600; }

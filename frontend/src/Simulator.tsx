@@ -5,7 +5,7 @@ import { CustomerCard } from './CustomerCard.tsx';
 import { CustomerPhone } from './CustomerPhone.tsx';
 import { CustomerSwitcher } from './CustomerSwitcher.tsx';
 import { DavePanel } from './DavePanel.tsx';
-import { GoogleSync } from './GoogleSync.tsx';
+import { GoogleSyncButton, GoogleSyncNote } from './GoogleSync.tsx';
 import { JudgmentLog } from './JudgmentLog.tsx';
 import { BookingStatusCard, SuggestedReplies } from './SidePanels.tsx';
 import { TownMap } from './TownMap.tsx';
@@ -154,6 +154,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
 
   const [googleMessage, setGoogleMessage] = useState(googleReturned?.message);
   const [googleBusy, setGoogleBusy] = useState(false);
+  const [googleNoticeOpen, setGoogleNoticeOpen] = useState(false);
   useEffect(() => {
     if (googleReturned) window.history.replaceState(null, '', googleReturned.cleaned);
   }, [googleReturned]);
@@ -185,6 +186,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
       const status = statusOf(caught);
       if (status !== 401) setGoogleMessage(status === 503 ? GOOGLE_NOT_SET_UP : status === 429 ? SLOW_DOWN : GOOGLE_CONNECT_FAILED);
       setGoogleBusy(false);
+      setGoogleNoticeOpen(false);
     }
   }
 
@@ -538,6 +540,19 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
         <section className={`panel${layout.veiled === 'dave' ? ' veiled' : ''}`} aria-label="Dave">
           <div className="panel-head">
             <h2>Dave</h2>
+            <GoogleSyncButton
+              status={calendar?.google}
+              today={calendar?.today}
+              busy={googleBusy}
+              noticeOpen={googleNoticeOpen}
+              onOpenNotice={() => {
+                setGoogleMessage(undefined);
+                setGoogleNoticeOpen(true);
+              }}
+              onCloseNotice={() => setGoogleNoticeOpen(false)}
+              onConnect={() => void onGoogleConnect()}
+              onDisconnect={() => void onGoogleDisconnect()}
+            />
             {focus !== 'dave' && (
               <button type="button" className="focus-btn" onClick={() => openFocus('dave')}>
                 Focus
@@ -556,18 +571,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
                 daveTyping={false}
                 daveOpen={daveOpen}
                 daveUnread={unreadCount(shownDave.length, daveSeenCount)}
-                googleSync={
-                  calendar && (
-                    <GoogleSync
-                      status={calendar.google}
-                      today={calendar.today}
-                      message={googleMessage}
-                      busy={googleBusy}
-                      onConnect={() => void onGoogleConnect()}
-                      onDisconnect={() => void onGoogleDisconnect()}
-                    />
-                  )
-                }
+                calendarNote={<GoogleSyncNote status={calendar?.google} message={googleMessage} />}
                 onToggleDave={() => {
                   if (!daveOpen) loadCalendar();
                   setDaveOpen(!daveOpen);
