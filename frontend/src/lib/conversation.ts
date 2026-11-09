@@ -6,11 +6,6 @@ export function customerConversationUrl(visitorId: string, generation: number, p
   return `/api/agents/lawn-desk/${visitorId}:${generation}:${phone}`;
 }
 
-/** `<visitorId>:<generation>:dave`, served by the dave-phone agent. */
-export function daveConversationUrl(visitorId: string, generation: number): string {
-  return `/api/agents/dave-phone/${visitorId}:${generation}:dave`;
-}
-
 /**
  * A fictional customer phone for "New customer": `+1555` and seven random
  * digits (E.164, 11 digits). `random` returns [0, 1); a number already in

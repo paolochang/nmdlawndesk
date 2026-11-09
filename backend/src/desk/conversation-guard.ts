@@ -8,11 +8,15 @@ import { type Conversation, parseConversationId } from '../domain/conversation.t
  * only from the server's dispatch()), and 409 when a message is posted to a
  * conversation of another generation than the visitor's current one. A reset
  * leaves old conversations behind; they stay readable and abortable, but never
- * talk to the new calendar.
+ * talk to the new calendar. `admitted` gets each text that passes, before the
+ * agent runs (the lawn desk records the customer's texts, build-plan §13). A
+ * `readOnly` mount answers 405 to any posted message.
  */
 export function conversationGuard(
 	kind: Conversation['kind'],
 	currentGeneration: (visitorId: string) => Promise<number>,
+	admitted?: (conversation: Conversation, text: string) => Promise<void>,
+	{ readOnly = false }: { readOnly?: boolean } = {},
 ): MiddlewareHandler {
 	return async (c, next) => {
 		const id = c.req.param('id') ?? '';
@@ -20,6 +24,8 @@ export function conversationGuard(
 		if (conversation?.kind !== kind) return c.json({ error: 'invalid conversation id' }, 400);
 		// Only `POST /:id` delivers a message; `POST /:id/abort` and reads pass.
 		if (c.req.method === 'POST' && lastSegment(c.req.path) === id) {
+			// A read-only mount (Dave's conversation since build-plan §13) takes no messages.
+			if (readOnly) return c.json({ error: 'this conversation is read-only' }, 405);
 			// Read a clone, so the agent router still gets the untouched body. Malformed
 			// JSON passes through for the router to reject in its own error envelope.
 			const message: unknown = await c.req.raw.clone().json().catch(() => undefined);
@@ -29,6 +35,12 @@ export function conversationGuard(
 			const generation = await currentGeneration(conversation.visitorId);
 			if (conversation.generation !== generation) {
 				return c.json({ error: 'stale conversation', generation }, 409);
+			}
+			// Record only a message Flue will admit as well: a string body, attachments
+			// absent or a list. Anything else goes on for the router to reject.
+			const { body, attachments } = (message ?? {}) as { body?: unknown; attachments?: unknown };
+			if (admitted && typeof body === 'string' && (attachments === undefined || Array.isArray(attachments))) {
+				await admitted(conversation, body);
 			}
 		}
 		await next();

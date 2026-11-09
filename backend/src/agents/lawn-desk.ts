@@ -1,18 +1,17 @@
 'use agent';
-import { type AgentProps, dispatch, useAgentStart, useModel, useTool } from '@flue/runtime';
-import { daveConversationId, parseConversationId } from '../domain/conversation.ts';
+import { type AgentProps, useAgentStart, useModel, useTool } from '@flue/runtime';
+import { parseConversationId } from '../domain/conversation.ts';
 import { RULES } from '../domain/rules.ts';
 import { localDateTime } from '../domain/time.ts';
-import { DESK_MODEL, daveAlertMessage, daveBookingMessage, lawnDeskPrompt } from '../desk/prompts.ts';
+import { DESK_MODEL, lawnDeskPrompt } from '../desk/prompts.ts';
 import { deskTools } from '../desk/tools.ts';
 import { visitorStore } from '../store/stub.ts';
-import { DavePhone } from './dave-phone.ts';
 
 /**
  * Dave's booking agent: one conversation per customer phone
  * (`<visitorId>:<generation>:<customerPhone>`, build-plan §3). The tools' logic
  * lives in src/desk/ and is tested in Node; this module only wires it to the
- * visitor's store and to Dave's phone.
+ * visitor's store, which also keeps Dave's texts (build-plan §13).
  */
 export function LawnDesk({ id }: AgentProps) {
 	useModel(DESK_MODEL);
@@ -26,17 +25,7 @@ export function LawnDesk({ id }: AgentProps) {
 		await store.addCustomer(conversation.phone, conversation.generation);
 	});
 
-	const daveId = daveConversationId(conversation.visitorId, conversation.generation);
-	const tools = deskTools({
-		conversation,
-		store,
-		async alertDave(alert) {
-			await dispatch(DavePhone, { id: daveId, message: daveAlertMessage(alert) });
-		},
-		async tellDaveBooked(notice) {
-			await dispatch(DavePhone, { id: daveId, message: daveBookingMessage(notice) });
-		},
-	});
+	const tools = deskTools({ conversation, store });
 	for (const tool of tools) useTool(tool);
 
 	return lawnDeskPrompt(localDateTime(Date.now(), RULES.timeZone));

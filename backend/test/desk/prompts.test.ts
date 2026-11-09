@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DAVE_PHONE_PROMPT, daveAlertMessage, daveBookingMessage, lawnDeskPrompt } from '../../src/desk/prompts.ts';
+import { DAVE_PHONE_PROMPT, lawnDeskPrompt } from '../../src/desk/prompts.ts';
 
 // Thu 2026-12-03 10:40 in Dave's time zone.
 const NOW = '2026-12-03T10:40';
@@ -25,6 +25,10 @@ describe('lawnDeskPrompt', () => {
 		expect(prompt).toContain('Fri 2026-12-04, Sat 2026-12-05, Sun 2026-12-06, Mon 2026-12-07, Tue 2026-12-08');
 		expect(prompt).toContain('Thu 2026-12-17.');
 		expect(prompt).not.toContain('2026-12-18');
+	});
+
+	it('asks for texts a person would write: no formulas, arrows, or calculation symbols (build-plan §13)', () => {
+		expect(lawnDeskPrompt(NOW)).toContain('never a formula, an arrow, or symbols such as × or →');
 	});
 
 	// build-plan §4 "Conversation": not every text is a booking.
@@ -60,42 +64,5 @@ describe('lawnDeskPrompt', () => {
 		expect(prompt).toContain('Send that reply only on the turn you hand off');
 		expect(prompt).toContain('keep answering their general questions');
 		expect(prompt).toContain('Never call handoffToDave twice for the same issue');
-	});
-});
-
-describe('daveAlertMessage', () => {
-	it('is a handoff signal carrying the reason, customer phone, and details', () => {
-		expect(
-			daveAlertMessage({ reason: 'out-of-area', details: 'Ann, 9 Hill Rd, Riverside', customerPhone: '+15550102' }),
-		).toEqual({
-			kind: 'signal',
-			type: 'lawn-desk.handoff',
-			tagName: 'handoff',
-			body: 'Ann, 9 Hill Rd, Riverside',
-			attributes: { reason: 'out-of-area', customerPhone: '+15550102' },
-		});
-	});
-});
-
-describe('daveBookingMessage', () => {
-	it("is a booking signal Dave's phone turns into one text: who, when, where, price", () => {
-		expect(
-			daveBookingMessage({
-				customerPhone: '+15550101',
-				bookingId: 'g1-1',
-				name: 'Sarah Lee',
-				when: 'Tue Nov 17, 10:00-11:00 AM',
-				place: '45 Oak Rd, Birchwood',
-				price: '$45',
-				duration: '1 h',
-			}),
-		).toEqual({
-			kind: 'signal',
-			type: 'lawn-desk.booking',
-			tagName: 'booking',
-			body: 'Sarah Lee · Tue Nov 17, 10:00-11:00 AM · 45 Oak Rd, Birchwood · $45 (1 h)',
-			attributes: { bookingId: 'g1-1', customerPhone: '+15550101' },
-		});
-		expect(DAVE_PHONE_PROMPT).toMatch(/<booking>/);
 	});
 });

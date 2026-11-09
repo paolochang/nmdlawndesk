@@ -1,8 +1,6 @@
-import type { DeliveredMessage } from '@flue/runtime';
 import { dollars } from '../domain/quote.ts';
 import { RULES, WEEKDAY_NAMES } from '../domain/rules.ts';
 import { addDays, weekdayOf } from '../domain/time.ts';
-import type { DaveAlert, DaveBookingNotice } from './tools.ts';
 
 /** Both agents' model (build-plan §2, 🟡 until Day 10-11 tuning). */
 export const DESK_MODEL = 'cloudflare/@cf/zai-org/glm-4.7-flash';
@@ -48,7 +46,7 @@ How to talk:
 - Asking what a job costs is not haggling. Haggling is pushing for a lower price than Dave's, or asking for a discount.
 
 When to hand off, on any text:
-- Hand off to Dave right away, without asking for more details, when the town is not one of the four, the yard is over ${lower} acre, or the customer complains, asks for a refund, or haggles. Call handoffToDave with what the customer already told you, then send the reply it returns, word for word: it says why you cannot take this and that Dave will contact them directly.
+- Hand off to Dave right away, without asking for more details, when the town is not one of the four, the yard is over ${lower} acre, or the customer complains, asks for a refund, or haggles. Call handoffToDave with the reason, then send the reply it returns, word for word: it says why you cannot take this and that Dave will contact them directly.
 
 How to book, only once the customer wants a quote or a booking:
 1. You need the town, street address, and yard size. Ask only for what is missing, in one short question.
@@ -59,12 +57,13 @@ After a handoff:
 - Send that reply only on the turn you hand off. Afterwards keep answering their general questions from the rules.
 - Never call handoffToDave twice for the same issue. If they ask about it again, say Dave will be in touch. A new, different request is handled as usual.
 
-Style: this is SMS. Reply in 1-3 short sentences of plain text. No markdown, no lists.`;
+Style: this is SMS. Reply in 1-3 short sentences of plain text, the way a person texts: say the price and the times in words, never a formula, an arrow, or symbols such as × or →. No markdown, no lists.`;
 }
 
 /**
- * Dave's phone: the desk texting Dave. Alerts arrive as `<handoff>` signals that
- * handoffToDave posts into this conversation.
+ * The `DavePhone` agent's prompt. Since build-plan §13 the desk no longer posts
+ * into Dave's conversation (Dave's texts are fixed templates in the visitor
+ * store); the agent stays mounted so conversations from before still open.
  */
 export const DAVE_PHONE_PROMPT = `You text Dave, the owner of Dave's Lawn Desk, for his booking assistant.
 
@@ -75,25 +74,3 @@ A <booking> signal is a job the assistant booked. For each one, send Dave one SM
 If Dave texts you, reply in one short sentence: you cannot act on his messages yet, so he should contact the customer directly.
 
 Plain text, no markdown.`;
-
-/** The signal `handoffToDave` posts into the Dave conversation. */
-export function daveAlertMessage(alert: DaveAlert): Extract<DeliveredMessage, { kind: 'signal' }> {
-	return {
-		kind: 'signal',
-		type: 'lawn-desk.handoff',
-		tagName: 'handoff',
-		body: alert.details,
-		attributes: { reason: alert.reason, customerPhone: alert.customerPhone },
-	};
-}
-
-/** The signal `bookSlot` posts into the Dave conversation after a booking. */
-export function daveBookingMessage(notice: DaveBookingNotice): Extract<DeliveredMessage, { kind: 'signal' }> {
-	return {
-		kind: 'signal',
-		type: 'lawn-desk.booking',
-		tagName: 'booking',
-		body: `${notice.name} · ${notice.when} · ${notice.place} · ${notice.price} (${notice.duration})`,
-		attributes: { bookingId: notice.bookingId, customerPhone: notice.customerPhone },
-	};
-}

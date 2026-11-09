@@ -30,11 +30,24 @@ const generation = async (visitorId: string) => (await visitorStore(visitorId).l
 //   curl -X POST "http://localhost:8787/api/agents/lawn-desk/$VISITOR_ID:1:+15550101" \
 //     -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
 //     -d '{"kind":"user","body":"How much to mow half an acre?"}'
-app.use('/agents/lawn-desk/:id/*', conversationGuard('customer', generation));
+// The customer's admitted texts are recorded, so a booking can only use a name and
+// address the customer texted (build-plan §13).
+app.use(
+	'/agents/lawn-desk/:id/*',
+	conversationGuard('customer', generation, async (conversation, text) => {
+		await visitorStore(conversation.visitorId).addCustomerText(
+			conversation.kind === 'customer' ? conversation.phone : '',
+			text,
+			conversation.generation,
+		);
+	}),
+);
 app.route('/agents/lawn-desk', createAgentRouter(LawnDesk));
 
-// Dave's phone, `<visitorId>:<generation>:dave`: handoff alerts land here.
-app.use('/agents/dave-phone/:id/*', conversationGuard('dave', generation));
+// Dave's phone, `<visitorId>:<generation>:dave`: alerts landed here until build-plan §13
+// moved Dave's texts into the visitor store; kept read-only (405 to any message, so no
+// model call) so older conversations still open.
+app.use('/agents/dave-phone/:id/*', conversationGuard('dave', generation, undefined, { readOnly: true }));
 app.route('/agents/dave-phone', createAgentRouter(DavePhone));
 
 // /api/config and /api/calendar/:visitorId[/reset].

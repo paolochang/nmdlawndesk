@@ -5,8 +5,9 @@ import { DAVE_PHONE_PROMPT, DESK_MODEL } from '../desk/prompts.ts';
 
 /**
  * Dave's phone: one conversation per visitor and generation (`<visitorId>:<generation>:dave`).
- * The lawn desk's handoffToDave posts `<handoff>` signals here server-side with
- * dispatch(), and this agent texts Dave the alert (build-plan §4, §11).
+ * Until build-plan §13 the desk posted `<handoff>` and `<booking>` signals here and
+ * this agent texted Dave. Dave's texts are now fixed templates in the visitor store;
+ * the mount is read-only and only keeps older conversations open.
  */
 export function DavePhone({ id }: AgentProps) {
 	useModel(DESK_MODEL);

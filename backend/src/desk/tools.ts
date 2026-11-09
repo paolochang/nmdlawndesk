@@ -5,8 +5,9 @@ import type { Conversation } from '../domain/conversation.ts';
 import { dollars, quote } from '../domain/quote.ts';
 import { RULES, resolveTown, TOWNS, townWeekdays, WEEKDAY_NAMES } from '../domain/rules.ts';
 import { findSlots } from '../domain/slots.ts';
-import { type Clock, localDateTime, splitDateTime, weekdayOf } from '../domain/time.ts';
-import type { TimeRange } from '../domain/types.ts';
+import { type Clock, localDateTime } from '../domain/time.ts';
+import { HANDOFF_REASONS, type HandoffReason } from '../domain/dave-texts.ts';
+import { hours, slotLabel } from '../domain/labels.ts';
 import type { AddResult, BookingRequest, Customer, VisitorSnapshot } from '../store/ledger.ts';
 
 export type CustomerConversation = Extract<Conversation, { kind: 'customer' }>;
@@ -16,36 +17,15 @@ export interface DeskStore {
 	list(): Promise<VisitorSnapshot>;
 	add(request: BookingRequest): Promise<AddResult>;
 	addCustomer(phone: string, generation?: number): Promise<Customer[]>;
+	/** Texts Dave the handoff: the reason and the customer's own texts (build-plan §13). */
+	handoff(phone: string, reason: HandoffReason, generation: number): Promise<{ ok: boolean }>;
 }
 
-export const HANDOFF_REASONS = ['out-of-area', 'yard-over-1-acre', 'complaint', 'refund', 'haggling', 'other'] as const;
-export type HandoffReason = (typeof HANDOFF_REASONS)[number];
-
-export interface DaveAlert {
-	reason: HandoffReason;
-	details: string;
-	customerPhone: string;
-}
-
-/** A booking the desk made, as Dave's phone is told about it. */
-export interface DaveBookingNotice {
-	customerPhone: string;
-	bookingId: string;
-	name: string;
-	when: string;
-	/** Street address and town, e.g. `45 Oak Rd, Birchwood`. */
-	place: string;
-	price: string;
-	duration: string;
-}
+export { HANDOFF_REASONS, type HandoffReason };
 
 export interface DeskDeps {
 	conversation: CustomerConversation;
 	store: DeskStore;
-	/** Posts the alert into this visitor's Dave conversation of the same generation. */
-	alertDave(alert: DaveAlert): Promise<void>;
-	/** Posts a new booking into the same Dave conversation. */
-	tellDaveBooked(notice: DaveBookingNotice): Promise<void>;
 	/** The clock, read in Dave's time zone on every call (build-plan §12). Default `Date.now`. */
 	clock?: Clock;
 }
@@ -76,6 +56,7 @@ const HANDOFF_NEXT = `If this issue is not handed off yet, call handoffToDave no
 const HANDED_OFF_NEXT =
 	"Send the reply once, now. After that keep answering the customer's general questions from the rules; do not call handoffToDave again for this issue.";
 const PRICE_NOTE = 'Final price may change on site.';
+const UNKNOWN_SIZE_NOTE = 'Yard size unknown: this is the 1-hour rate, adjusted on site.';
 
 // Required but nullable: the model must say "unknown" explicitly instead of dropping the key.
 const acres = v.pipe(
@@ -92,6 +73,10 @@ const REJECTION_NEXT: Record<Rejection, string> = {
 	'outside-hours': 'Not a bookable time. Offer only times from findSlots.',
 	'off-grid': 'Not a bookable time. Offer only times from findSlots.',
 	'missing-name': "Ask the customer's name, then book.",
+	'name-not-texted':
+		"The customer has not texted this name. Ask for their name and book with it exactly as they wrote it; never guess or invent one.",
+	'address-not-texted':
+		'The customer has not texted this street address. Ask for it and book with their words; never guess or invent one.',
 	handoff: HANDOFF_NEXT,
 	'invalid-request': `Check the town (${TOWNS.join(', ')}), the start (a findSlots start), and the yard size.`,
 	'stale-generation': 'The demo was reset, so nothing was booked. Tell the customer to text again from a new conversation.',
@@ -103,12 +88,14 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 	return [
 		defineTool({
 			name: 'quoteJob',
-			description: 'Price a mowing job from the yard size. Returns price, duration, and the basis, or a handoff.',
+			description: 'Price a mowing job from the yard size. Returns the price and duration, or a handoff.',
 			input: v.object({ acres }),
 			run({ data }) {
 				const q = quote(data.acres ?? 'unknown');
 				if (q.kind === 'handoff') return { output: { handoff: 'yard-over-1-acre', next: HANDOFF_NEXT } };
-				return { output: { price: dollars(q.priceCents), duration: hours(q.durationMinutes), basis: q.basis, note: PRICE_NOTE } };
+				// No calculation basis: the model copied it into texts (build-plan §13); the store keeps it for Dave.
+				const note = data.acres === null ? `${UNKNOWN_SIZE_NOTE} ${PRICE_NOTE}` : PRICE_NOTE;
+				return { output: { price: dollars(q.priceCents), duration: hours(q.durationMinutes), note } };
 			},
 		}),
 		defineTool({
@@ -155,8 +142,8 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 			description:
 				"Book the slot the customer picked. Needs the customer's name, street address, town, the slot start from findSlots, and the yard size. Returns the booking or why it was refused.",
 			input: v.object({
-				name: v.pipe(v.string(), v.description("The customer's name. Ask for it first; never guess.")),
-				address: v.pipe(v.string(), v.description('Street address, e.g. 45 Oak Rd.')),
+				name: v.pipe(v.string(), v.description("The customer's name exactly as they texted it. Ask for it first; never guess.")),
+				address: v.pipe(v.string(), v.description('Street address as the customer texted it, e.g. 45 Oak Rd.')),
 				town,
 				start: v.pipe(v.string(), v.description('The `start` of the chosen findSlots slot, e.g. 2026-11-17T10:00.')),
 				acres,
@@ -172,32 +159,15 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 					phone: deps.conversation.phone,
 				});
 				if (!result.ok) return { output: { ok: false, reason: result.reason, next: REJECTION_NEXT[result.reason] } };
+				// The store texted Dave the booking in the same call (build-plan §13).
 				const { booking } = result;
-				const when = slotLabel(booking);
-				const price = dollars(booking.priceCents);
-				const duration = hours(booking.durationMinutes);
-				try {
-					await deps.tellDaveBooked({
-						customerPhone: deps.conversation.phone,
-						bookingId: booking.id,
-						name: booking.name,
-						when,
-						place: `${booking.address}, ${booking.town}`,
-						price,
-						duration,
-					});
-				} catch (error) {
-					// The booking is stored either way; only Dave's text about it is lost.
-					console.error('Could not tell Dave about booking', booking.id, error);
-				}
 				return {
 					output: {
 						ok: true,
 						bookingId: booking.id,
-						when,
-						duration,
-						price,
-						basis: booking.basis,
+						when: slotLabel(booking),
+						duration: hours(booking.durationMinutes),
+						price: dollars(booking.priceCents),
 						note: PRICE_NOTE,
 					},
 				};
@@ -206,40 +176,14 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 		defineTool({
 			name: 'handoffToDave',
 			description:
-				'Hand the customer to Dave: outside the service area, yard over 1 acre, complaint, refund, or haggling (pushing for a lower price or a discount). Asking what a job costs is not haggling. Alerts Dave right away; do not collect more details first. Once per issue.',
-			input: v.object({
-				reason: v.picklist(HANDOFF_REASONS),
-				details: v.pipe(
-					v.string(),
-					v.description("What Dave needs, from what the customer already said: name, address, town, yard size, request."),
-				),
-			}),
+				"Hand the customer to Dave: outside the service area, yard over 1 acre, complaint, refund, or haggling (pushing for a lower price or a discount). Asking what a job costs is not haggling. Texts Dave right away with the reason and the customer's own texts; do not collect more details first. Once per issue.",
+			input: v.object({ reason: v.picklist(HANDOFF_REASONS) }),
 			async run({ data }) {
-				await deps.alertDave({ reason: data.reason, details: data.details, customerPhone: deps.conversation.phone });
+				const { phone, generation } = deps.conversation;
+				const result = await deps.store.handoff(phone, data.reason, generation);
+				if (!result.ok) return { output: { ok: false, reason: 'stale-generation', next: REJECTION_NEXT['stale-generation'] } };
 				return { output: { ok: true, reply: handoffReply(data.reason), next: HANDED_OFF_NEXT } };
 			},
 		}),
 	];
-}
-
-function hours(minutes: number): string {
-	return `${minutes / 60} h`;
-}
-
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** `Thu Nov 19, 8:00-9:30 AM`, `Tue Nov 17, 11:30 AM-12:30 PM`. */
-export function slotLabel({ start, end }: TimeRange): string {
-	const from = splitDateTime(start);
-	const to = splitDateTime(end);
-	const [, month, day] = from.date.split('-').map(Number);
-	const sameHalf = from.minutes < 720 === to.minutes < 720;
-	const times = `${clock(from.minutes, !sameHalf)}-${clock(to.minutes, true)}`;
-	return `${WEEKDAY_NAMES[weekdayOf(from.date)]} ${MONTHS[month - 1]} ${day}, ${times}`;
-}
-
-function clock(minutes: number, meridiem: boolean): string {
-	const h = Math.floor(minutes / 60);
-	const text = `${h % 12 || 12}:${String(minutes % 60).padStart(2, '0')}`;
-	return meridiem ? `${text} ${h < 12 ? 'AM' : 'PM'}` : text;
 }

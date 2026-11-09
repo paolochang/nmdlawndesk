@@ -1,8 +1,9 @@
 // M1 evidence (ROADMAP Day 7): through the API alone, a scripted customer
-// conversation books a slot, and a handoff reaches the Dave conversation. Then the
+// conversation books a slot, and a handoff texts Dave's phone. Then the
 // off-script turns of build-plan §4 "Conversation": a question after a handoff, a
 // greeting, a price question, haggling, and a complaint with no booking intent.
-// Last, live dates (build-plan §12): "next Tuesday" books on the real date.
+// Then live dates (build-plan §12): "next Tuesday" books on the real date. Last,
+// chat-only bookings (build-plan §13): no booking before the customer texts a name.
 //
 //   npx vite dev --port 8787 --strictPort        # in another terminal
 //   ACCESS_CODE=... NICKNAME=... node scripts/m1.ts
@@ -149,6 +150,16 @@ if (booked.name !== NAME) throw new Error(`M1 failed: booked under ${booked.name
 if (booked.start !== firstOffer) throw new Error(`M1 failed: booked ${booked.start}, first offer was ${firstOffer}`);
 console.log(`\n✓ booked in GET /calendar/${visitorId}: ${booked.id} ${booked.start} — ${booked.basis}`);
 console.log(`  (name ${NAME} asked for before booking; start = first slot offered)`);
+interface DaveText {
+	id: string;
+	text: string;
+}
+const daveTexts = async () => (await api<{ daveTexts: DaveText[] }>(`/calendar/${visitorId}`, { token })).daveTexts;
+const bookedText = (await daveTexts()).find((t) => t.id === booked.id);
+if (!bookedText?.text.startsWith(`Booked ${booked.id}: ${NAME},`)) {
+	throw new Error(`M1 failed: Dave's phone has no booking text for ${booked.id} (${JSON.stringify(bookedText)})`);
+}
+console.log(`  dave   < ${bookedText.text}`);
 
 // 3. Handoff: a 2-acre yard goes to Dave.
 const handoff = `/agents/lawn-desk/${visitorId}:${generation}:+15550102`;
@@ -156,21 +167,12 @@ console.log(`\n# Handoff conversation ${handoff}`);
 const reply = await text(handoff, token, 'Hello, how much to mow my 2 acre lot at 9 Hill Rd, Ashford? I am Ann.');
 if (!usedTool(reply, 'handoffToDave')) throw new Error('M1 failed: the 2-acre request was not handed off');
 
-const dave = `/agents/dave-phone/${visitorId}:${generation}:dave`;
-for (let i = 0; i < 120; i++) {
-	const snap = await api<Snapshot>(dave, { token });
-	const alert = snap.messages.find((m) => m.signal?.tagName === 'handoff');
-	const sms = snap.messages.findLast((m) => m.role === 'assistant')?.parts.find((p) => p.type === 'text' && p.state === 'done');
-	if (alert && sms) {
-		console.log(`\n✓ alert in GET ${dave}`);
-		console.log(`  signal: ${JSON.stringify(alert.signal?.attributes)} ${alert.parts.map((p) => p.text).join(' ')}`);
-		console.log(`  dave   < ${sms.text}`);
-		console.log('\nM1 reached.');
-		break;
-	}
-	if (i === 119) throw new Error('M1 failed: no alert in the Dave conversation');
-	await sleep(1000);
-}
+// Dave's phone gets the fixed handoff text quoting the customer (build-plan §13).
+const alert = (await daveTexts()).find((t) => t.text.startsWith('Please call +15550102 (yard over 1 acre).'));
+if (!alert?.text.includes('9 Hill Rd, Ashford')) throw new Error(`M1 failed: no handoff text on Dave's phone (${JSON.stringify(alert)})`);
+console.log(`\n✓ Dave's phone in GET /calendar/${visitorId}`);
+console.log(`  dave   < ${alert.text}`);
+console.log('\nM1 reached.');
 
 // 4. Off-script turns (build-plan §4 "Conversation").
 console.log(`\n# Off-script: a question after the handoff in ${handoff}`);
@@ -227,3 +229,27 @@ if (!tuesdayBooking || !bookedTuesday) {
 }
 const reading = bookedTuesday === tuesdays[0] ? 'the coming Tuesday' : 'the Tuesday a week later';
 console.log(`\n✓ Live dates: ${tuesdayBooking.id} ${tuesdayBooking.start} (${reading}) — ${tuesdayBooking.basis}`);
+
+// 6. Chat-only bookings (build-plan §13): a customer who never texts a name is not
+// booked, whatever the desk tries, until they text it; then the calendar and
+// Dave's phone carry the texted name.
+const nameless = `/agents/lawn-desk/${visitorId}:${fresh.generation}:+15550106`;
+console.log(`\n# Chat-only: no name, then a name, in ${nameless}`);
+const known = async () => (await api<{ bookings: Booking[] }>(`/calendar/${visitorId}`, { token })).bookings;
+const beforeNameless = await known();
+for (const body of ['About half an acre, 6 Heath Road, Birchwood. When can you come?', 'The first time works.', 'Yes, please book it.']) {
+	await text(nameless, token, body);
+	const added = (await known()).find((b) => !beforeNameless.some((p) => p.id === b.id));
+	if (added) throw new Error(`Chat-only failed: booked under "${added.name}" before the customer texted a name`);
+}
+await text(nameless, token, "Sorry, I'm Rosa Quinn.");
+let namedBooking = (await known()).find((b) => !beforeNameless.some((p) => p.id === b.id));
+if (!namedBooking) {
+	await text(nameless, token, 'Please book the first time for Rosa Quinn.');
+	namedBooking = (await known()).find((b) => !beforeNameless.some((p) => p.id === b.id));
+}
+if (namedBooking?.name !== 'Rosa Quinn') throw new Error(`Chat-only failed: booked ${JSON.stringify(namedBooking?.name)}, not Rosa Quinn`);
+const namedText = (await daveTexts()).find((t) => t.id === namedBooking.id);
+if (!namedText?.text.includes('Rosa Quinn')) throw new Error(`Chat-only failed: Dave's phone has no text with Rosa Quinn (${JSON.stringify(namedText)})`);
+console.log(`\n✓ Chat-only: ${namedBooking.id} ${namedBooking.start} — ${namedBooking.basis}`);
+console.log(`  dave   < ${namedText?.text}`);

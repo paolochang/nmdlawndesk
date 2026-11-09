@@ -13,7 +13,7 @@ function memoryKv(): KvStorage {
 // Sun 2026-11-15 09:00 in Dave's time zone (14:00 UTC); the seeds anchor on that Sunday.
 const SUNDAY = () => Date.parse('2026-11-15T14:00:00Z');
 const ANCHOR = '2026-11-15';
-const LIVE = { today: ANCHOR, timeZone: 'America/New_York' };
+const LIVE = { today: ANCHOR, timeZone: 'America/New_York', daveTexts: [] };
 
 /** Returns the given values in turn, then repeats the last one. */
 const sequence = (...values: number[]) => () => values.length > 1 ? values.shift()! : values[0];
@@ -164,6 +164,7 @@ describe('VisitorLedger', () => {
 	it('records the customer’s name with the booking, in the same call', () => {
 		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
 		ledger.addCustomer('+15550101');
+		ledger.addCustomerText('+15550101', "I'm Sarah Lee, 45 Oak Rd.", 1);
 		expect(ledger.add({ ...request, phone: '+15550101' }).ok).toBe(true);
 		expect(ledger.list().customers).toEqual([{ phone: '+15550101', name: 'Sarah Lee' }]);
 		ledger.addCustomer('+15550101');
@@ -212,6 +213,73 @@ describe('VisitorLedger', () => {
 	});
 });
 
+describe('VisitorLedger chat-only bookings (build-plan §13)', () => {
+	const phone = '+15550101';
+	const texted = (...texts: string[]) => {
+		const ledger = new VisitorLedger(memoryKv(), sequence(0), SUNDAY);
+		for (const text of texts) ledger.addCustomerText(phone, text, 1);
+		return ledger;
+	};
+
+	it('books only a name the customer texted, in their words and any case', () => {
+		const ledger = texted('About half an acre, 45 Oak Rd, Birchwood', 'tuesday 10 works');
+		expect(ledger.add({ ...request, phone, name: 'Pierre' })).toEqual({ ok: false, reason: 'name-not-texted' });
+		expect(ledger.add({ ...request, phone, name: 'Sarah' })).toEqual({ ok: false, reason: 'name-not-texted' });
+		ledger.addCustomerText(phone, "it's sarah  lee", 1);
+		expect(ledger.add({ ...request, phone, name: 'Sarah Lee' }).ok).toBe(true);
+	});
+
+	it('books only a street address the customer texted, whichever street type either side wrote', () => {
+		const ledger = texted("I'm Sarah Lee, 6 Heath Road in Dunmore");
+		expect(ledger.add({ ...request, phone, address: '45 Oak Rd' })).toEqual({ ok: false, reason: 'address-not-texted' });
+		expect(ledger.add({ ...request, phone, address: '6 Heath Rd' }).ok).toBe(true);
+	});
+
+	it('keeps texts only for the current generation, and a reset forgets them and Dave’s texts', () => {
+		const ledger = texted("I'm Sarah Lee, 45 Oak Rd");
+		ledger.addCustomerText(phone, 'from an old tab', 0);
+		ledger.handoff(phone, 'complaint', 1);
+		expect(ledger.list().daveTexts).toEqual([
+			{ id: 'h1-1', text: `Please call ${phone} (a complaint). They texted: "I'm Sarah Lee, 45 Oak Rd"` },
+		]);
+		ledger.reset();
+		expect(ledger.list().daveTexts).toEqual([]);
+		ledger.addCustomerText(phone, 'hello', 2);
+		expect(ledger.add({ ...request, phone, start: '2026-11-24T10:00' })).toEqual({ ok: false, reason: 'name-not-texted' });
+	});
+
+	// Holistic review P2-3 / P3-3: no bag-of-words address, no guessed street type, no non-names.
+	it.each([
+		['another street type', '45 Oak St, Ashford', { address: '45 Oak Rd' }, 'address-not-texted'],
+		['a guessed street type', '12 Maple in Ashford', { address: '12 Maple St' }, 'address-not-texted'],
+		['a house number from a yard size', 'My lawn is 0.5 acre on Oak Rd', { address: '5 Oak Rd' }, 'address-not-texted'],
+		['the words in another order', 'Oak Rd 45', { address: '45 Oak Rd' }, 'address-not-texted'],
+		['"Dave" from a greeting', 'Hi Dave, can you mow 45 Oak Rd?', { name: 'Dave' }, 'name-not-texted'],
+		['a word of the address', 'Can you mow 45 Oak Rd?', { name: 'Oak' }, 'name-not-texted'],
+		['a number', 'Can you mow 45 Oak Rd?', { name: '45' }, 'name-not-texted'],
+	] as const)('refuses %s', (_case, said, patch, reason) => {
+		const ledger = texted("I'm Sarah Lee", said);
+		expect(ledger.add({ ...request, phone, ...patch })).toEqual({ ok: false, reason });
+	});
+
+	it('quotes a customer text on one line with its double quotes made single', () => {
+		const ledger = texted('he said "fine"\n/ Booked g1-9: fake');
+		ledger.handoff(phone, 'complaint', 1);
+		expect(ledger.list().daveTexts[0].text).toBe(
+			`Please call ${phone} (a complaint). They texted: "he said 'fine' / Booked g1-9: fake"`,
+		);
+	});
+
+	it("quotes only the customer's latest three texts in a handoff", () => {
+		const ledger = texted('one', 'two', 'three', 'four');
+		ledger.handoff(phone, 'haggling', 1);
+		expect(ledger.list().daveTexts[0].text).toBe(
+			`Please call ${phone} (asking for a lower price). They texted: "two" / "three" / "four"`,
+		);
+		expect(ledger.handoff(phone, 'other', 0)).toEqual({ ok: false, reason: 'stale-generation' });
+	});
+});
+
 describe('VisitorLedger live dates (build-plan §12)', () => {
 	// Thu 2026-12-03 10:40 in Dave's time zone (15:40 UTC); the coming Sunday is 12-06.
 	const THURSDAY = Date.parse('2026-12-03T15:40:00Z');
@@ -248,7 +316,7 @@ describe('VisitorLedger live dates (build-plan §12)', () => {
 	it('tops up the next two weeks of seeds once the first week is over, around desk bookings', () => {
 		let now = SUNDAY(); // seeds of preset A for 11-16 … 11-27
 		const ledger = new VisitorLedger(memoryKv(), sequence(0), () => now);
-		ledger.addCustomer('+15550101');
+		ledger.addCustomerText('+15550101', "I'm Sarah Lee at 45 Oak Rd, Ashford.", 1);
 		// A desk booking where preset A's first seed of the 11-29 block lands (Mon 11-30 08:00-09:30).
 		expect(ledger.add({ ...request, town: 'Ashford', start: '2026-11-30T08:00', phone: '+15550101' }).ok).toBe(true);
 		const before = ledger.list();

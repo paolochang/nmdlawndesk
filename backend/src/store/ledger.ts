@@ -1,3 +1,5 @@
+import { bookingText, type HandoffReason, handoffText } from '../domain/dave-texts.ts';
+import { addressTexted, nameTexted } from '../domain/grounding.ts';
 import { bookingBasis, type Preset, pickPreset, presetBookings, PRESETS } from '../domain/presets.ts';
 import { quote } from '../domain/quote.ts';
 import { RULES, resolveTown, type Town } from '../domain/rules.ts';
@@ -17,11 +19,19 @@ export interface Customer {
 	name?: string;
 }
 
+/** One text the desk sent Dave's phone (build-plan §13), oldest first. */
+export interface DaveText {
+	id: string;
+	text: string;
+}
+
 export interface VisitorSnapshot {
 	generation: number;
 	presetId: string;
 	customers: Customer[];
 	bookings: Booking[];
+	/** What Dave's phone has received in this generation. */
+	daveTexts: DaveText[];
 	/** Today in Dave's time zone, `YYYY-MM-DD` (build-plan §12). */
 	today: string;
 	/** Dave's time zone, an IANA name. */
@@ -39,7 +49,11 @@ export interface BookingRequest {
 	acres: number | 'unknown';
 	/** The caller's conversation generation; a booking for an older one is refused. */
 	generation?: number;
-	/** The customer's phone: a successful booking records `name` for it in the same call. */
+	/**
+	 * The customer's phone. With it, the name and street address must appear in that
+	 * customer's texts (build-plan §13); a successful booking records the name and
+	 * texts Dave in the same call.
+	 */
 	phone?: string;
 }
 
@@ -50,6 +64,10 @@ export type AddResult =
 			reason:
 				| Extract<SlotCheck, { ok: false }>['reason']
 				| 'missing-name'
+				/** The customer never texted this name. */
+				| 'name-not-texted'
+				/** The customer never texted this street address. */
+				| 'address-not-texted'
 				/** The conversation belongs to a generation before the last reset. */
 				| 'stale-generation'
 				| 'handoff'
@@ -64,7 +82,18 @@ interface StoredState extends CalendarState {
 	anchor: string;
 	/** Next booking number in this generation. */
 	nextBookingNo: number;
+	/** Each customer's texts in this generation, by phone, oldest first (never in a snapshot). */
+	texts?: Record<string, string[]>;
 }
+
+/**
+ * Texts kept per customer, the longest text kept (in code points), and how many
+ * customers' texts a generation keeps, so the one state value stays well under the
+ * Durable Object's value limit.
+ */
+const MAX_TEXTS = 20;
+const MAX_TEXT_LENGTH = 300;
+const MAX_TEXTING_CUSTOMERS = 30;
 
 const KEY = 'state';
 /**
@@ -73,7 +102,7 @@ const KEY = 'state';
  * next generation: generations stay monotonic, so an old conversation id never
  * points into the new state.
  */
-export const STATE_VERSION = 2;
+export const STATE_VERSION = 3;
 const RATE_KEY = 'rate';
 
 interface RateWindow {
@@ -118,6 +147,11 @@ export class VisitorLedger {
 		const now = this.#now();
 		const state = this.#load(now);
 		if (generation !== undefined && generation !== state.generation) return { ok: false, reason: 'stale-generation' };
+		if (typeof phone === 'string') {
+			const texts = state.texts?.[phone] ?? [];
+			if (!nameTexted(texts, name, address)) return { ok: false, reason: 'name-not-texted' };
+			if (!addressTexted(texts, address)) return { ok: false, reason: 'address-not-texted' };
+		}
 		let q: ReturnType<typeof quote>;
 		let check: SlotCheck;
 		try {
@@ -141,8 +175,43 @@ export class VisitorLedger {
 			basis: bookingBasis(name, address, town, q.basis),
 		};
 		const customers = typeof phone === 'string' ? withCustomer(state.customers, phone, name.trim()) : state.customers;
-		this.#save({ ...state, customers, bookings: [...state.bookings, booking], nextBookingNo: state.nextBookingNo + 1 });
+		const daveTexts =
+			typeof phone === 'string' ? [...state.daveTexts, { id: booking.id, text: bookingText(booking, phone) }] : state.daveTexts;
+		this.#save({
+			...state,
+			customers,
+			daveTexts,
+			bookings: [...state.bookings, booking],
+			nextBookingNo: state.nextBookingNo + 1,
+		});
 		return { ok: true, booking };
+	}
+
+	/**
+	 * Records one text the customer sent (build-plan §13), so a booking can check
+	 * the name and address against it. A text from another `generation` is ignored.
+	 */
+	addCustomerText(phone: string, text: string, generation: number): void {
+		const state = this.#load(this.#now());
+		if (generation !== state.generation || typeof phone !== 'string' || typeof text !== 'string') return;
+		const customers = state.customers.some((c) => c.phone === phone) ? state.customers : [...state.customers, { phone }];
+		const kept = [...(state.texts?.[phone] ?? []), Array.from(text).slice(0, MAX_TEXT_LENGTH).join('')].slice(-MAX_TEXTS);
+		// The customer who texted longest ago gives way; their bookings stay, new ones need fresh texts.
+		const others = Object.entries(state.texts ?? {}).filter(([known]) => known !== phone).slice(-(MAX_TEXTING_CUSTOMERS - 1));
+		this.#save({ ...state, customers, texts: { ...Object.fromEntries(others), [phone]: kept } });
+	}
+
+	/**
+	 * Texts Dave that the desk handed this customer to him: the reason and the
+	 * customer's own latest texts. A handoff from another `generation` is refused.
+	 */
+	handoff(phone: string, reason: HandoffReason, generation: number): { ok: true } | { ok: false; reason: 'stale-generation' } {
+		const state = this.#load(this.#now());
+		if (generation !== state.generation) return { ok: false, reason: 'stale-generation' };
+		const id = `h${state.generation}-${state.daveTexts.length + 1}`;
+		const text = handoffText(reason, phone, state.texts?.[phone] ?? []);
+		this.#save({ ...state, daveTexts: [...state.daveTexts, { id, text }] });
+		return { ok: true };
 	}
 
 	/**
@@ -224,6 +293,8 @@ function fresh(generation: number, preset: Preset, now: string): StoredState {
 		anchor,
 		customers: [],
 		bookings: presetBookings(preset, anchor),
+		daveTexts: [],
+		texts: {},
 		nextBookingNo: 1,
 	};
 }
@@ -248,7 +319,7 @@ function topUp(state: StoredState, today: string): StoredState {
 }
 
 function snapshot(
-	{ nextBookingNo: _, schemaVersion: __, anchor: ___, ...state }: StoredState,
+	{ nextBookingNo: _, schemaVersion: __, anchor: ___, texts: ____, ...state }: StoredState,
 	now: string,
 ): VisitorSnapshot {
 	return { ...state, today: now.slice(0, 10), timeZone: RULES.timeZone };

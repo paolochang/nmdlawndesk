@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookingStatus, settledStatus } from './status.ts';
+import { bookingStatus, settledStatus, textedStatus } from './status.ts';
 import { done, message, running, text } from './test-messages.ts';
 
 const booked = done(
@@ -58,5 +58,81 @@ describe('settledStatus', () => {
 
   it('shows the outcome once the reply is in', () => {
     expect(settledStatus([ask, reply], false)).toEqual(bookingStatus([ask, reply]));
+  });
+});
+
+// build-plan §13: the customer's card shows only what the desk's texts stated.
+describe('textedStatus', () => {
+  const reply = (value: string) => message('m3', 'assistant', [booked, text(value)]);
+
+  it('shows a booking only once a desk text states its day and time', () => {
+    expect(textedStatus([message('m2', 'user', [text('Monday works')]), reply('All set, thanks!')])).toEqual({ kind: 'open' });
+    expect(textedStatus([reply("You're booked for Monday Nov 16 at 8 AM.")])).toEqual({
+      kind: 'booked',
+      when: 'Mon Nov 16, 8:00 AM',
+    });
+  });
+
+  it('fills the end time, street, town, and price only when the text states them', () => {
+    expect(textedStatus([reply('Booked Mon Nov 16, 8:00-9:00 AM at 45 Oak Rd, Ashford. $45 for 1 hour.')])).toEqual({
+      kind: 'booked',
+      when: 'Mon Nov 16, 8:00 AM-9:00 AM',
+      where: '45 Oak Rd, Ashford',
+      price: '$45',
+      duration: '1 h',
+    });
+    // Codex P2: the tool's end time and town are not the text's.
+    expect(textedStatus([reply('Booked Nov 16 at 8 AM at 45 Oak Rd.')])).toEqual({
+      kind: 'booked',
+      when: 'Mon Nov 16, 8:00 AM',
+      where: '45 Oak Rd',
+    });
+    // Holistic P3-4: "$45" is a price, not the house number.
+    expect(textedStatus([reply('Booked Nov 16 at 8 AM on Oak Rd for $45.')])).toEqual({
+      kind: 'booked',
+      when: 'Mon Nov 16, 8:00 AM',
+      price: '$45',
+    });
+  });
+
+  // Codex P2: details the desk texts after confirming still fill in.
+  it('keeps filling details from later desk texts until the next booking', () => {
+    const later = message('m5', 'assistant', [text('It is $45 for 1 hour.')]);
+    expect(textedStatus([reply('Booked Nov 16 at 8 AM.'), message('m4', 'user', [text('How much?')]), later])).toEqual({
+      kind: 'booked',
+      when: 'Mon Nov 16, 8:00 AM',
+      price: '$45',
+      duration: '1 h',
+    });
+  });
+
+  // Codex round 2: "$450" and "$45.50" are not "$45".
+  it('takes the price only as a whole amount', () => {
+    expect(textedStatus([reply('Booked Nov 16 at 8 AM. It costs $450.')])).toEqual({ kind: 'booked', when: 'Mon Nov 16, 8:00 AM' });
+    expect(textedStatus([reply('Booked Nov 16 at 8 AM, $45.50.')])).toEqual({ kind: 'booked', when: 'Mon Nov 16, 8:00 AM' });
+    expect(textedStatus([reply('Booked Nov 16 at 8 AM for $45.00.')])).toMatchObject({ price: '$45' });
+  });
+
+  it('does not take a different meridiem for the booked time', () => {
+    expect(textedStatus([reply('Booked Nov 16 at 8 PM.')])).toEqual({ kind: 'open' });
+  });
+
+  it('says the customer is with Dave once the desk texts the handoff reply', () => {
+    const handoff = done('c4', 'handoffToDave', { reason: 'complaint' }, { ok: true, reply: 'He will contact you directly.' });
+    expect(textedStatus([message('m4', 'assistant', [handoff])])).toEqual({ kind: 'open' });
+    expect(textedStatus([message('m4', 'assistant', [handoff, text('He will contact you directly.')])])).toEqual({
+      kind: 'with-dave',
+      reason: 'complaint',
+    });
+    // Holistic P3-4: a paraphrased reply does not tell the customer why.
+    expect(textedStatus([message('m4', 'assistant', [handoff, text('Dave will contact you directly about it.')])])).toEqual({
+      kind: 'with-dave',
+      reason: 'other',
+    });
+  });
+
+  it('keeps what was settled before the last text while the desk replies', () => {
+    const first = reply('Booked for Nov 16 at 8 AM.');
+    expect(textedStatus([first, message('m5', 'user', [text('Can I move it?')])], true)).toMatchObject({ kind: 'booked' });
   });
 });

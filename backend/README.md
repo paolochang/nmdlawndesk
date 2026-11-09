@@ -7,9 +7,11 @@ it through a service binding and forwards every `/api/*` request unchanged.
 
 The agent `LawnDesk` answers each customer conversation with tools over Dave's rules
 (`src/domain/`) and the visitor's booking calendar (`src/store/`): it quotes a job,
-finds open slots, books one, and hands anything outside the rules to Dave. A handoff
-lands in a second agent, `DavePhone`, which texts Dave the alert. Every booking is
-posted there too, so Dave gets a text with who, when, where, and the price.
+finds open slots, books one, and hands anything outside the rules to Dave. It books
+only a name and street address the customer texted. Every booking and handoff texts
+Dave's phone from a fixed template (the booking's who, when, where, and price; a
+handoff's reason and the customer's own texts), kept in the visitor's store and
+returned with the calendar (build-plan §13).
 
 Notes for coding agents: [AGENTS.md](./AGENTS.md).
 
@@ -91,8 +93,7 @@ GENERATION=…   # "generation" from the calendar answer; each reset adds one
 curl -X POST "http://localhost:8787/api/agents/lawn-desk/$VISITOR_ID:$GENERATION:+15550101" \
   -H "authorization: Bearer $TOKEN" -H 'content-type: application/json' \
   -d '{"kind":"user","body":"How much to mow half an acre?"}'
-curl "http://localhost:8787/api/agents/dave-phone/$VISITOR_ID:$GENERATION:dave" \
-  -H "authorization: Bearer $TOKEN"   # Dave's phone: booking and handoff texts
+# Dave's phone: "daveTexts" in the calendar answer above (booking and handoff texts)
 ```
 
 ## M1 check against the dev server
@@ -118,10 +119,10 @@ All routes are under `/api` (`src/app.ts`).
 | `GET /api/health` | public | Liveness check |
 | `GET /api/config` | public | Dave's rules (`src/domain/rules.ts`): hours, town weekdays, prices, time zone |
 | `POST /api/auth` | public | `{ accessCode, nickname }` → `{ visitorId, token, expiresAt }`; 401 for a wrong code or a nickname not in the allowlist |
-| `GET /api/calendar/<visitorId>` | token | The visitor's generation, seed preset, customers, and bookings, plus `today` and `timeZone` (Dave's date, build-plan §12) |
+| `GET /api/calendar/<visitorId>` | token | The visitor's generation, seed preset, customers, bookings, and Dave's texts (`daveTexts`, build-plan §13), plus `today` and `timeZone` (Dave's date, build-plan §12) |
 | `POST /api/calendar/<visitorId>/reset` | token | New generation, no customers, a different seed preset dated from this week |
 | `/api/agents/lawn-desk/<visitorId>:<generation>:<phone>` | token | A customer conversation with the Flue agent `LawnDesk` |
-| `/api/agents/dave-phone/<visitorId>:<generation>:dave` | token | Dave's phone (`DavePhone`): booking and handoff texts for that generation |
+| `/api/agents/dave-phone/<visitorId>:<generation>:dave` | token | Dave's conversation before build-plan §13 (`DavePhone`); kept so older conversations open, nothing posts to it now |
 
 Protected routes answer 401 for a missing, invalid, or expired token, 403 when the
 path's `visitorId` is not the token's, and 429 once the visitor has made 30 writes
@@ -151,7 +152,7 @@ src/
 ├─ app.ts         route map (auth guard first, then every route)
 ├─ cloudflare.ts  Worker exports (VisitorStore Durable Object)
 ├─ env.d.ts       binding and secret types
-├─ agents/        LawnDesk (customer conversations) and DavePhone (booking and handoff texts)
+├─ agents/        LawnDesk (customer conversations) and DavePhone (older Dave conversations)
 ├─ auth/          sign-in, nickname identity, signed token, 401/403/429 guard
 ├─ desk/          agent tools, prompts, and the per-conversation 400/409 guard
 ├─ domain/        Dave's rules, quote, slot finding, seed presets, conversation ids (pure, no I/O)
