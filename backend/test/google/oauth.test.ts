@@ -29,7 +29,7 @@ describe('Google connect and callback (build-plan §14)', () => {
 		expect(consent.origin + consent.pathname).toBe('https://accounts.google.com/o/oauth2/v2/auth');
 		expect(consent.searchParams.get('scope')).toBe(GOOGLE_SCOPE);
 		expect(consent.searchParams.get('redirect_uri')).toBe('http://localhost:5180/api/google/callback');
-		expect(await verifyState(SECRET, consent.searchParams.get('state')!, NOW)).toBe(VISITOR);
+		expect((await verifyState(SECRET, consent.searchParams.get('state')!, NOW))?.visitorId).toBe(VISITOR);
 		expect(window).toEqual({ from: '2026-12-03', to: '2026-12-16' });
 	});
 
@@ -41,28 +41,57 @@ describe('Google connect and callback (build-plan §14)', () => {
 		expect((await app.request(`/calendar/${VISITOR}/google/connect`, { method: 'POST' })).status).toBe(503);
 	});
 
+	/** Starts Connect like the browser does: the consent URL's state and the cookie set with it. */
+	async function startConnect(app: ReturnType<typeof routes>['app']) {
+		const res = await app.request(`http://localhost:5180/calendar/${VISITOR}/google/connect`, { method: 'POST' });
+		const state = new URL(((await res.json()) as { url: string }).url).searchParams.get('state')!;
+		const cookie = res.headers.get('set-cookie') ?? '';
+		return { state, cookie, sent: cookie.split(';')[0] };
+	}
+
+	it('connect binds the round trip to the browser with an HttpOnly cookie scoped to the callback', async () => {
+		const { cookie } = await startConnect(routes().app);
+		expect(cookie).toMatch(/^google_oauth=[A-Za-z0-9_-]+;/);
+		expect(cookie).toContain('HttpOnly');
+		expect(cookie).toContain('SameSite=Lax');
+		expect(cookie).toContain('Path=/api/google');
+		expect(cookie).toContain('Max-Age=600');
+	});
+
 	it('a callback with a forged, tampered, or expired state connects nothing', async () => {
 		const { app, connects } = routes();
-		const good = await signState(SECRET, VISITOR, NOW);
+		const { state: good, sent } = await startConnect(app);
 		const tampered = good.replace(VISITOR, 'v_someone-else');
 		const forged = await signState('another-secret', VISITOR, NOW);
 		const expired = await signState(SECRET, VISITOR, NOW - STATE_TTL_MS - 1);
 		for (const state of [tampered, forged, expired, '']) {
-			const res = await app.request(`/google/callback?code=good-code&state=${encodeURIComponent(state)}`);
+			const res = await app.request(`/google/callback?code=good-code&state=${encodeURIComponent(state)}`, { headers: { cookie: sent } });
 			expect(res.status).toBe(302);
 			expect(res.headers.get('location')).toBe('/?google=failed&reason=state');
 		}
 		expect(connects).toEqual([]);
 
-		const ok = await app.request(`http://localhost:5180/google/callback?code=good-code&state=${encodeURIComponent(good)}`);
+		const ok = await app.request(`http://localhost:5180/google/callback?code=good-code&state=${encodeURIComponent(good)}`, { headers: { cookie: sent } });
 		expect(ok.headers.get('location')).toBe('/?google=connected');
+		expect(ok.headers.get('set-cookie')).toMatch(/^google_oauth=;.*Max-Age=0/);
 		expect(connects).toEqual([[VISITOR, 'good-code', 'http://localhost:5180/api/google/callback']]);
+	});
+
+	it('a valid state opened in another browser (no or another cookie) connects nothing (review round 3)', async () => {
+		const { app, connects } = routes();
+		const { state } = await startConnect(app);
+		const { sent: otherBrowser } = await startConnect(app);
+		for (const headers of [{}, { cookie: otherBrowser }] as Record<string, string>[]) {
+			const res = await app.request(`/google/callback?code=good-code&state=${encodeURIComponent(state)}`, { headers });
+			expect(res.headers.get('location')).toBe('/?google=failed&reason=state');
+		}
+		expect(connects).toEqual([]);
 	});
 
 	it('a declined consent redirects as denied', async () => {
 		const { app, connects } = routes();
-		const state = await signState(SECRET, VISITOR, NOW);
-		const res = await app.request(`/google/callback?error=access_denied&state=${encodeURIComponent(state)}`);
+		const { state, sent } = await startConnect(app);
+		const res = await app.request(`/google/callback?error=access_denied&state=${encodeURIComponent(state)}`, { headers: { cookie: sent } });
 		expect(res.headers.get('location')).toBe('/?google=failed&reason=denied');
 		expect(connects).toEqual([]);
 	});

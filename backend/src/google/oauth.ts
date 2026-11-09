@@ -34,8 +34,8 @@ export async function signState(secret: string, visitorId: string, nowMs: number
 	return `${body}.${toBase64url(await hmac(secret, `google-state:${body}`))}`;
 }
 
-/** The visitorId a state was signed for; null when forged, malformed, or expired. */
-export async function verifyState(secret: string, state: string, nowMs: number): Promise<string | null> {
+/** The signed visitorId and nonce; null when forged, malformed, or expired. */
+export async function verifyState(secret: string, state: string, nowMs: number): Promise<{ visitorId: string; nonce: string } | null> {
 	const parts = state.split('.');
 	if (parts.length !== 4) return null;
 	const [visitorId, expiresAt, nonce, mac] = parts;
@@ -44,7 +44,7 @@ export async function verifyState(secret: string, state: string, nowMs: number):
 	const expected = await hmac(secret, `google-state:${visitorId}.${expiresAt}.${nonce}`);
 	if (!timingSafeEqual(given, expected)) return null;
 	if (!(Number(expiresAt) > nowMs)) return null;
-	return visitorId;
+	return { visitorId, nonce };
 }
 
 export interface TokenGrant {
