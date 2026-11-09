@@ -92,13 +92,10 @@ export class GoogleLink {
 	#access: { token: string; expiresAtMs: number } | undefined;
 	#running: Promise<void> | undefined;
 	#again = false;
+	#disconnecting = false;
 
 	constructor(deps: LinkDeps) {
 		this.#deps = deps;
-	}
-
-	get configured(): boolean {
-		return Boolean(this.#deps.client);
 	}
 
 	status(): GoogleStatus {
@@ -115,20 +112,23 @@ export class GoogleLink {
 	/** Whether a snapshot read should start a sync: work to do, and not right after a failure. */
 	wantsSync(): boolean {
 		const link = this.#load();
-		if (!link || this.#running) return false;
+		if (!link || this.#running || this.#disconnecting) return false;
 		if (link.lastSync === 'failed' && this.#deps.clock() - (link.lastAttemptMs ?? 0) < RETRY_AFTER_MS) return false;
 		const plan = planSync(this.#deps.calendar(), link);
 		return plan.insert.length > 0 || plan.remove.length > 0;
 	}
 
-	/** Finishes a consent: exchanges the code, creates the calendar, and stores the link. */
+	/**
+	 * Finishes a consent: exchanges the code, creates the calendar, and stores the link.
+	 * An earlier link is replaced: its calendar is deleted, but its grant is not revoked,
+	 * since for the same Google account that would also revoke the grant just received.
+	 */
 	async connect(code: string, redirectUri: string): Promise<void> {
 		const client = this.#client();
 		const now = this.#deps.clock();
 		const grant = await exchangeCode(this.#deps.fetch, client, code, redirectUri, now);
 		if (!grant.refreshToken) throw new Error('no refresh token');
-		const previous = this.#load();
-		if (previous) await this.disconnect();
+		if (this.#load()) await this.disconnect({ revokeGrant: false });
 		const calendarId = await new CalendarApi(this.#deps.fetch, grant.accessToken).createCalendar(CALENDAR_NAME, this.#deps.calendar().timeZone);
 		this.#access = { token: grant.accessToken, expiresAtMs: grant.expiresAtMs };
 		const view = this.#deps.calendar();
@@ -149,6 +149,7 @@ export class GoogleLink {
 
 	/** Runs a sync, or queues one more after the sync already running. Never throws. */
 	sync(): Promise<void> {
+		if (this.#disconnecting) return Promise.resolve();
 		if (this.#running) {
 			this.#again = true;
 			return this.#running;
@@ -164,59 +165,74 @@ export class GoogleLink {
 		return this.#running;
 	}
 
-	/** Deletes the app's calendar (and every event in it), revokes the grant, and forgets the link. */
-	async disconnect(): Promise<{ calendarRemoved: boolean }> {
-		await this.#running;
-		const link = this.#load();
-		if (!link) return { calendarRemoved: true };
-		let calendarRemoved = false;
-		const refreshToken = await open(this.#deps.secret, link.sealedToken);
+	/**
+	 * Deletes the app's calendar (and every event in it), revokes the grant, and forgets
+	 * the link. The link is forgotten before any Google call, and no sync starts or saves
+	 * while this runs, so nothing can bring it back.
+	 */
+	async disconnect({ revokeGrant = true } = {}): Promise<{ calendarRemoved: boolean }> {
+		this.#disconnecting = true;
 		try {
-			await this.#withApi(link, (api) => api.deleteCalendar(link.calendarId));
-			calendarRemoved = true;
-		} catch {
-			// The token is forgotten anyway; the reviewer can remove the calendar in Google.
+			await this.#running;
+			const link = this.#load();
+			if (!link) return { calendarRemoved: true };
+			this.#forget();
+			let calendarRemoved = false;
+			const refreshToken = await open(this.#deps.secret, link.sealedToken);
+			try {
+				await this.#withApi(link, (api) => api.deleteCalendar(link.calendarId));
+				calendarRemoved = true;
+			} catch {
+				// The token is forgotten anyway; the reviewer can remove the calendar in Google.
+			}
+			if (revokeGrant && refreshToken) await revoke(this.#deps.fetch, refreshToken);
+			return { calendarRemoved };
+		} finally {
+			this.#disconnecting = false;
 		}
-		if (refreshToken) await revoke(this.#deps.fetch, refreshToken);
-		this.#forget();
-		return { calendarRemoved };
 	}
 
+	/**
+	 * One pass of the plan. After every Google call it re-reads the stored link and merges
+	 * only its own change into it, so a window moved by Reset all meanwhile stands; if the
+	 * link is gone or now names another calendar, it stops without saving.
+	 */
 	async #syncOnce(): Promise<void> {
-		let link = this.#load();
-		if (!link) return;
+		const start = this.#load();
+		if (!start || this.#disconnecting) return;
+		const { calendarId } = start;
 		const view = this.#deps.calendar();
-		const plan = planSync(view, link);
-		const byId = new Map(view.bookings.map((b) => [b.id, b]));
+		const plan = planSync(view, start);
+		const update = (change: (link: LinkState) => LinkState): boolean => {
+			const current = this.#load();
+			if (!current || current.calendarId !== calendarId || this.#disconnecting) return false;
+			this.#save(change(current));
+			return true;
+		};
 		let failed = false;
 		try {
 			for (const bookingId of plan.remove) {
-				const { calendarId, events: mapped } = link;
-				await this.#withApi(link, (api) => api.deleteEvent(calendarId, mapped[bookingId]));
-				const { [bookingId]: _, ...events } = link.events;
-				link = { ...link, events };
-				this.#save(link);
+				const eventId = start.events[bookingId];
+				await this.#withApi(start, (api) => api.deleteEvent(calendarId, eventId));
+				const removed = update((link) => {
+					const { [bookingId]: _, ...events } = link.events;
+					return { ...link, events };
+				});
+				if (!removed) return;
 			}
-			if (link.generation !== view.generation) {
-				link = { ...link, generation: view.generation, events: {} };
-				this.#save(link);
-			}
+			if (start.generation !== view.generation && !update((link) => ({ ...link, generation: view.generation, events: {} }))) return;
 			for (const booking of plan.insert) {
-				if (!byId.has(booking.id)) continue;
-				const { calendarId } = link;
-				const eventId: string = await this.#withApi(link, (api) => api.insertEvent(calendarId, eventFor(booking, view.timeZone)));
-				link = { ...link, events: { ...link.events, [booking.id]: eventId } };
-				this.#save(link);
+				const eventId = await this.#withApi(start, (api) => api.insertEvent(calendarId, eventFor(booking, view.timeZone)));
+				if (!update((link) => ({ ...link, events: { ...link.events, [booking.id]: eventId } }))) return;
 			}
 		} catch (error) {
 			if (error instanceof GrantRevoked) {
-				this.#forget();
+				if (this.#load()?.calendarId === calendarId) this.#forget();
 				return;
 			}
 			failed = true;
 		}
-		const latest = this.#load();
-		if (latest) this.#save({ ...latest, lastSync: failed ? 'failed' : 'ok', lastAttemptMs: this.#deps.clock() });
+		update((link) => ({ ...link, lastSync: failed ? 'failed' : 'ok', lastAttemptMs: this.#deps.clock() }));
 	}
 
 	/** Calls the API with a live access token, refreshing it once on 401. */

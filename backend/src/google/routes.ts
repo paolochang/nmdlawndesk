@@ -11,7 +11,7 @@ export interface GoogleStoreApi {
 
 export interface GoogleRouteDeps {
 	getStore: (visitorId: string) => GoogleStoreApi;
-	env: () => { SECRET?: string; GOOGLE_CLIENT_ID?: string };
+	env: () => { SECRET?: string; GOOGLE_CLIENT_ID?: string; GOOGLE_CLIENT_SECRET?: string };
 	now?: () => number;
 }
 
@@ -25,8 +25,8 @@ export function googleRoutes({ getStore, env, now = Date.now }: GoogleRouteDeps)
 	const redirectUri = (url: string) => new URL('/api/google/callback', url).toString();
 
 	app.post('/calendar/:visitorId/google/connect', async (c) => {
-		const { SECRET, GOOGLE_CLIENT_ID } = env();
-		if (!SECRET || !GOOGLE_CLIENT_ID) return c.json({ error: 'google not configured' }, 503);
+		const { SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET } = env();
+		if (!SECRET || !GOOGLE_CLIENT_ID || !GOOGLE_CLIENT_SECRET) return c.json({ error: 'google not configured' }, 503);
 		const visitorId = c.req.param('visitorId');
 		const { today } = await getStore(visitorId).list();
 		const state = await signState(SECRET, visitorId, now());

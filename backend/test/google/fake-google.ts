@@ -17,6 +17,8 @@ export function fakeGoogle() {
 	const state = { failCalendar: false, revoked: false, nextId: 1 };
 
 	const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
+		// A real network round trip yields, so other Durable Object calls interleave here.
+		await new Promise((resolve) => setTimeout(resolve, 0));
 		const url = new URL(String(input));
 		const method = init?.method ?? 'GET';
 		requests.push(`${method} ${url.host}${url.pathname}`);

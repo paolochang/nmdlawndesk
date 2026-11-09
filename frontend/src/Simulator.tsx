@@ -157,13 +157,23 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
   useEffect(() => {
     if (googleReturned) window.history.replaceState(null, '', googleReturned.cleaned);
   }, [googleReturned]);
-  // While the store copies events into Google, reload until it says it is done.
+  // While the store copies events into Google, reload until it says it is done; an
+  // interval keeps going even when one reload fails.
   const googleSyncing = Boolean(calendar?.google?.syncing);
   useEffect(() => {
     if (!googleSyncing) return;
-    const timer = window.setTimeout(loadCalendar, GOOGLE_POLL_MS);
-    return () => window.clearTimeout(timer);
-  }, [googleSyncing, calendar, loadCalendar]);
+    const timer = window.setInterval(loadCalendar, GOOGLE_POLL_MS);
+    return () => window.clearInterval(timer);
+  }, [googleSyncing, loadCalendar]);
+  // Back from Google's page through the browser's back button: the page may come back
+  // from the back-forward cache with "Opening Google…" still on.
+  useEffect(() => {
+    const onPageShow = (event: PageTransitionEvent) => {
+      if (event.persisted) setGoogleBusy(false);
+    };
+    window.addEventListener('pageshow', onPageShow);
+    return () => window.removeEventListener('pageshow', onPageShow);
+  }, []);
 
   async function onGoogleConnect() {
     setGoogleBusy(true);

@@ -16,7 +16,7 @@ function routes() {
 		googleConnect: (code, redirectUri) => (connects.push([visitorId, code, redirectUri]), { ok: true }),
 		googleDisconnect: () => ({ calendarRemoved: true }),
 	});
-	const app = googleRoutes({ getStore: store, env: () => ({ SECRET, GOOGLE_CLIENT_ID: 'client-1' }), now: () => NOW });
+	const app = googleRoutes({ getStore: store, env: () => ({ SECRET, GOOGLE_CLIENT_ID: 'client-1', GOOGLE_CLIENT_SECRET: 'shh' }), now: () => NOW });
 	return { app, connects };
 }
 
@@ -31,6 +31,14 @@ describe('Google connect and callback (build-plan §14)', () => {
 		expect(consent.searchParams.get('redirect_uri')).toBe('http://localhost:5180/api/google/callback');
 		expect(await verifyState(SECRET, consent.searchParams.get('state')!, NOW)).toBe(VISITOR);
 		expect(window).toEqual({ from: '2026-12-03', to: '2026-12-16' });
+	});
+
+	it('connect answers 503 unless both the client id and secret are set', async () => {
+		const app = googleRoutes({
+			getStore: () => ({ list: () => ({ today: '2026-12-03' }), googleConnect: () => ({ ok: true }), googleDisconnect: () => ({ calendarRemoved: true }) }),
+			env: () => ({ SECRET, GOOGLE_CLIENT_ID: 'client-1' }),
+		});
+		expect((await app.request(`/calendar/${VISITOR}/google/connect`, { method: 'POST' })).status).toBe(503);
 	});
 
 	it('a callback with a forged, tampered, or expired state connects nothing', async () => {

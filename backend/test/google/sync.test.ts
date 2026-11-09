@@ -117,4 +117,33 @@ describe('Google Calendar sync (build-plan §14)', () => {
 		await link.sync();
 		expect(link.status()).toEqual({ connected: false });
 	});
+
+	it('a Reset all during a running sync keeps the moved window (review round 1)', async () => {
+		const { ledger, link } = await connected();
+		const running = link.sync();
+		ledger.reset();
+		link.moveWindow('2026-12-05');
+		await running;
+		expect(link.status().window).toEqual({ from: '2026-12-05', to: '2026-12-18' });
+	});
+
+	it('a sync started during Disconnect does not bring the link back (review round 1)', async () => {
+		const { google, kv, link } = await connected();
+		const disconnecting = link.disconnect();
+		const late = link.sync();
+		await Promise.all([disconnecting, late]);
+		expect(kv.map.has('google')).toBe(false);
+		expect(link.status()).toEqual({ connected: false });
+		expect(google.calendars.size).toBe(0);
+	});
+
+	it('connecting again replaces the old calendar without revoking the new grant (review round 1)', async () => {
+		const { google, link } = await connected();
+		await link.sync();
+		await link.connect('good-code', 'http://localhost:5180/api/google/callback');
+		await link.sync();
+		expect(google.state.revoked).toBe(false);
+		expect(google.calendars.size).toBe(1);
+		expect(link.status()).toMatchObject({ connected: true, lastSync: 'ok' });
+	});
 });
