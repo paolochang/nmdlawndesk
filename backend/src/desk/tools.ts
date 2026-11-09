@@ -53,6 +53,11 @@ export function handoffReply(reason: HandoffReason): string {
 }
 
 const HANDOFF_NEXT = `If this issue is not handed off yet, call handoffToDave now, then send the reply it returns, word for word. Otherwise do not hand it off again; answer the customer's question from the rules.`;
+/** The largest yard the price table covers; anything larger goes to Dave. */
+const MAX_ACRES = Math.max(...RULES.priceTable.map((row) => row.maxAcres));
+const NOT_OVER_NEXT = `Not handed off: a yard of ${MAX_ACRES} acre or less is in the price table. Call quoteJob with the size and quote it; hand off only a yard larger than ${MAX_ACRES} acre.`;
+const MISSING_ACRES_NEXT = 'Not handed off: call handoffToDave again with the yard size in acres, or ask the customer for it.';
+
 const HANDED_OFF_NEXT =
 	"Send the reply once, now. After that keep answering the customer's general questions from the rules; do not call handoffToDave again for this issue.";
 const PRICE_NOTE = 'Final price may change on site.';
@@ -177,8 +182,21 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 			name: 'handoffToDave',
 			description:
 				"Hand the customer to Dave: outside the service area, yard over 1 acre, complaint, refund, or haggling (pushing for a lower price or a discount). Asking what a job costs is not haggling. Texts Dave right away with the reason and the customer's own texts; do not collect more details first. Once per issue.",
-			input: v.object({ reason: v.picklist(HANDOFF_REASONS) }),
+			input: v.object({
+				reason: v.picklist(HANDOFF_REASONS),
+				acres: v.optional(
+					v.pipe(
+						v.nullable(v.number()),
+						v.description('Required for yard-over-1-acre: the yard size the customer gave, in acres. Not needed for other reasons.'),
+					),
+				),
+			}),
 			async run({ data }) {
+				// The model once read "1 acre" as over 1 acre (owner E2E, PR 9): the size decides, not the model.
+				if (data.reason === 'yard-over-1-acre') {
+					if (typeof data.acres !== 'number') return { output: { ok: false, reason: 'missing-acres', next: MISSING_ACRES_NEXT } };
+					if (data.acres <= MAX_ACRES) return { output: { ok: false, reason: 'not-over-1-acre', next: NOT_OVER_NEXT } };
+				}
 				const { phone, generation } = deps.conversation;
 				const result = await deps.store.handoff(phone, data.reason, generation);
 				if (!result.ok) return { output: { ok: false, reason: 'stale-generation', next: REJECTION_NEXT['stale-generation'] } };
