@@ -30,6 +30,14 @@ describe('src/app.ts wiring', () => {
 		expect((await app.request(`/api/calendar/${id}`)).status).toBe(401);
 	});
 
+	it('guards Google connect but leaves the Google callback public (it trusts only the signed state)', async () => {
+		const id = await visitorIdFor(SECRET, 'gang');
+		expect((await app.request(`/api/calendar/${id}/google/connect`, { method: 'POST' })).status).toBe(401);
+		const callback = await app.request('/api/google/callback?code=x&state=forged');
+		expect(callback.status).toBe(302);
+		expect(callback.headers.get('location')).toBe('/?google=failed&reason=state');
+	});
+
 	it('limits writes through the visitor’s own store with WRITE_RATE_LIMIT', async () => {
 		const res = await app.request('/api/auth', {
 			method: 'POST',

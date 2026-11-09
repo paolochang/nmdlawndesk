@@ -5,6 +5,7 @@ import { DavePhone } from './agents/dave-phone.ts';
 import { LawnDesk } from './agents/lawn-desk.ts';
 import { mountAuth, WRITE_RATE_LIMIT } from './auth/middleware.ts';
 import { conversationGuard } from './desk/conversation-guard.ts';
+import { googleRoutes } from './google/routes.ts';
 import { storeRoutes } from './store/routes.ts';
 import { visitorStore } from './store/stub.ts';
 
@@ -52,5 +53,9 @@ app.route('/agents/dave-phone', createAgentRouter(DavePhone));
 
 // /api/config and /api/calendar/:visitorId[/reset].
 app.route('/', storeRoutes(visitorStore));
+
+// /api/calendar/:visitorId/google/{connect,disconnect} (behind the guard above) and the
+// public /api/google/callback (build-plan §14).
+app.route('/', googleRoutes({ getStore: visitorStore, env: () => env }));
 
 export default app;

@@ -6,6 +6,7 @@ import { RULES, resolveTown, type Town } from '../domain/rules.ts';
 import { checkSlot, overlaps, type SlotCheck } from '../domain/slots.ts';
 import { addDays, type Clock, comingSunday, localDateTime } from '../domain/time.ts';
 import type { Booking } from '../domain/types.ts';
+import type { GoogleStatus } from '../google/link.ts';
 
 /** The synchronous key-value API of a SQLite-backed Durable Object (`ctx.storage.kv`). */
 export interface KvStorage {
@@ -36,9 +37,11 @@ export interface VisitorSnapshot {
 	today: string;
 	/** Dave's time zone, an IANA name. */
 	timeZone: string;
+	/** Google Calendar sync, added by the Durable Object (build-plan §14). */
+	google?: GoogleStatus;
 }
 
-type CalendarState = Omit<VisitorSnapshot, 'today' | 'timeZone'>;
+type CalendarState = Omit<VisitorSnapshot, 'today' | 'timeZone' | 'google'>;
 
 /** What a caller books. The store prices the job itself from `acres` with `quote`. */
 export interface BookingRequest {
