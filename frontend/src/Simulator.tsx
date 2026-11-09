@@ -497,7 +497,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
                     locked={texted}
                     onChange={(patch) => setCustomer((old) => ({ ...old, ...patch }))}
                     onNewCustomer={() => onNewCustomer()}
-                    map={<TownMap focus={focus} customer={customer} config={config} />}
+                    map={(stacked) => <TownMap focus={focus} customer={customer} config={config} stacked={stacked} />}
                   />
                   <SuggestedReplies
                     replies={repliesNow(stage, customer, typing)}

@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { mapStacked } from './lib/town-map.ts';
 import { ALL_TOWNS, formatPhone, YARDS, type Customer } from './lib/persona.ts';
 
 const YARD_LABEL: Record<string, string> = {
@@ -17,12 +18,14 @@ interface Props {
   locked: boolean;
   onChange: (patch: Partial<Pick<Customer, 'street' | 'town' | 'acres'>>) => void;
   onNewCustomer: () => void;
-  /** The town map, shown beside the address fields. */
-  map?: ReactNode;
+  /** The town map, beside the address fields; `stacked` when it wraps under them. */
+  map?: (stacked: boolean) => ReactNode;
 }
 
 // Who the tester is texting as. The desk only knows what is texted to it.
 export function CustomerCard({ customer, locked, onChange, onNewCustomer, map }: Props) {
+  const body = useRef<HTMLDivElement>(null);
+  const stacked = useStacked(body);
   return (
     <div className="card">
       <div className="card-top">
@@ -31,7 +34,7 @@ export function CustomerCard({ customer, locked, onChange, onNewCustomer, map }:
           New customer
         </button>
       </div>
-      <div className="persona-body">
+      <div className="persona-body" ref={body}>
         <div className="persona-info">
           <div>
             <div className="persona-name">{customer.name}</div>
@@ -84,8 +87,21 @@ export function CustomerCard({ customer, locked, onChange, onNewCustomer, map }:
             )}
           </p>
         </div>
-        {map}
+        {map?.(stacked)}
       </div>
     </div>
   );
+}
+
+/** Whether the card body is too narrow to put the map beside the details. */
+function useStacked(body: RefObject<HTMLDivElement | null>): boolean {
+  const [stacked, setStacked] = useState(false);
+  useEffect(() => {
+    const element = body.current;
+    if (!element) return;
+    const observer = new ResizeObserver(([entry]) => setStacked(mapStacked(entry.contentRect.width)));
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [body]);
+  return stacked;
 }
