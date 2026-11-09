@@ -1,6 +1,6 @@
 import { addDays } from '../domain/time.ts';
 import type { Booking } from '../domain/types.ts';
-import { CalendarApi, CalendarApiError, eventFor } from './calendar-api.ts';
+import { CalendarApi, CalendarApiError, eventFor, eventIdFor } from './calendar-api.ts';
 import { exchangeCode, type GoogleClient, GrantRevoked, refreshAccess, revoke } from './oauth.ts';
 import { open, seal } from './vault.ts';
 
@@ -93,6 +93,8 @@ export class GoogleLink {
 	#running: Promise<void> | undefined;
 	#again = false;
 	#disconnecting = false;
+	/** Connect and Disconnect run one at a time, in arrival order. */
+	#lifecycle: Promise<unknown> = Promise.resolve();
 
 	constructor(deps: LinkDeps) {
 		this.#deps = deps;
@@ -123,12 +125,16 @@ export class GoogleLink {
 	 * An earlier link is replaced: its calendar is deleted, but its grant is not revoked,
 	 * since for the same Google account that would also revoke the grant just received.
 	 */
-	async connect(code: string, redirectUri: string): Promise<void> {
+	connect(code: string, redirectUri: string): Promise<void> {
+		return this.#exclusive(() => this.#connect(code, redirectUri));
+	}
+
+	async #connect(code: string, redirectUri: string): Promise<void> {
 		const client = this.#client();
 		const now = this.#deps.clock();
 		const grant = await exchangeCode(this.#deps.fetch, client, code, redirectUri, now);
 		if (!grant.refreshToken) throw new Error('no refresh token');
-		if (this.#load()) await this.disconnect({ revokeGrant: false });
+		if (this.#load()) await this.#disconnect(false);
 		const calendarId = await new CalendarApi(this.#deps.fetch, grant.accessToken).createCalendar(CALENDAR_NAME, this.#deps.calendar().timeZone);
 		this.#access = { token: grant.accessToken, expiresAtMs: grant.expiresAtMs };
 		const view = this.#deps.calendar();
@@ -170,7 +176,11 @@ export class GoogleLink {
 	 * the link. The link is forgotten before any Google call, and no sync starts or saves
 	 * while this runs, so nothing can bring it back.
 	 */
-	async disconnect({ revokeGrant = true } = {}): Promise<{ calendarRemoved: boolean }> {
+	disconnect(): Promise<{ calendarRemoved: boolean }> {
+		return this.#exclusive(() => this.#disconnect(true));
+	}
+
+	async #disconnect(revokeGrant: boolean): Promise<{ calendarRemoved: boolean }> {
 		this.#disconnecting = true;
 		try {
 			await this.#running;
@@ -222,7 +232,8 @@ export class GoogleLink {
 			}
 			if (start.generation !== view.generation && !update((link) => ({ ...link, generation: view.generation, events: {} }))) return;
 			for (const booking of plan.insert) {
-				const eventId = await this.#withApi(start, (api) => api.insertEvent(calendarId, eventFor(booking, view.timeZone)));
+				const event = eventFor(booking, view.timeZone, await eventIdFor(view.generation, booking.id));
+				const eventId = await this.#withApi(start, (api) => api.insertEvent(calendarId, event));
 				if (!update((link) => ({ ...link, events: { ...link.events, [booking.id]: eventId } }))) return;
 			}
 		} catch (error) {
@@ -233,6 +244,12 @@ export class GoogleLink {
 			failed = true;
 		}
 		update((link) => ({ ...link, lastSync: failed ? 'failed' : 'ok', lastAttemptMs: this.#deps.clock() }));
+	}
+
+	#exclusive<T>(work: () => Promise<T>): Promise<T> {
+		const run = this.#lifecycle.then(work, work);
+		this.#lifecycle = run.catch(() => undefined);
+		return run;
 	}
 
 	/** Calls the API with a live access token, refreshing it once on 401. */

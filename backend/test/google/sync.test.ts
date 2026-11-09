@@ -146,4 +146,31 @@ describe('Google Calendar sync (build-plan §14)', () => {
 		expect(google.calendars.size).toBe(1);
 		expect(link.status()).toMatchObject({ connected: true, lastSync: 'ok' });
 	});
+
+	it('an insert whose response was lost is not duplicated by the retry (review round 2)', async () => {
+		const { google, ledger, link, events } = await connected();
+		google.state.loseNextInsertResponse = true;
+		await link.sync();
+		expect(link.status().lastSync).toBe('failed');
+		await link.sync();
+		const wanted = ledger.list().bookings.filter((b) => inWindow(b.start));
+		expect(events()).toHaveLength(wanted.length);
+		expect(link.status().lastSync).toBe('ok');
+	});
+
+	it('a Disconnect while a Connect is still creating the calendar leaves nothing connected (review round 2)', async () => {
+		const google = fakeGoogle();
+		const kv = memoryKv();
+		const ledger = new VisitorLedger(kv, () => 0, () => NOW);
+		const link = new GoogleLink({ kv, fetch: google.fetcher, clock: () => NOW, secret: 's', client: { clientId: 'c', clientSecret: 'x' }, calendar: () => ledger.list() });
+		let release = () => {};
+		google.state.holdCreate = new Promise<void>((resolve) => (release = resolve));
+		const connecting = link.connect('good-code', 'http://localhost:5180/api/google/callback');
+		while (!google.requests.some((r) => r.endsWith('/calendar/v3/calendars'))) await new Promise((r) => setTimeout(r, 0));
+		const disconnecting = link.disconnect();
+		release();
+		await Promise.all([connecting, disconnecting]);
+		expect(link.status()).toEqual({ connected: false });
+		expect(google.calendars.size).toBe(0);
+	});
 });

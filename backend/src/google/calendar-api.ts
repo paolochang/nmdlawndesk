@@ -21,9 +21,13 @@ export class CalendarApi {
 		return (body as { id: string }).id;
 	}
 
+	/**
+	 * Inserts an event under its own id. A 409 means an earlier insert of this id already
+	 * reached Google (its response was lost), so it counts as inserted.
+	 */
 	async insertEvent(calendarId: string, event: GoogleEvent): Promise<string> {
-		const body = await this.#call('POST', `/calendars/${encodeURIComponent(calendarId)}/events`, event);
-		return (body as { id: string }).id;
+		await this.#call('POST', `/calendars/${encodeURIComponent(calendarId)}/events`, event, [409]);
+		return event.id;
 	}
 
 	/** An event already gone (404, 410) counts as deleted. */
@@ -49,6 +53,8 @@ export class CalendarApi {
 }
 
 export interface GoogleEvent {
+	/** Chosen by the app (base32hex), so a retried insert cannot make a second event. */
+	id: string;
 	summary: string;
 	description: string;
 	start: { dateTime: string; timeZone: string };
@@ -57,12 +63,23 @@ export interface GoogleEvent {
 }
 
 /** The Google event for one booking: the same title and details as Dave's calendar (build-plan §14). */
-export function eventFor(booking: Booking, timeZone: string): GoogleEvent {
+export function eventFor(booking: Booking, timeZone: string, id: string): GoogleEvent {
 	return {
+		id,
 		summary: `${booking.name} · ${booking.town}`,
 		description: booking.basis,
 		start: { dateTime: `${booking.start}:00`, timeZone },
 		end: { dateTime: `${booking.end}:00`, timeZone },
 		extendedProperties: { private: { bookingId: booking.id } },
 	};
+}
+
+/**
+ * The event id for a booking in a generation: lowercase hex of SHA-256, which Google
+ * accepts (base32hex, 5-1024 characters). Booking ids repeat across generations, so the
+ * generation is part of it.
+ */
+export async function eventIdFor(generation: number, bookingId: string): Promise<string> {
+	const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${generation}:${bookingId}`));
+	return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('').slice(0, 40);
 }

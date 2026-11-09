@@ -14,7 +14,15 @@ export interface FakeEvent {
 export function fakeGoogle() {
 	const calendars = new Map<string, Map<string, FakeEvent>>();
 	const requests: string[] = [];
-	const state = { failCalendar: false, revoked: false, nextId: 1 };
+	const state: {
+		failCalendar: boolean;
+		revoked: boolean;
+		nextId: number;
+		/** Held before answering a calendar create, to interleave other calls. */
+		holdCreate?: Promise<void>;
+		/** Answers the next event insert with a network error after Google has stored it. */
+		loseNextInsertResponse?: boolean;
+	} = { failCalendar: false, revoked: false, nextId: 1 };
 
 	const fetcher = (async (input: RequestInfo | URL, init?: RequestInit) => {
 		// A real network round trip yields, so other Durable Object calls interleave here.
@@ -40,6 +48,7 @@ export function fakeGoogle() {
 		const [, , , , calendarId, , eventId] = url.pathname.split('/').map(decodeURIComponent);
 		// /calendar/v3/calendars[/<id>[/events[/<eventId>]]]
 		if (method === 'POST' && url.pathname === '/calendar/v3/calendars') {
+			await state.holdCreate;
 			const id = `cal-${state.nextId++}@group.calendar.google.com`;
 			calendars.set(id, new Map());
 			return json({ id, ...JSON.parse(String(init?.body)) });
@@ -51,8 +60,14 @@ export function fakeGoogle() {
 			return new Response(null, { status: 204 });
 		}
 		if (method === 'POST') {
-			const id = `ev-${state.nextId++}`;
-			calendar.set(id, { id, ...JSON.parse(String(init?.body)) });
+			const body = JSON.parse(String(init?.body)) as FakeEvent & { id?: string };
+			const id = body.id ?? `ev-${state.nextId++}`;
+			if (calendar.has(id)) return json({ error: { code: 409 } }, 409);
+			calendar.set(id, { ...body, id });
+			if (state.loseNextInsertResponse) {
+				state.loseNextInsertResponse = false;
+				throw new TypeError('network connection lost');
+			}
 			return json({ id });
 		}
 		if (method === 'DELETE') {

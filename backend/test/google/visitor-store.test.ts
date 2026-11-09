@@ -31,6 +31,18 @@ function store() {
 	return { google, visitor, settle, events };
 }
 
+/** The first 08:00-12:00 start on an Ashford day (Mon, Thu) in the window that overlaps no booking. */
+function freeAshfordHour(bookings: readonly { start: string; end: string }[]): string {
+	for (const day of ['2026-12-07', '2026-12-10', '2026-12-14']) {
+		for (const time of ['08:00', '09:00', '10:00', '11:00', '12:00']) {
+			const start = `${day}T${time}`;
+			const end = `${day}T${String(Number(time.slice(0, 2)) + 1).padStart(2, '0')}:00`;
+			if (!bookings.some((b) => b.start < end && start < b.end)) return start;
+		}
+	}
+	throw new Error('no free Ashford hour');
+}
+
 afterEach(() => {
 	vi.unstubAllGlobals();
 	vi.useRealTimers();
@@ -47,9 +59,11 @@ describe('VisitorStore with Google Calendar (build-plan §14)', () => {
 		const seeded = events().length;
 		expect(seeded).toBeGreaterThan(0);
 
-		const generation = visitor.list().generation;
+		const { generation, bookings } = visitor.list();
 		visitor.addCustomerText('+15550101', 'Hi, I am Mia Park at 6 Heath Road, Ashford, half an acre', generation);
-		expect(visitor.add({ name: 'Mia Park', address: '6 Heath Rd', town: 'Ashford', start: '2026-12-14T08:00', acres: 0.5, generation, phone: '+15550101' }).ok).toBe(true);
+		// The store picks a random seed preset, so book the first Ashford hour it left open.
+		const start = freeAshfordHour(bookings);
+		expect(visitor.add({ name: 'Mia Park', address: '6 Heath Rd', town: 'Ashford', start, acres: 0.5, generation, phone: '+15550101' })).toEqual({ ok: true, booking: expect.anything() });
 		await settle();
 		expect(events().some((e) => e.summary === 'Mia Park · Ashford')).toBe(true);
 
