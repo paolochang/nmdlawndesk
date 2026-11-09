@@ -69,3 +69,23 @@ export function reportingUnauthorized(fetchFn: typeof fetch, onUnauthorized: () 
     return response;
   };
 }
+
+/** Google Calendar connect (build-plan §14): the consent URL to navigate to. */
+export async function googleConnect(fetchFn: typeof fetch, session: Session): Promise<{ url: string }> {
+  const response = await fetchFn(`/api/calendar/${session.visitorId}/google/connect`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${session.token}` },
+  });
+  if (!response.ok) throw new ApiError(response.status, `google connect failed (${response.status})`);
+  return (await response.json()) as { url: string };
+}
+
+/** Google Calendar disconnect: deletes the app's calendar and forgets the grant. */
+export async function googleDisconnect(fetchFn: typeof fetch, session: Session): Promise<{ calendarRemoved: boolean }> {
+  const response = await fetchFn(`/api/calendar/${session.visitorId}/google/disconnect`, {
+    method: 'POST',
+    headers: { authorization: `Bearer ${session.token}` },
+  });
+  if (!response.ok) throw new ApiError(response.status, `google disconnect failed (${response.status})`);
+  return (await response.json()) as { calendarRemoved: boolean };
+}

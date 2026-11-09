@@ -5,12 +5,23 @@ import { CustomerCard } from './CustomerCard.tsx';
 import { CustomerPhone } from './CustomerPhone.tsx';
 import { CustomerSwitcher } from './CustomerSwitcher.tsx';
 import { DavePanel } from './DavePanel.tsx';
+import { GoogleSync } from './GoogleSync.tsx';
 import { JudgmentLog } from './JudgmentLog.tsx';
 import { BookingStatusCard, SuggestedReplies } from './SidePanels.tsx';
 import { TownMap } from './TownMap.tsx';
-import { fetchCalendar, fetchConfig, fetchGeneration, reportingUnauthorized, resetCalendar, statusOf } from './lib/api.ts';
+import {
+  fetchCalendar,
+  fetchConfig,
+  fetchGeneration,
+  googleConnect,
+  googleDisconnect,
+  reportingUnauthorized,
+  resetCalendar,
+  statusOf,
+} from './lib/api.ts';
 import { acceptSnapshot, daveTextBubbles, todayLabel, type CalendarSnapshot } from './lib/calendar.ts';
 import type { DaveConfig } from './lib/config.ts';
+import { googleReturn } from './lib/google.ts';
 import { customerConversationUrl } from './lib/conversation.ts';
 import { panelLayout, type Focus } from './lib/layout.ts';
 import { newCustomer, type Customer } from './lib/persona.ts';
@@ -36,6 +47,14 @@ const SLOW_DOWN = 'Slow down a little: too many texts in a short time. Try again
 const RESET = "Dave's calendar was reset, so this is a new conversation.";
 const NO_REPLY = "Dave's desk couldn't reply. Please send your text again.";
 const RESET_FAILED = 'Reset did not go through. Please try again.';
+// Google Calendar (build-plan §14).
+const GOOGLE_POLL_MS = 1500;
+const GOOGLE_NOT_SET_UP = 'Google Calendar is not set up on this server.';
+const GOOGLE_CONNECT_FAILED = 'Could not open Google. Please try again.';
+const GOOGLE_DISCONNECT_FAILED = 'Disconnect did not go through. Please try again.';
+const GOOGLE_DISCONNECTED = "Disconnected. The Dave's Lawn Desk calendar and its events were removed from your Google account.";
+const GOOGLE_CALENDAR_LEFT =
+  "Disconnected, but Google did not remove the Dave's Lawn Desk calendar. You can delete it in Google Calendar.";
 
 interface Props {
   nickname: string;
@@ -75,7 +94,9 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
   const phone = customer.phone;
   // The phone on screen right now, read by sends that finish after the customer changed.
   const currentPhone = useRef(phone);
-  const [focus, setFocus] = useState<Focus>('customer');
+  // Back from Google's consent (build-plan §14): open on Dave's side, where the result shows.
+  const [googleReturned] = useState(() => googleReturn(window.location.href));
+  const [focus, setFocus] = useState<Focus>(googleReturned ? 'dave' : 'customer');
   const [notice, setNotice] = useState<string>();
   const [draft, setDraft] = useState('');
 
@@ -130,6 +151,47 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
   const loadCalendar = useCallback(() => {
     fetchCalendar(authFetch, session).then(showCalendar, () => undefined);
   }, [authFetch, session, showCalendar]);
+
+  const [googleMessage, setGoogleMessage] = useState(googleReturned?.message);
+  const [googleBusy, setGoogleBusy] = useState(false);
+  useEffect(() => {
+    if (googleReturned) window.history.replaceState(null, '', googleReturned.cleaned);
+  }, [googleReturned]);
+  // While the store copies events into Google, reload until it says it is done.
+  const googleSyncing = Boolean(calendar?.google?.syncing);
+  useEffect(() => {
+    if (!googleSyncing) return;
+    const timer = window.setTimeout(loadCalendar, GOOGLE_POLL_MS);
+    return () => window.clearTimeout(timer);
+  }, [googleSyncing, calendar, loadCalendar]);
+
+  async function onGoogleConnect() {
+    setGoogleBusy(true);
+    setGoogleMessage(undefined);
+    try {
+      const { url: consent } = await googleConnect(authFetch, session);
+      window.location.assign(consent);
+    } catch (caught) {
+      const status = statusOf(caught);
+      if (status !== 401) setGoogleMessage(status === 503 ? GOOGLE_NOT_SET_UP : status === 429 ? SLOW_DOWN : GOOGLE_CONNECT_FAILED);
+      setGoogleBusy(false);
+    }
+  }
+
+  async function onGoogleDisconnect() {
+    setGoogleBusy(true);
+    setGoogleMessage(undefined);
+    try {
+      const { calendarRemoved } = await googleDisconnect(authFetch, session);
+      setGoogleMessage(calendarRemoved ? GOOGLE_DISCONNECTED : GOOGLE_CALENDAR_LEFT);
+      loadCalendar();
+    } catch (caught) {
+      const status = statusOf(caught);
+      if (status !== 401) setGoogleMessage(status === 429 ? SLOW_DOWN : GOOGLE_DISCONNECT_FAILED);
+    } finally {
+      setGoogleBusy(false);
+    }
+  }
 
   const url = generation === undefined ? undefined : customerConversationUrl(session.visitorId, generation, phone);
   const client = useMemo(
@@ -484,6 +546,18 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
                 daveTyping={false}
                 daveOpen={daveOpen}
                 daveUnread={unreadCount(shownDave.length, daveSeenCount)}
+                googleSync={
+                  calendar && (
+                    <GoogleSync
+                      status={calendar.google}
+                      today={calendar.today}
+                      message={googleMessage}
+                      busy={googleBusy}
+                      onConnect={() => void onGoogleConnect()}
+                      onDisconnect={() => void onGoogleDisconnect()}
+                    />
+                  )
+                }
                 onToggleDave={() => {
                   if (!daveOpen) loadCalendar();
                   setDaveOpen(!daveOpen);

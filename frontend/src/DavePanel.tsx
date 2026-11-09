@@ -4,7 +4,7 @@ import timeGridPlugin from '@fullcalendar/react/timegrid';
 import '@fullcalendar/react/skeleton.css';
 import '@fullcalendar/react/themes/classic/theme.css';
 import '@fullcalendar/react/themes/classic/palette.css';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { calendarWindow, dayLabel, toEvents, type CalendarBooking } from './lib/calendar.ts';
 import { hoursNote, priceNote, priceRows, townDays, type DaveConfig } from './lib/config.ts';
 import type { Bubble } from './lib/transcript.ts';
@@ -219,9 +219,11 @@ interface Props {
   /** New texts since the phone was last opened (the button's badge). */
   daveUnread: number;
   onToggleDave: () => void;
+  /** Google Calendar sync controls (build-plan §14), above the calendar. */
+  googleSync?: ReactNode;
 }
 
-export function DavePanel({ config, failed, bookings, today, landingId, daveBubbles, daveTyping, daveOpen, daveUnread, onToggleDave }: Props) {
+export function DavePanel({ config, failed, bookings, today, landingId, daveBubbles, daveTyping, daveOpen, daveUnread, onToggleDave, googleSync }: Props) {
   if (!config || !bookings || !today) {
     return (
       <p className="placeholder dave-placeholder">
@@ -233,6 +235,7 @@ export function DavePanel({ config, failed, bookings, today, landingId, daveBubb
   return (
     <>
       <div className="dave-body">
+        {googleSync}
         <DaveCalendar config={config} today={today} bookings={bookings} landingId={landingId} />
         <RulesTables config={config} />
       </div>

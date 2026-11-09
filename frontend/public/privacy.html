@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Privacy · Dave's Lawn Desk</title>
+    <style>
+      body { font-family: system-ui, sans-serif; max-width: 640px; margin: 40px auto; padding: 0 16px; line-height: 1.5; color: #1f2a1f; }
+      h1 { font-size: 1.4rem; }
+      h2 { font-size: 1.05rem; margin-top: 1.6em; }
+    </style>
+  </head>
+  <body>
+    <h1>Dave's Lawn Desk: privacy</h1>
+    <p>
+      Dave's Lawn Desk is a demo of a text-message booking assistant for a fictional lawn-mowing business. Everyone and
+      every booking in it is made up.
+    </p>
+    <h2>Google Calendar</h2>
+    <p>
+      If you choose <b>Connect Google Calendar</b>, the demo asks Google for one permission: to create its own calendar
+      and manage the events in that calendar
+      (<code>https://www.googleapis.com/auth/calendar.app.created</code>). It then creates a calendar named
+      "Dave's Lawn Desk" in your account and copies the demo's two weeks of fictional bookings into it.
+    </p>
+    <ul>
+      <li>It cannot read, change, or delete your other calendars or events.</li>
+      <li>It stores only what it needs to keep that calendar in step: an encrypted Google refresh token, the calendar's id, and the ids of the events it added.</li>
+      <li>It never shares this with anyone and uses it for nothing else.</li>
+      <li><b>Disconnect</b> deletes the "Dave's Lawn Desk" calendar with every event it added, revokes the permission, and deletes the stored token.</li>
+    </ul>
+    <p>You can also remove the permission any time at <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a>.</p>
+    <h2>Everything else</h2>
+    <p>
+      Sign-in uses a shared access code and a nickname. The demo keeps the texts you type and the fictional bookings for
+      your nickname so you can come back to them; <b>Reset all</b> clears them.
+    </p>
+  </body>
+</html>

@@ -2,6 +2,7 @@
 // `GET /api/calendar/<visitorId>`, turned into FullCalendar events and the
 // window the week view may show.
 import { GROUP_TINTS, INK, NEW_BOOKING_COLOR, townGroup, type DaveConfig } from './config.ts';
+import type { GoogleStatus } from './google.ts';
 import type { Bubble } from './transcript.ts';
 
 export interface CalendarBooking {
@@ -28,6 +29,8 @@ export interface CalendarSnapshot {
   timeZone: string;
   /** The desk's texts to Dave in this generation, oldest first (build-plan §13). */
   daveTexts: { id: string; text: string }[];
+  /** Google Calendar sync (build-plan §14). */
+  google?: GoogleStatus;
 }
 
 export interface CalendarEvent {
@@ -52,7 +55,7 @@ export interface CalendarWindow {
   slotMaxTime: string;
 }
 
-function addDays(date: string, days: number): string {
+export function addDays(date: string, days: number): string {
   const day = new Date(`${date}T00:00:00Z`);
   day.setUTCDate(day.getUTCDate() + days);
   return day.toISOString().slice(0, 10);
