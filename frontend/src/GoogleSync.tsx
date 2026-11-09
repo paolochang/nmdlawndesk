@@ -20,6 +20,9 @@ interface ButtonProps {
   today: string | undefined;
   busy: boolean;
   noticeOpen: boolean;
+  /** The last connect/disconnect outcome, shown in its own popup until dismissed. */
+  message: string | undefined;
+  onDismissMessage: () => void;
   onOpenNotice: () => void;
   onCloseNotice: () => void;
   onConnect: () => void;
@@ -31,20 +34,16 @@ interface ButtonProps {
  * popup with the notice; only **Agree and connect** goes to Google. Once connected the
  * button is **Disconnect**.
  */
-export function GoogleSyncButton({ status, today, busy, noticeOpen, onOpenNotice, onCloseNotice, onConnect, onDisconnect }: ButtonProps) {
-  const dialog = useRef<HTMLDialogElement>(null);
-  useEffect(() => {
-    const element = dialog.current;
-    if (!element) return;
-    if (noticeOpen && !element.open) element.showModal();
-    if (!noticeOpen && element.open) element.close();
-  }, [noticeOpen]);
+export function GoogleSyncButton({ status, today, busy, noticeOpen, message, onDismissMessage, onOpenNotice, onCloseNotice, onConnect, onDisconnect }: ButtonProps) {
+  const dialog = useModal(noticeOpen);
+  const outcome = useModal(message !== undefined && !noticeOpen);
 
-  if (!today) return null;
+  // The dialogs stay mounted while the calendar loads, so a message from Google's
+  // redirect opens as soon as the page does.
   const connected = googleView(status).kind === 'on';
   return (
     <>
-      {connected ? (
+      {!today ? null : connected ? (
         <button type="button" className="gcal-btn" disabled={busy} onClick={onDisconnect} title="Stop syncing and delete the Dave's Lawn Desk calendar from your Google account">
           <CalendarIcon />
           {busy ? 'Disconnecting…' : 'Disconnect'}
@@ -59,7 +58,7 @@ export function GoogleSyncButton({ status, today, busy, noticeOpen, onOpenNotice
         <h3 id="gcal-title">
           <CalendarIcon /> Sync with Google Calendar
         </h3>
-        <p>{connectNotice(syncWindow(today))}</p>
+        <p>{today ? connectNotice(syncWindow(today)) : ''}</p>
         <div className="gcal-actions">
           <button type="button" className="primary" disabled={busy} onClick={onConnect}>
             {busy ? 'Opening Google…' : 'Agree and connect'}
@@ -69,32 +68,44 @@ export function GoogleSyncButton({ status, today, busy, noticeOpen, onOpenNotice
           </button>
         </div>
       </dialog>
+      <dialog ref={outcome} className="gcal-dialog" aria-labelledby="gcal-outcome" onClose={onDismissMessage}>
+        <h3 id="gcal-outcome">
+          <CalendarIcon /> Google Calendar
+        </h3>
+        <p>{message}</p>
+        <div className="gcal-actions">
+          <button type="button" className="primary" onClick={onDismissMessage}>
+            OK
+          </button>
+        </div>
+      </dialog>
     </>
   );
 }
 
-interface NoteProps {
-  status: GoogleStatus | undefined;
-  /** The last connect/disconnect outcome, one line. */
-  message: string | undefined;
+/** A `<dialog>` shown as a modal while `open`. */
+function useModal(open: boolean) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const element = ref.current;
+    if (!element) return;
+    if (open && !element.open) element.showModal();
+    if (!open && element.open) element.close();
+  }, [open]);
+  return ref;
 }
 
-/** Beside the demo calendar's title: the synced dates, syncing, a failure, and the last outcome. */
-export function GoogleSyncNote({ status, message }: NoteProps) {
+/** Beside the demo calendar's title: the synced dates, syncing, and a sync failure. */
+export function GoogleSyncNote({ status }: { status: GoogleStatus | undefined }) {
   const view = googleView(status);
-  if (view.kind === 'off' && !message) return null;
+  if (view.kind === 'off') return null;
   return (
     <span className="cal-sync">
-      {view.kind === 'on' && (
-        <>
-          <a href="https://calendar.google.com/" target="_blank" rel="noreferrer">
-            {view.label}
-          </a>
-          {view.syncing && <em> · syncing…</em>}
-          {view.failed && <b className="cal-sync-error"> · Google Calendar sync failed</b>}
-        </>
-      )}
-      {message && <span className="cal-sync-message">{view.kind === 'on' ? ` · ${message}` : message}</span>}
+      <a href="https://calendar.google.com/" target="_blank" rel="noreferrer">
+        {view.label}
+      </a>
+      {view.syncing && <em> · syncing…</em>}
+      {view.failed && <b className="cal-sync-error"> · Google Calendar sync failed</b>}
     </span>
   );
 }

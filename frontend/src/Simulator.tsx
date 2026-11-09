@@ -545,6 +545,8 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
               today={calendar?.today}
               busy={googleBusy}
               noticeOpen={googleNoticeOpen}
+              message={googleMessage}
+              onDismissMessage={() => setGoogleMessage(undefined)}
               onOpenNotice={() => {
                 setGoogleMessage(undefined);
                 setGoogleNoticeOpen(true);
@@ -571,7 +573,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
                 daveTyping={false}
                 daveOpen={daveOpen}
                 daveUnread={unreadCount(shownDave.length, daveSeenCount)}
-                calendarNote={<GoogleSyncNote status={calendar?.google} message={googleMessage} />}
+                calendarNote={<GoogleSyncNote status={calendar?.google} />}
                 onToggleDave={() => {
                   if (!daveOpen) loadCalendar();
                   setDaveOpen(!daveOpen);
