@@ -99,7 +99,8 @@ function TourMap({ areas }: { areas: readonly TourArea[] }) {
         <text x="11" y="14.5" className="label strong">
           Dave's Lawn Desk
         </text>
-        <rect className="mark" x="82" y="9" width="20" height="6" rx="3" />
+        <rect className="mark" x="82" y="10" width="40" height="4" rx="2" />
+        <rect className="mark" x="128" y="9" width="20" height="6" rx="3" />
         <rect className="mark" x="196" y="9.5" width="30" height="5" rx="2" />
         <rect className="mark" x="232" y="9" width="24" height="6" rx="3" />
         <rect className="mark" x="262" y="9.5" width="48" height="5" rx="2" />

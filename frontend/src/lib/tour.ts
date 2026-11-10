@@ -101,7 +101,7 @@ export const TOUR_SLIDES: readonly TourSlide[] = [
     lines: [
       "Docked at the bottom: the desk's tool calls and reasoning for the conversation on screen, so you can see why it answered as it did.",
       'Click its head to open it, and drag its top edge to resize it.',
-      'How it works, beside the title, brings these slides back anytime.',
+      'How it works, at the end of the title in the header, brings these slides back anytime.',
     ],
     areas: ['log'],
   },

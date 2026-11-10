@@ -438,6 +438,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
       <header className="app-header">
         <div className="brand">
           <h1>Dave's Lawn Desk</h1>
+          <span className="subtitle">Text-message booking simulator</span>
           <button type="button" className="tour-btn" title="What the demo is and where everything is" onClick={() => setTourOpen(true)}>
             <svg viewBox="0 0 16 16" aria-hidden="true">
               <circle cx="8" cy="8" r="6.5" />
@@ -445,7 +446,6 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
             </svg>
             How it works
           </button>
-          <span className="subtitle">Text-message booking simulator</span>
         </div>
         {calendar && (
           <div className="today">
