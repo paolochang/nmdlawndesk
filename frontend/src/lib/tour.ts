@@ -39,7 +39,7 @@ export const TOUR_SLIDES: readonly TourSlide[] = [
     id: 'header',
     title: 'The header',
     lines: [
-      "Your nickname has its own copy of Dave's calendar. Today is Dave's date, in his time zone.",
+      "Under your Nomad Coders username, you have your own test environment of Dave's Lawn Desk and calendar. Today is Dave's date, in his time zone.",
       'Reset all gives Dave a new schedule and starts fresh conversations.',
       'Cust. / Both / Dave choose which side you see. A hidden side is blurred, so you only know what that person would.',
     ],
