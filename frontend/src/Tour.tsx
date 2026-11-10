@@ -14,6 +14,7 @@ interface Props {
 export function Tour({ onClose }: Props) {
   const dialog = useRef<HTMLDialogElement>(null);
   const next = useRef<HTMLButtonElement>(null);
+  const skip = useRef<HTMLButtonElement>(null);
   const [index, setIndex] = useState(0);
   const slide = TOUR_SLIDES[index];
   const last = index === TOUR_SLIDES.length - 1;
@@ -27,11 +28,16 @@ export function Tour({ onClose }: Props) {
     }
   }, []);
   // Back is disabled on the first slide and Skip is hidden on the last; focus held
-  // there would fall out of the dialog.
+  // there would fall out of the dialog. A hidden Skip is still mounted and enabled,
+  // so it is named here: the browser moves focus off it only later, to the page.
   useEffect(() => {
     const active = document.activeElement;
-    if (!dialog.current?.contains(active) || (active instanceof HTMLButtonElement && active.disabled)) next.current?.focus();
-  }, [index]);
+    const stranded =
+      !dialog.current?.contains(active) ||
+      (active instanceof HTMLButtonElement && active.disabled) ||
+      (last && active === skip.current);
+    if (stranded) next.current?.focus();
+  }, [index, last]);
 
   const close = () => dialog.current?.close();
   const go = (to: number) => setIndex(Math.max(0, Math.min(TOUR_SLIDES.length - 1, to)));
@@ -48,7 +54,7 @@ export function Tour({ onClose }: Props) {
       <div className="tour-head">
         <h2 id="tour-name">Onboarding</h2>
         {/* Hidden, not removed, on the last slide, so the title row keeps its height. */}
-        <button type="button" className="tour-skip" style={last ? { visibility: 'hidden' } : undefined} onClick={close}>
+        <button type="button" className="tour-skip" ref={skip} style={last ? { visibility: 'hidden' } : undefined} onClick={close}>
           Skip
         </button>
       </div>
