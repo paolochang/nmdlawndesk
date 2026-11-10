@@ -153,7 +153,7 @@ export class VisitorLedger {
 		if (typeof phone === 'string') {
 			const texts = state.texts?.[phone] ?? [];
 			if (!nameTexted(texts, name, address)) return { ok: false, reason: 'name-not-texted' };
-			if (!addressTexted(texts, address)) return { ok: false, reason: 'address-not-texted' };
+			if (!addressTexted(texts, address, town)) return { ok: false, reason: 'address-not-texted' };
 		}
 		let q: ReturnType<typeof quote>;
 		let check: SlotCheck;

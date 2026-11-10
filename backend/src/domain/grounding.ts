@@ -46,8 +46,17 @@ export function nameTexted(texts: readonly string[], name: string, address = '')
 
 /**
  * The street address, word for word and in order, appears in one of the customer's
- * texts; `Rd` and `Road` (and the other street types) count as the same word.
+ * texts; `Rd` and `Road` (and the other street types) count as the same word. A
+ * `town` the desk wrote after the street is left out: the town is checked on its own,
+ * and may be spelled right where the customer misspelled it (owner E2E).
  */
-export function addressTexted(texts: readonly string[], address: string): boolean {
-	return inOneText(texts, words(address).map(streetForm), streetForm);
+export function addressTexted(texts: readonly string[], address: string, town = ''): boolean {
+	const street = words(address);
+	const townWords = words(town);
+	const tail = street.slice(-townWords.length);
+	const withoutTown =
+		townWords.length && street.length > townWords.length && tail.every((word, i) => word === townWords[i])
+			? street.slice(0, -townWords.length)
+			: street;
+	return inOneText(texts, withoutTown.map(streetForm), streetForm);
 }
