@@ -369,8 +369,9 @@ button.danger { background: var(--err); border-color: var(--err); color: var(--s
 .tour::backdrop { background: rgb(0 0 0 / 0.45); }
 .tour-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 0 0 12px; }
 .tour-head h2 { font-size: 1.2rem; }
-.tour h3 { font-size: 1.15rem; margin: 2px 0 8px; }
-.tour-step { margin: 14px 0 0; font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tour-title-row { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin: 14px 0 8px; }
+.tour h3 { font-size: 1.15rem; margin: 0; }
+.tour-step { flex: none; margin: 0; font-size: 0.85rem; color: var(--muted); font-variant-numeric: tabular-nums; }
 .tour-lines { min-height: 8em; }
 .tour-lines p { margin: 0 0 8px; line-height: 1.5; font-size: 0.92rem; }
 .tour-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px; }

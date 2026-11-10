@@ -55,10 +55,12 @@ export function Tour({ onClose }: Props) {
       <TourMap areas={slide.areas} />
       {/* Announces the new slide; the dialog's label and description are read only when it opens. */}
       <div aria-live="polite">
-        <p className="tour-step">
-          {index + 1} / {TOUR_SLIDES.length}
-        </p>
-        <h3 id="tour-title">{slide.title}</h3>
+        <div className="tour-title-row">
+          <h3 id="tour-title">{slide.title}</h3>
+          <p className="tour-step">
+            {index + 1} / {TOUR_SLIDES.length}
+          </p>
+        </div>
         <div id="tour-lines" className="tour-lines">
           {slide.lines.map((line) => (
             <p key={line}>{line}</p>
