@@ -4,7 +4,7 @@ import timeGridPlugin from '@fullcalendar/react/timegrid';
 import '@fullcalendar/react/skeleton.css';
 import '@fullcalendar/react/themes/classic/theme.css';
 import '@fullcalendar/react/themes/classic/palette.css';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { calendarWindow, dayLabel, toEvents, type CalendarBooking } from './lib/calendar.ts';
 import { hoursNote, priceNote, priceRows, townDays, type DaveConfig } from './lib/config.ts';
 import type { Bubble } from './lib/transcript.ts';
@@ -17,6 +17,8 @@ interface CalendarProps {
   bookings: readonly CalendarBooking[];
   /** The booking that just landed: the calendar moves to its week and animates it. */
   landingId: string | undefined;
+  /** Shown beside the week title (Google Calendar sync status). */
+  note?: ReactNode;
 }
 
 const GROUP_CLASS = ['group-a', 'group-b'];
@@ -29,7 +31,7 @@ function weekTitle(start: Date | undefined): string {
 
 // Dave's week (build-plan §7): Mon-Fri, opening hours only, within the weeks the
 // desk can book into. Each day says which towns Dave mows; Wednesday is off.
-function DaveCalendar({ config, today, bookings, landingId }: CalendarProps) {
+function DaveCalendar({ config, today, bookings, landingId, note }: CalendarProps) {
   const calendar = useRef<CalendarRef>(null);
   const range = useMemo(() => calendarWindow(config, today, bookings), [config, today, bookings]);
   const events = useMemo(() => toEvents(bookings, config, landingId), [bookings, config, landingId]);
@@ -49,6 +51,7 @@ function DaveCalendar({ config, today, bookings, landingId }: CalendarProps) {
     <div className="dave-calendar">
       <div className="cal-top">
         <h3>{weekTitle(shown?.start)}</h3>
+        {note}
         <button type="button" aria-label="Previous week" disabled={atStart} onClick={() => calendar.current?.getApi().prev()}>
           ‹
         </button>
@@ -219,9 +222,11 @@ interface Props {
   /** New texts since the phone was last opened (the button's badge). */
   daveUnread: number;
   onToggleDave: () => void;
+  /** Google Calendar sync status (build-plan §14), beside the calendar's title. */
+  calendarNote?: ReactNode;
 }
 
-export function DavePanel({ config, failed, bookings, today, landingId, daveBubbles, daveTyping, daveOpen, daveUnread, onToggleDave }: Props) {
+export function DavePanel({ config, failed, bookings, today, landingId, daveBubbles, daveTyping, daveOpen, daveUnread, onToggleDave, calendarNote }: Props) {
   if (!config || !bookings || !today) {
     return (
       <p className="placeholder dave-placeholder">
@@ -233,7 +238,7 @@ export function DavePanel({ config, failed, bookings, today, landingId, daveBubb
   return (
     <>
       <div className="dave-body">
-        <DaveCalendar config={config} today={today} bookings={bookings} landingId={landingId} />
+        <DaveCalendar config={config} today={today} bookings={bookings} landingId={landingId} note={calendarNote} />
         <RulesTables config={config} />
       </div>
       {daveOpen && <DavePhone bubbles={daveBubbles} typing={daveTyping} />}

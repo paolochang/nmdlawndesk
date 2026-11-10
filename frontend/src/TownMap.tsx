@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { townDays, townGroup, type DaveConfig } from './lib/config.ts';
 import type { Focus } from './lib/layout.ts';
 import { mapCaption, ROADS, TOWN_POSITIONS, townMap } from './lib/town-map.ts';
@@ -6,15 +7,37 @@ interface Props {
   focus: Focus;
   customer: { street: string; town: string };
   config: DaveConfig | undefined;
+  /** Wrapped under the customer details: the map folds behind a Show map toggle. */
+  stacked?: boolean;
 }
 
 // A fictional map of every town (build-plan §7), the customer's own marked "You".
 // Once Dave's side is open, the towns take his weekday colours.
-export function TownMap({ focus, customer, config }: Props) {
+export function TownMap({ focus, customer, config, stacked = false }: Props) {
   const view = townMap(focus, customer.town, config);
+  const [open, setOpen] = useState(false);
+  if (stacked && !open) {
+    return (
+      <figure className="town-map folded">
+        <div className="town-map-top">
+          <h3>Your location</h3>
+          <button type="button" aria-expanded="false" onClick={() => setOpen(true)}>
+            Show map
+          </button>
+        </div>
+      </figure>
+    );
+  }
   return (
     <figure className="town-map">
-      <h3>Your location</h3>
+      <div className="town-map-top">
+        <h3>Your location</h3>
+        {stacked && (
+          <button type="button" aria-expanded="true" onClick={() => setOpen(false)}>
+            Hide map
+          </button>
+        )}
+      </div>
       <svg viewBox="0 0 320 214" role="img" aria-label={`Map of the towns; the customer lives in ${customer.town}`}>
         {ROADS.map(([from, to]) => {
           const a = TOWN_POSITIONS[from];

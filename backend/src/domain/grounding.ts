@@ -46,8 +46,23 @@ export function nameTexted(texts: readonly string[], name: string, address = '')
 
 /**
  * The street address, word for word and in order, appears in one of the customer's
- * texts; `Rd` and `Road` (and the other street types) count as the same word.
+ * texts; `Rd` and `Road` (and the other street types) count as the same word. A
+ * `town` the desk wrote after the street is left out: the town is checked on its own,
+ * and may be spelled right where the customer misspelled it (owner E2E).
  */
-export function addressTexted(texts: readonly string[], address: string): boolean {
-	return inOneText(texts, words(address).map(streetForm), streetForm);
+export function addressTexted(texts: readonly string[], address: string, town = ''): boolean {
+	const street = words(address);
+	const townWords = words(town);
+	const tail = street.slice(-townWords.length);
+	const head = street.slice(0, -townWords.length);
+	const townLeftOut = townWords.length > 0 && tail.every((word, i) => word === townWords[i]) && isStreet(head);
+	return inOneText(texts, (townLeftOut ? head : street).map(streetForm), streetForm);
+}
+
+/**
+ * A house number, a street name, and a street type (`45 Oak Rd`): only then is a town
+ * after it left out, so a size or a stray number never stands in for a street.
+ */
+function isStreet(street: readonly string[]): boolean {
+	return street.length >= 3 && /^\d+[a-z]?$/.test(street[0]) && Object.hasOwn(STREET_TYPES, street.at(-1)!);
 }

@@ -63,3 +63,16 @@ export function mapCaption(customer: { street: string; town: string }, config: D
   if (!group) return `${address} · not one of Dave's towns`;
   return `${address} · Dave mows here on ${group.weekdays.map((day) => WEEKDAYS[day]).join(', ')}`;
 }
+
+/** `.persona-body`'s columns: `repeat(auto-fit, minmax(240px, 1fr))` with a 16px gap. */
+const PERSONA_COLUMN_MIN = 240;
+const PERSONA_GAP = 16;
+
+/**
+ * Whether the customer card is too narrow for the details and the map side by side, so
+ * the map wraps under the details (as when both sides are open). Then the map starts
+ * folded, leaving the suggested replies and booking status in view (owner E2E).
+ */
+export function mapStacked(cardBodyWidth: number): boolean {
+  return cardBodyWidth < PERSONA_COLUMN_MIN * 2 + PERSONA_GAP;
+}

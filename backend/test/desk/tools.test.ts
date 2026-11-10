@@ -212,11 +212,23 @@ describe('desk tools', () => {
 	describe('handoffToDave', () => {
 		it("texts Dave the reason and the customer's own texts, and gives the customer reply", async () => {
 			const { call, daveTexts } = setup(1, SUNDAY, ['How much for my 2 acre lot at 9 Hill Rd, Ashford?']);
-			const output = await call('handoffToDave', { reason: 'yard-over-1-acre' });
+			const output = await call('handoffToDave', { reason: 'yard-over-1-acre', acres: 2 });
 			expect(daveTexts()).toEqual([
 				'Please call +15550101 (yard over 1 acre). They texted: "How much for my 2 acre lot at 9 Hill Rd, Ashford?"',
 			]);
 			expect(output).toMatchObject({ ok: true, reply: handoffReply('yard-over-1-acre') });
+		});
+
+		it('refuses an over-1-acre handoff for a yard of 1 acre or less, and says to quote it (owner E2E, PR 9)', async () => {
+			// Owner E2E 2026-11-09: "hw much 2 mow 1 acre at 6 heath rd dunmor?" was handed to Dave as over 1 acre.
+			const { call, daveTexts } = setup(1, SUNDAY, ['hw much 2 mow 1 acre at 6 heath rd dunmor?']);
+			for (const acres of [1, 0.5]) {
+				const output = await call('handoffToDave', { reason: 'yard-over-1-acre', acres });
+				expect(output).toMatchObject({ ok: false, reason: 'not-over-1-acre' });
+				expect((output as { next: string }).next).toMatch(/Call quoteJob/);
+			}
+			expect(await call('handoffToDave', { reason: 'yard-over-1-acre' })).toMatchObject({ ok: false, reason: 'missing-acres' });
+			expect(daveTexts()).toEqual([]);
 		});
 
 		it('refuses a handoff from a conversation of an older generation', async () => {

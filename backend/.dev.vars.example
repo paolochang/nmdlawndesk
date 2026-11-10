@@ -3,3 +3,7 @@
 # SECRET must never be rotated during the demo: it derives every visitorId.
 SECRET="change-me-local-dev-secret"
 ACCESS_CODE="change-me-local-code"
+# Optional: Google OAuth client for Calendar sync (build-plan §14). Without them,
+# Connect Google Calendar answers 503 and everything else works.
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=

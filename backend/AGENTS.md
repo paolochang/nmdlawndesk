@@ -7,6 +7,7 @@ This is a [Flue](https://flueframework.com) project: agents are TypeScript funct
 - `src/agents/` — agent modules. A module whose first line is the `'use agent'` directive exports agents: every exported capitalized function is one, and the function name is its durable identity. `LawnDesk` serves customer conversations; `DavePhone` only keeps Dave conversations from before build-plan §13 readable (Dave's texts now live in the visitor store). Both only wire `src/desk/`.
 - `src/desk/` — the agent's tools (`deskTools`), prompts, and the conversation-id guard. Plain modules, tested in Node with fakes.
 - `src/domain/` — pure business rules (no I/O); `src/store/` — the per-visitor `VisitorStore` Durable Object.
+- `src/google/` — Google Calendar sync into the reviewer's own account (build-plan §14): OAuth with a signed state, the sealed refresh token, and `GoogleLink`, which reconciles the two-week window; `VisitorStore` starts its syncs in `waitUntil`.
 - `src/app.ts` — the route map; every route is mounted here explicitly.
 - `src/cloudflare.ts` — Worker-level exports and non-HTTP handlers.
 - `wrangler.jsonc` — Worker config; every agent needs a Durable Object migration entry.
@@ -25,5 +26,6 @@ This is a [Flue](https://flueframework.com) project: agents are TypeScript funct
 ## Auth and local secrets
 
 - Local dev reads `SECRET` and `ACCESS_CODE` from `.dev.vars` (gitignored); copy `.dev.vars.example`. Production uses `npx wrangler secret put`.
+- `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` (optional, same places) enable Connect Google Calendar; without them Connect answers 503. The OAuth client's redirect URI must be `<origin>/api/google/callback` for each origin (local `http://localhost:5180`).
 - `src/auth/` holds sign-in (`POST /api/auth`) and the 401/403/429 guard; `mountAuth(...)` must stay before every `app.route(...)` in `src/app.ts`.
 - Never commit a nickname list or generated allowlist JSON.

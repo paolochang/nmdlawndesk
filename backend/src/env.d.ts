@@ -10,5 +10,8 @@ declare namespace Cloudflare {
 		SECRET: string;
 		/** Secret: the shared access code reviewers type at sign-in. */
 		ACCESS_CODE: string;
+		/** Secret, optional: Google OAuth client for Calendar sync (build-plan §14). Unset → Connect answers 503. */
+		GOOGLE_CLIENT_ID?: string;
+		GOOGLE_CLIENT_SECRET?: string;
 	}
 }

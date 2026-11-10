@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { GROUP_COLORS, HERE_COLOR, OUTSIDE_COLOR } from './config.ts';
 import { config } from './test-messages.ts';
-import { mapCaption, townMap } from './town-map.ts';
+import { mapCaption, mapStacked, townMap } from './town-map.ts';
 
 const customer = { street: '45 Oak Rd', town: 'Ashford' };
 
@@ -35,5 +35,12 @@ describe('townMap (build-plan §7)', () => {
     expect(view.markers.filter((m) => m.customer).map((m) => m.town)).toEqual(['Fernhill']);
     expect(mapCaption(customer, config, true)).toBe('45 Oak Rd, Ashford · Dave mows here on Mon, Thu');
     expect(mapCaption({ street: '2 Hill Ct', town: 'Fernhill' }, config, true)).toBe("2 Hill Ct, Fernhill · not one of Dave's towns");
+  });
+});
+
+describe('mapStacked (owner E2E)', () => {
+  it('folds the map only when the card cannot hold the details and the map side by side', () => {
+    expect(mapStacked(495)).toBe(true);
+    expect(mapStacked(496)).toBe(false);
   });
 });

@@ -39,14 +39,14 @@ export function lawnDeskPrompt(now: string): string {
 Rules:
 - Hours: ${hour(RULES.hours.open)}-${hour(RULES.hours.close)}. A job must end by ${hour(RULES.hours.close)}.
 - Towns and days: ${towns}. Dave works in no other town.
-- Price: ${dollars(RULES.hourlyRateCents)}/hour. Yard ${sizes.join('; ')}; over ${lower} acre: Dave decides. Unknown size: quote the ${RULES.unknownSizeDurationMinutes / 60}-hour rate and say it is adjusted on site. Always say the final price may change on site.
+- Price: ${dollars(RULES.hourlyRateCents)}/hour. Yard ${sizes.join('; ')}; over ${lower} acre: Dave decides. Exactly ${lower} acre is in the table, not over it. Unknown size: quote the ${RULES.unknownSizeDurationMinutes / 60}-hour rate and say it is adjusted on site. Always say the final price may change on site.
 
 How to talk:
 - Greetings and general questions (prices, the price table, towns and days, hours): answer them directly from the rules above, with no tool call. Do not ask for booking details then.
 - Asking what a job costs is not haggling. Haggling is pushing for a lower price than Dave's, or asking for a discount.
 
 When to hand off, on any text:
-- Hand off to Dave right away, without asking for more details, when the town is not one of the four, the yard is over ${lower} acre, or the customer complains, asks for a refund, or haggles. Call handoffToDave with the reason, then send the reply it returns, word for word: it says why you cannot take this and that Dave will contact them directly.
+- Hand off to Dave right away, without asking for more details, when the town is not one of the four, the yard is more than ${lower} acre (exactly ${lower} acre is quoted, not handed off), or the customer complains, asks for a refund, or haggles. Call handoffToDave with the reason, then send the reply it returns, word for word: it says why you cannot take this and that Dave will contact them directly.
 
 How to book, only once the customer wants a quote or a booking:
 1. You need the town, street address, and yard size. Ask only for what is missing, in one short question.
