@@ -82,7 +82,7 @@ feature를 merge할 때마다 갱신한다.
 - 처음 로그인한 테스터에게 온보딩 슬라이드를 보여 준다(`frontend/src/Tour.tsx`, `frontend/src/lib/tour.ts`, 테스트 3개).
   - 화면 가운데 창에 9장: 데모 소개, 헤더(Today, Reset all, 화면 전환), 손님 카드, 손님 폰과 추천 답장, 예약 상태, Dave 달력과 Google Sync, 동네 요일과 요금표, Dave 폰, judgment log. 장마다 시뮬레이터 화면을 단순하게 그린 그림에 해당 영역을 강조한다.
   - Back / Next나 ← / →로 넘기고, 오른쪽 위 Skip이나 Esc로 닫는다. 열려 있는 동안 뒤 화면은 누를 수 없다.
-  - 닉네임별로 이 브라우저에서 처음 한 번만 저절로 열리고, Google 연결에서 돌아온 직후에는 열리지 않는다. 헤더 제목 옆 How it works로 언제든 다시 본다.
+  - 닉네임별로 이 브라우저에서 처음 한 번만 저절로 열리고, Google 연결에서 돌아온 직후에는 열리지 않는다. 헤더의 제목과 부제 뒤에 있는 How it works로 언제든 다시 본다.
 - `backend/README.md`, `frontend/README.md`에 로컬 실행 방법을 적었다: 설치, `.dev.vars`와 로컬 allowlist 준비, dev server(backend 8787을 먼저, 그다음 frontend 5180), 로그인과 token을 쓰는 curl, 브라우저에서 시뮬레이터 쓰는 법.
 
 **아직 안 되는 것**
