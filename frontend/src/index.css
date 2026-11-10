@@ -363,7 +363,7 @@ button.danger { background: var(--err); border-color: var(--err); color: var(--s
 .cal-sync-error { color: var(--err); font-weight: 600; }
 
 /* Onboarding slides (build-plan §15): a modal with a schematic of the screen */
-.tour-btn { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 2px 10px; font-size: 0.85rem; color: var(--muted); }
+.tour-btn { align-self: center; display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 2px 10px; font-size: 0.85rem; color: var(--muted); }
 .tour-btn svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; }
 .tour { width: min(540px, calc(100vw - 32px)); border: 1px solid var(--line); border-radius: 16px; padding: 18px 22px 20px; background: var(--surface); color: var(--ink); }
 .tour::backdrop { background: rgb(0 0 0 / 0.45); }

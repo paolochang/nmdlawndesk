@@ -46,14 +46,17 @@ export function Tour({ onClose }: Props) {
   return (
     <dialog ref={dialog} className="tour" aria-labelledby="tour-title" aria-describedby="tour-lines" onClose={onClose} onKeyDown={onKeyDown}>
       <TourMap areas={slide.areas} />
-      <p className="tour-step">
-        {index + 1} / {TOUR_SLIDES.length}
-      </p>
-      <h2 id="tour-title">{slide.title}</h2>
-      <div id="tour-lines" className="tour-lines">
-        {slide.lines.map((line) => (
-          <p key={line}>{line}</p>
-        ))}
+      {/* Announces the new slide; the dialog's label and description are read only when it opens. */}
+      <div aria-live="polite">
+        <p className="tour-step">
+          {index + 1} / {TOUR_SLIDES.length}
+        </p>
+        <h2 id="tour-title">{slide.title}</h2>
+        <div id="tour-lines" className="tour-lines">
+          {slide.lines.map((line) => (
+            <p key={line}>{line}</p>
+          ))}
+        </div>
       </div>
       <div className="tour-actions">
         {!last && (
@@ -86,7 +89,7 @@ function TourMap({ areas }: { areas: readonly TourArea[] }) {
         <text x="11" y="14.5" className="label strong">
           Dave's Lawn Desk
         </text>
-        <rect className="mark" x="74" y="9" width="20" height="6" rx="3" />
+        <rect className="mark" x="82" y="9" width="20" height="6" rx="3" />
         <rect className="mark" x="196" y="9.5" width="30" height="5" rx="2" />
         <rect className="mark" x="232" y="9" width="24" height="6" rx="3" />
         <rect className="mark" x="262" y="9.5" width="48" height="5" rx="2" />

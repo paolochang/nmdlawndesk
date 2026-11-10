@@ -39,7 +39,7 @@ export const TOUR_SLIDES: readonly TourSlide[] = [
     id: 'header',
     title: 'The header',
     lines: [
-      "Your nickname has its own copy of Dave's calendar. Today is Dave's date in New York.",
+      "Your nickname has its own copy of Dave's calendar. Today is Dave's date, in his time zone.",
       'Reset all gives Dave a new schedule and starts fresh conversations.',
       'Cust. / Both / Dave choose which side you see. A hidden side is blurred, so you only know what that person would.',
     ],
@@ -101,6 +101,7 @@ export const TOUR_SLIDES: readonly TourSlide[] = [
     lines: [
       "Docked at the bottom: the desk's tool calls and reasoning for the conversation on screen, so you can see why it answered as it did.",
       'Click its head to open it, and drag its top edge to resize it.',
+      'How it works, beside the title, brings these slides back anytime.',
     ],
     areas: ['log'],
   },
@@ -128,6 +129,6 @@ export function markTourSeen(storage: KeyValueStorage, visitorId: string): void 
   try {
     storage.setItem(`${TOUR_KEY}:${visitorId}`, 'seen');
   } catch {
-    // A per-viewer convenience: the slides may open once more.
+    // A per-viewer convenience: while storage refuses writes, the slides open on every load.
   }
 }
