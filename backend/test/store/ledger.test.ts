@@ -248,6 +248,15 @@ describe('VisitorLedger chat-only bookings (build-plan §13)', () => {
 		expect(ledger.add({ ...booking, address: '46 Oak Rd Ashford', start: '2026-11-30T10:00' })).toEqual({ ok: false, reason: 'address-not-texted' });
 	});
 
+	// Post-E2E review (Codex P2): leaving the town out must not ground a street the customer never texted.
+	it.each(['1 Ashford', '1 acre Ashford', '2 mow Ashford'])('refuses %s when the customer texted only a name, a size, and the town', (address) => {
+		const ledger = texted("I'm Maya, hw much 2 mow 1 acre in Ashford");
+		expect(ledger.add({ ...request, phone, name: 'Maya', town: 'Ashford', start: '2026-11-23T10:00', address })).toEqual({
+			ok: false,
+			reason: 'address-not-texted',
+		});
+	});
+
 	it('keeps texts only for the current generation, and a reset forgets them and Dave’s texts', () => {
 		const ledger = texted("I'm Sarah Lee, 45 Oak Rd");
 		ledger.addCustomerText(phone, 'from an old tab', 0);
