@@ -124,7 +124,7 @@ export function tourOpensItself(storage: KeyValueStorage, visitorId: string, goo
   }
 }
 
-/** Any close (the last slide, Skip tour, Esc) marks the slides seen for this visitor. */
+/** Any close (the last slide, Skip, Esc) marks the slides seen for this visitor. */
 export function markTourSeen(storage: KeyValueStorage, visitorId: string): void {
   try {
     storage.setItem(`${TOUR_KEY}:${visitorId}`, 'seen');

@@ -26,7 +26,7 @@ export function Tour({ onClose }: Props) {
       next.current?.focus();
     }
   }, []);
-  // Back is disabled on the first slide and Skip tour leaves on the last; focus held
+  // Back is disabled on the first slide and Skip is hidden on the last; focus held
   // there would fall out of the dialog.
   useEffect(() => {
     const active = document.activeElement;
@@ -44,14 +44,21 @@ export function Tour({ onClose }: Props) {
   }
 
   return (
-    <dialog ref={dialog} className="tour" aria-labelledby="tour-title" aria-describedby="tour-lines" onClose={onClose} onKeyDown={onKeyDown}>
+    <dialog ref={dialog} className="tour" aria-labelledby="tour-name tour-title" aria-describedby="tour-lines" onClose={onClose} onKeyDown={onKeyDown}>
+      <div className="tour-head">
+        <h2 id="tour-name">Onboarding</h2>
+        {/* Hidden, not removed, on the last slide, so the title row keeps its height. */}
+        <button type="button" className="tour-skip" style={last ? { visibility: 'hidden' } : undefined} onClick={close}>
+          Skip
+        </button>
+      </div>
       <TourMap areas={slide.areas} />
       {/* Announces the new slide; the dialog's label and description are read only when it opens. */}
       <div aria-live="polite">
         <p className="tour-step">
           {index + 1} / {TOUR_SLIDES.length}
         </p>
-        <h2 id="tour-title">{slide.title}</h2>
+        <h3 id="tour-title">{slide.title}</h3>
         <div id="tour-lines" className="tour-lines">
           {slide.lines.map((line) => (
             <p key={line}>{line}</p>
@@ -59,11 +66,6 @@ export function Tour({ onClose }: Props) {
         </div>
       </div>
       <div className="tour-actions">
-        {!last && (
-          <button type="button" className="tour-skip" onClick={close}>
-            Skip tour
-          </button>
-        )}
         <button type="button" disabled={index === 0} onClick={() => go(index - 1)}>
           Back
         </button>
