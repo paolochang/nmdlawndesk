@@ -9,6 +9,7 @@ import { GoogleSyncButton, GoogleSyncNote } from './GoogleSync.tsx';
 import { JudgmentLog } from './JudgmentLog.tsx';
 import { BookingStatusCard, SuggestedReplies } from './SidePanels.tsx';
 import { TownMap } from './TownMap.tsx';
+import { Tour } from './Tour.tsx';
 import {
   fetchCalendar,
   fetchConfig,
@@ -39,6 +40,7 @@ import {
 import { failedSendView, sendFailure, type Session } from './lib/session.ts';
 import { bookingStatus, settledStatus, textedStatus, type BookingStatus } from './lib/status.ts';
 import { conversationStage, repliesNow } from './lib/suggestions.ts';
+import { markTourSeen, tourOpensItself } from './lib/tour.ts';
 import { isTyping, replyFailed, toBubbles, toJudgmentLog } from './lib/transcript.ts';
 
 const LOAD_FAILED = "Could not load Dave's calendar. Reload the page to try again.";
@@ -97,6 +99,12 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
   // Back from Google's consent (build-plan §14): open on Dave's side, where the result shows.
   const [googleReturned] = useState(() => googleReturn(window.location.href));
   const [focus, setFocus] = useState<Focus>(googleReturned ? 'dave' : 'customer');
+  // Onboarding slides (build-plan §15): once per nickname in this browser, then from the header.
+  const [tourOpen, setTourOpen] = useState(() => tourOpensItself(localStorage, session.visitorId, googleReturned !== undefined));
+  const closeTour = useCallback(() => {
+    markTourSeen(localStorage, session.visitorId);
+    setTourOpen(false);
+  }, [session.visitorId]);
   const [notice, setNotice] = useState<string>();
   const [draft, setDraft] = useState('');
 
@@ -431,6 +439,13 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
         <div className="brand">
           <h1>Dave's Lawn Desk</h1>
           <span className="subtitle">Text-message booking simulator</span>
+          <button type="button" className="tour-btn" title="What the demo is and where everything is" onClick={() => setTourOpen(true)}>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.5" />
+              <path d="M6.2 6.3a1.9 1.9 0 1 1 2.6 1.8c-.5.2-.8.6-.8 1.1v.4M8 11.6v.1" />
+            </svg>
+            How it works
+          </button>
         </div>
         {calendar && (
           <div className="today">
@@ -600,6 +615,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
         </section>
       </main>
       <JudgmentLog entries={log} conversation={url} historyReady={agent.historyReady} />
+      {tourOpen && <Tour onClose={closeTour} />}
     </div>
   );
 }
