@@ -84,24 +84,53 @@ export function clockTime(iso: string | undefined): string | undefined {
 /** The longest reasoning summary, in characters (build-plan §17). */
 export const SUMMARY_MAX = 120;
 
-/**
- * One line for a reasoning row: the first sentence of a finished thought, or the
- * latest line of one still streaming, with think tags dropped, whitespace collapsed,
- * and clipped to `SUMMARY_MAX` characters with "…" (build-plan §17).
- */
-export function reasoningSummary(text: string, done: boolean): string {
-  const lines = text
-    .replace(/<\/?think>/gi, ' ')
-    .split('\n')
-    .map((line) => line.replace(/\s+/g, ' ').trim())
-    .filter(Boolean);
-  if (lines.length === 0) return '';
-  let line: string;
-  if (done) {
-    const flat = lines.join(' ');
-    line = /^.+?[.!?](?=\s|$)/.exec(flat)?.[0] ?? flat;
-  } else {
-    line = lines[lines.length - 1];
+/** What a reasoning row shows: one line, the whole thought, and whether there is more than the line. */
+export interface ReasoningView {
+  summary: string;
+  full: string;
+  more: boolean;
+}
+
+/** Words a period can follow without ending the sentence ("12 Oak St. in Ashford", "10 a.m. Tuesday"). */
+const NO_SENTENCE_END = new Set(['st', 'rd', 'ave', 'dr', 'ln', 'ct', 'blvd', 'mr', 'mrs', 'ms', 'a.m', 'p.m', 'e.g', 'i.e', 'etc', 'vs', 'approx', 'no']);
+/** A first "sentence" shorter than this is a label ("Plan:", "1."), so the summary runs on. */
+const MIN_SENTENCE = 20;
+
+/** One line of the thought without list markers, headings, or markdown emphasis. */
+function plainLine(line: string): string {
+  return line
+    .replace(/^\s*(?:#+\s*|(?:\d+[.)]|[-*•])\s+)/, '')
+    .replace(/\*\*|__|`/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** The first sentence end that is not an abbreviation, a number, or a too-short label. */
+function firstSentence(flat: string): string {
+  for (const match of flat.matchAll(/[.!?](?=\s|$)/g)) {
+    const end = match.index + 1;
+    const word = /(\S+)$/.exec(flat.slice(0, match.index))?.[1].toLowerCase() ?? '';
+    if (NO_SENTENCE_END.has(word.replace(/\.$/, '')) || /^\d+$|^[a-z]$/.test(word) || end < MIN_SENTENCE) continue;
+    return flat.slice(0, end);
   }
-  return line.length > SUMMARY_MAX ? `${line.slice(0, SUMMARY_MAX - 1).trimEnd()}…` : line;
+  return flat;
+}
+
+const clipEnd = (line: string) => (line.length > SUMMARY_MAX ? `${line.slice(0, SUMMARY_MAX - 1).trimEnd()}…` : line);
+const clipStart = (line: string) => (line.length > SUMMARY_MAX ? `…${line.slice(line.length - SUMMARY_MAX + 1).trimStart()}` : line);
+
+/**
+ * A reasoning row (build-plan §17). Think tags are dropped once, for both the line and
+ * the whole thought. A finished thought shows its first sentence; one still streaming
+ * shows its latest line, ending at the newest words. Either is clipped to
+ * `SUMMARY_MAX` characters, and `more` says the whole thought has more to show.
+ */
+export function reasoningView(text: string, done: boolean): ReasoningView {
+  const full = text.replace(/<\/?think>/gi, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  const lines = full.split('\n').map(plainLine).filter(Boolean);
+  if (lines.length === 0) return { summary: '', full, more: false };
+  const last = lines.length - 1;
+  const flat = lines.map((line, i) => (i < last && !/[.!?:;,]$/.test(line) ? `${line};` : line)).join(' ');
+  const summary = done ? clipEnd(firstSentence(flat)) : clipStart(lines[last]);
+  return { summary, full, more: summary !== flat };
 }

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useStickToBottom } from './useStickToBottom.ts';
-import { clockTime, jsonLines, jsonTokens, reasoningSummary, withPrevious } from './lib/log-format.ts';
+import { clockTime, jsonLines, jsonTokens, reasoningView, withPrevious } from './lib/log-format.ts';
 import { clampLogHeight, LOG_DOCK_KEY, loadLogDock, type LogDock } from './lib/log-dock.ts';
 import { unreadCount } from './lib/reveal.ts';
 import type { JudgmentEntry } from './lib/transcript.ts';
@@ -38,14 +38,15 @@ function newSince(value: unknown, previous: unknown, label: string) {
   return added > 0 ? <span className="delta">+{added} new since the last {label}</span> : null;
 }
 
-/** A reasoning row: one line by default, the full thought when opened (build-plan §17). */
+/**
+ * A reasoning row: one line by default, the full thought when opened (build-plan §17).
+ * A thought with nothing more than its line wraps instead of clipping, since it has no toggle.
+ */
 function Thought({ text, done, open, onToggle }: { text: string; done: boolean; open: boolean; onToggle: () => void }) {
-  const summary = reasoningSummary(text, done);
-  const whole = text.replace(/<\/?think>/gi, '').trim();
-  const more = summary !== whole.replace(/\s+/g, ' ');
+  const { summary, full, more } = reasoningView(text, done);
   return (
     <div className="thought-wrap">
-      <p className={`thought${open ? '' : ' one-line'}`}>{open ? whole : summary}</p>
+      <p className={`thought${more && !open ? ' one-line' : ''}`}>{more && open ? full : summary}</p>
       {more && (
         <button type="button" className="thought-toggle" aria-expanded={open} onClick={onToggle}>
           {open ? 'Show less' : 'Show all'}

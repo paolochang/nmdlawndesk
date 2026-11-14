@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clockTime, jsonLines, jsonTokens, reasoningSummary, SUMMARY_MAX, withPrevious } from './log-format.ts';
+import { clockTime, jsonLines, jsonTokens, reasoningView, SUMMARY_MAX, withPrevious } from './log-format.ts';
 import type { JudgmentEntry } from './transcript.ts';
 
 describe('jsonLines (build-plan §7 judgment log)', () => {
@@ -67,18 +67,38 @@ describe('clockTime', () => {
   });
 });
 
-describe('reasoningSummary (build-plan §17)', () => {
+describe('reasoningView (build-plan §17)', () => {
   it('shows one line: the first sentence of a finished thought, without think tags, clipped with an ellipsis', () => {
-    expect(reasoningSummary('<think>The customer gave 0.5 acre in Ashford.\nSo quote first, then find slots.</think>', true)).toBe(
-      'The customer gave 0.5 acre in Ashford.',
-    );
-    const long = reasoningSummary(`${'word '.repeat(60)}end.`, true);
+    const view = reasoningView('<think>The customer gave 0.5 acre in Ashford.\nSo quote first, then find slots.</think>', true);
+    expect(view.summary).toBe('The customer gave 0.5 acre in Ashford.');
+    expect(view.full).toBe('The customer gave 0.5 acre in Ashford.\nSo quote first, then find slots.');
+    expect(view.more).toBe(true);
+    const long = reasoningView(`${'word '.repeat(30)}\n${'more '.repeat(30)}end.`, true).summary;
     expect(long).toHaveLength(SUMMARY_MAX);
     expect(long.endsWith('…')).toBe(true);
     expect(long).not.toContain('\n');
   });
 
-  it('shows the latest line of a thought that is still streaming', () => {
-    expect(reasoningSummary('The town is Dunmore.\n\nNext I need the yard size', false)).toBe('Next I need the yard size');
+  it('skips list markers, markdown, abbreviations, and numbers when it finds the first sentence', () => {
+    expect(reasoningView('1. Check the town first.\n2. Then quote.', true).summary).toBe('Check the town first.');
+    expect(reasoningView('The customer lives at 12 Oak St. in Ashford, so Tuesday. Then quote.', true).summary).toBe(
+      'The customer lives at 12 Oak St. in Ashford, so Tuesday.',
+    );
+    expect(reasoningView('Slot at 10 a.m. Tuesday works for them. Book it.', true).summary).toBe('Slot at 10 a.m. Tuesday works for them.');
+    expect(reasoningView('**The customer** has provided:\n- Town: Ashford\n- Yard: half an acre', true).summary).toBe(
+      'The customer has provided: Town: Ashford; Yard: half an acre',
+    );
+  });
+
+  it('has nothing more to show for a short thought, so the row offers no toggle', () => {
+    expect(reasoningView('Short thought.', true)).toEqual({ summary: 'Short thought.', full: 'Short thought.', more: false });
+  });
+
+  it('shows the newest words of a thought that is still streaming', () => {
+    expect(reasoningView('The town is Dunmore.\n\nNext I need the yard size', false).summary).toBe('Next I need the yard size');
+    const streaming = reasoningView(`${'x '.repeat(200)}latest words`, false).summary;
+    expect(streaming.startsWith('…')).toBe(true);
+    expect(streaming.endsWith('latest words')).toBe(true);
+    expect(streaming.length).toBeLessThanOrEqual(SUMMARY_MAX);
   });
 });
