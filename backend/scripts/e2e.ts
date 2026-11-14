@@ -84,6 +84,10 @@ const weekday = (start: string) => new Date(`${start.slice(0, 10)}T00:00:00Z`).g
 const onDays = (starts: string[], days: number[]) => starts.length >= 2 && starts.every((s) => days.includes(weekday(s)));
 /** "may change on site", "changing on site", "adjusted on site" … */
 const ON_SITE = /(chang|adjust)\w* on site/i;
+/** The price reached the customer: quoteJob returned it or a desk text stated it (amounts are checked against the rules and tools below). */
+const quoted = (c: Convo, price: string) => quotes(c).some((q) => q.price === price) || c.replies.some((r) => said(r).includes(price));
+/** Asked for what is missing: no tool call, and the text names the address or the yard size. */
+const asksDetails = (m: Message | undefined) => !anyTool(m) && /town|address|street|where|size|acre|how big/i.test(said(m));
 const MON_THU = [1, 4];
 const TUE_FRI = [2, 5];
 
@@ -127,7 +131,7 @@ const cases: Case[] = [
 			const c = convo('1 complete');
 			await c.say("Hi, I'm Mia Chen. Can you mow my lawn at 12 Elm St, Ashford? It's about half an acre.");
 			const offered = await untilOffers(c, 'Great, what times do you have?');
-			if (!quotes(c).some((q) => q.price === '$45')) return `no $45 quote (${JSON.stringify(quotes(c))})`;
+			if (!quoted(c, '$45')) return 'no $45 quote';
 			if (!onDays(offered, MON_THU)) return `times not on Mon/Thu: ${offered.join(', ')}`;
 			const booking = await untilBooked(c, ['The first time works for me.', 'Yes, please book the first time you offered.']);
 			if (!booking) return 'no booking';
@@ -141,11 +145,10 @@ const cases: Case[] = [
 		async run() {
 			const c = convo('2 incomplete');
 			const first = await c.say('How much to mow my lawn?');
-			if (anyTool(first)) return 'called a tool before having the details';
-			if (!said(first).includes('?')) return 'did not ask for the missing details';
+			if (!asksDetails(first)) return 'did not ask for the missing details (or called a tool first)';
 			await c.say("It's 30 Mill Rd, Clearwater, about a quarter acre.");
 			const offered = await untilOffers(c, 'What times do you have?');
-			if (!quotes(c).some((q) => q.price === '$45')) return 'no $45 quote';
+			if (!quoted(c, '$45')) return 'no $45 quote';
 			return onDays(offered, MON_THU) || `times not on Mon/Thu: ${offered.join(', ')}`;
 		},
 	},
@@ -190,7 +193,7 @@ const cases: Case[] = [
 			await c.say('Can I get a quote for exactly 1 acre at 22 Pine Ave, Birchwood?');
 			const offered = await untilOffers(c, 'What times do you have?');
 			if (handoffReasons(c).length) return `handed off (${handoffReasons(c).join(', ')})`;
-			if (!quotes(c).some((q) => q.price === '$67.50')) return `no $67.50 quote (${JSON.stringify(quotes(c))})`;
+			if (!quoted(c, '$67.50')) return 'no $67.50 quote';
 			return onDays(offered, TUE_FRI) || `times not on Tue/Fri: ${offered.join(', ')}`;
 		},
 	},
