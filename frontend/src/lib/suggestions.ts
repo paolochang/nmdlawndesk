@@ -7,6 +7,7 @@ import type { FlueConversationMessage } from '@flue/react';
 import type { Customer } from './persona.ts';
 import { bookingUnconfirmed, textedStatus } from './status.ts';
 import { statesTime } from './texted.ts';
+import { visibleText } from './transcript.ts';
 
 export interface Slot {
   start: string;
@@ -64,8 +65,8 @@ export function conversationStage(messages: readonly FlueConversationMessage[]):
           customerTextAfterOffer = false;
         }
       } else if (part.type === 'text' && message.role === 'assistant' && offers > 0) {
-        deskTextAfterOffer = part.text;
-        deskTextsSinceOffer += `\n${part.text}`;
+        deskTextAfterOffer = visibleText(part.text);
+        deskTextsSinceOffer += `\n${deskTextAfterOffer}`;
       }
     }
   }
