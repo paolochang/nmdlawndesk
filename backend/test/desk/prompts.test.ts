@@ -38,7 +38,7 @@ describe('lawnDeskPrompt', () => {
 		expect(prompt).toContain('General questions (prices, the price table, towns and days, hours)');
 		expect(prompt).toContain('answer them directly from the rules above');
 		// A question about their own yard is a quote request (build-plan §16).
-		expect(prompt).toContain('is a quote request: if they gave the yard size, first say its price from the rules');
+		expect(prompt).toContain('is a quote request (see "How to book")');
 		expect(prompt).toMatch(/only once the customer wants a quote or a booking:\s*1\. You need the town, street address, and yard size/);
 	});
 
@@ -57,6 +57,8 @@ describe('lawnDeskPrompt', () => {
 		// A size the customer does not know is not asked again (build-plan §16, E2E case 7).
 		expect(prompt).toContain('If the customer says they do not know the yard size, do not ask again');
 		expect(prompt).toContain('Never call bookSlot before the customer has seen the price and picked a time');
+		// The desk once texted times findSlots never returned (build-plan §16, E2E case 10).
+		expect(prompt).toContain('Only state times findSlots returned in this conversation; never invent or change one.');
 	});
 
 	// build-plan §16 (Day 11 checklist): unrelated texts are declined, not done.
