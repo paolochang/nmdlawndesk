@@ -1,7 +1,8 @@
 // E2E score (build-plan §16, ROADMAP M3): the 10 scripted customer texts, scored on
 // tool outcomes and the calendar rather than wording, plus must-pass turns (greeting,
 // price question, a question after a handoff, off-topic texts) and style checks on
-// every desk reply. Exits non-zero below 9/10 or on any must-pass failure.
+// every desk reply (think tags, lists, symbols, internal ids, invented amounts, the
+// on-site note). Exits non-zero below 9/10 or on any must-pass failure.
 //
 //   npx vite dev --port 8787 --strictPort        # in another terminal
 //   ACCESS_CODE=... NICKNAME=... node scripts/e2e.ts
@@ -80,6 +81,8 @@ const offers = (c: Convo) =>
 const handoffReasons = (c: Convo) => inputsOf(c, 'handoffToDave').map((i) => i.reason);
 const weekday = (start: string) => new Date(`${start.slice(0, 10)}T00:00:00Z`).getUTCDay();
 const onDays = (starts: string[], days: number[]) => starts.length >= 2 && starts.every((s) => days.includes(weekday(s)));
+/** "may change on site", "changing on site", "adjusted on site" … */
+const ON_SITE = /(chang|adjust)\w* on site/i;
 const MON_THU = [1, 4];
 const TUE_FRI = [2, 5];
 
@@ -199,7 +202,7 @@ const cases: Case[] = [
 			if (!inputsOf(c, 'quoteJob').some((i) => i.acres === null)) await c.say("I really don't know the size.");
 			if (!inputsOf(c, 'quoteJob').some((i) => i.acres === null)) return 'no quote for an unknown size';
 			if (!quotes(c).some((q) => q.price === '$45')) return 'not the 1-hour rate';
-			return c.replies.some((r) => /adjusted on site|change on site/i.test(said(r))) || 'did not say it is adjusted on site';
+			return c.replies.some((r) => ON_SITE.test(said(r))) || 'did not say it is adjusted on site';
 		},
 	},
 	{
@@ -287,10 +290,11 @@ function styleProblems(c: Convo): string[] {
 		if (/<\/?think>/i.test(t)) problems.push(`think tag: ${t}`);
 		if (/(^|\n)\s*([-*•]|\d+[.)])\s+\S/.test(t)) problems.push(`list: ${t}`);
 		if (/[=×→]/.test(t)) problems.push(`symbol: ${t}`);
+		if (/\bg\d+-\d+\b/.test(t)) problems.push(`internal booking id: ${t}`);
 		const amounts = [...t.matchAll(/\$\s?(\d+(?:\.\d{2})?)/g)].map((m) => m[1]);
 		const invented = amounts.filter((a) => !allowed.has(a));
 		if (invented.length) problems.push(`amount not from the tools: $${invented.join(', $')} in: ${t}`);
-		if (amounts.some((a) => PRICE_TABLE.includes(a)) && !/change on site|adjusted on site/i.test(t)) {
+		if (amounts.some((a) => PRICE_TABLE.includes(a)) && !ON_SITE.test(t)) {
 			problems.push(`price without "may change on site": ${t}`);
 		}
 	}
