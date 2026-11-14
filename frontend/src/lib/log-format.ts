@@ -134,3 +134,22 @@ export function reasoningView(text: string, done: boolean): ReasoningView {
   const summary = done ? clipEnd(firstSentence(flat)) : clipStart(lines[last]);
   return { summary, full, more: summary !== flat };
 }
+
+/**
+ * The whole judgment log as plain text for the clipboard (owner request, build-plan §17):
+ * every entry in order, whatever the filter shows, tool calls with their full input and
+ * output and reasoning in full.
+ */
+export function judgmentLogText(entries: readonly JudgmentEntry[]): string {
+  return entries
+    .map((entry) => {
+      const time = clockTime(entry.time) ?? '--:--:--';
+      if (entry.kind === 'reasoning') return `${time} REASONING${entry.done ? '' : ' (streaming)'}\n${entry.text.trim()}`;
+      const state = { 'input-available': 'RUNNING', 'output-available': 'DONE', 'output-error': 'ERROR' }[entry.state];
+      const lines = [`${time} TOOL ${entry.toolName} ${state}`, `input: ${JSON.stringify(entry.input)}`];
+      if (entry.state === 'output-available') lines.push(`output: ${JSON.stringify(entry.output)}`);
+      if (entry.state === 'output-error') lines.push(`error: ${entry.errorText ?? ''}`);
+      return lines.join('\n');
+    })
+    .join('\n\n');
+}

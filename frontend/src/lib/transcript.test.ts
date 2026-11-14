@@ -1,6 +1,6 @@
 import type { FlueConversationMessage, FlueConversationPart } from '@flue/react';
 import { describe, expect, it } from 'vitest';
-import { isTyping, replyFailed, toBubbles, toJudgmentLog } from './transcript.ts';
+import { isTyping, phoneText, replyFailed, toBubbles, toJudgmentLog } from './transcript.ts';
 
 function message(
   id: string,
@@ -139,5 +139,15 @@ describe('toJudgmentLog', () => {
 
   it('is empty before any tool call or reasoning', () => {
     expect(toJudgmentLog([message('m1', 'user', [{ type: 'text', text: 'Hi', state: 'done' }])])).toEqual([]);
+  });
+});
+
+describe('phoneText (owner request)', () => {
+  it("copies the whole thread, one line per bubble with its sender's label", () => {
+    const thread = [
+      { id: '1', from: 'customer' as const, text: 'Hi! How much?' },
+      { id: '2', from: 'desk' as const, text: 'It is $45.' },
+    ];
+    expect(phoneText(thread, { customer: 'Customer', desk: 'Desk' })).toBe('Customer: Hi! How much?\nDesk: It is $45.');
   });
 });

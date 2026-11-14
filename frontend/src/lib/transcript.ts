@@ -82,3 +82,11 @@ export function toJudgmentLog(messages: readonly FlueConversationMessage[]): Jud
   }
   return entries;
 }
+
+/**
+ * A phone's whole thread as plain text for the clipboard, one "Sender: text" line per
+ * bubble (owner request): `names` labels the customer's and the desk's side.
+ */
+export function phoneText(bubbles: readonly Bubble[], names: { customer: string; desk: string }): string {
+  return bubbles.map((bubble) => `${bubble.from === 'customer' ? names.customer : names.desk}: ${bubble.text}`).join('\n');
+}

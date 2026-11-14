@@ -5,6 +5,7 @@ import '@fullcalendar/react/skeleton.css';
 import '@fullcalendar/react/themes/classic/theme.css';
 import '@fullcalendar/react/themes/classic/palette.css';
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { CopyButton } from './CopyButton.tsx';
 import { calendarWindow, dayLabel, toEvents, type CalendarBooking } from './lib/calendar.ts';
 import { hoursNote, priceNote, priceRows, townDays, type DaveConfig } from './lib/config.ts';
 import type { Bubble } from './lib/transcript.ts';
@@ -169,10 +170,11 @@ function RulesTables({ config }: { config: DaveConfig }) {
 interface PhoneProps {
   bubbles: readonly Bubble[];
   typing: boolean;
+  copyText?: string;
 }
 
 // Dave's own phone: read-only, the desk texts him handoff alerts (build-plan §4).
-function DavePhone({ bubbles, typing }: PhoneProps) {
+function DavePhone({ bubbles, typing, copyText }: PhoneProps) {
   const thread = useStickToBottom<HTMLOListElement>([bubbles.length, typing]);
   return (
     <div className="phone dave-phone" id="dave-phone">
@@ -183,6 +185,7 @@ function DavePhone({ bubbles, typing }: PhoneProps) {
           </div>
           <b>Lawn Desk assistant</b>
           <small>Texts to Dave</small>
+          {copyText !== undefined && <CopyButton text={copyText} label="Copy" className="phone-copy" />}
         </div>
         <ol className="thread" aria-label="Dave's texts" ref={thread}>
           {bubbles.length === 0 && !typing && (
@@ -224,9 +227,11 @@ interface Props {
   onToggleDave: () => void;
   /** Google Calendar sync status (build-plan §14), beside the calendar's title. */
   calendarNote?: ReactNode;
+  /** Dave's whole thread as text, for the owner's copy button. */
+  daveCopyText?: string;
 }
 
-export function DavePanel({ config, failed, bookings, today, landingId, daveBubbles, daveTyping, daveOpen, daveUnread, onToggleDave, calendarNote }: Props) {
+export function DavePanel({ config, failed, bookings, today, landingId, daveBubbles, daveTyping, daveOpen, daveUnread, onToggleDave, calendarNote, daveCopyText }: Props) {
   if (!config || !bookings || !today) {
     return (
       <p className="placeholder dave-placeholder">
@@ -241,7 +246,7 @@ export function DavePanel({ config, failed, bookings, today, landingId, daveBubb
         <DaveCalendar config={config} today={today} bookings={bookings} landingId={landingId} note={calendarNote} />
         <RulesTables config={config} />
       </div>
-      {daveOpen && <DavePhone bubbles={daveBubbles} typing={daveTyping} />}
+      {daveOpen && <DavePhone bubbles={daveBubbles} typing={daveTyping} copyText={daveCopyText} />}
       <button
         type="button"
         className={`phone-fab${daveOpen ? ' open' : ''}`}

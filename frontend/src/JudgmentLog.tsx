@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useStickToBottom } from './useStickToBottom.ts';
-import { clockTime, jsonLines, jsonTokens, reasoningView, withPrevious } from './lib/log-format.ts';
+import { CopyButton } from './CopyButton.tsx';
+import { clockTime, jsonLines, jsonTokens, judgmentLogText, reasoningView, withPrevious } from './lib/log-format.ts';
 import { clampLogHeight, LOG_DOCK_KEY, loadLogDock, type LogDock } from './lib/log-dock.ts';
 import { unreadCount } from './lib/reveal.ts';
 import type { JudgmentEntry } from './lib/transcript.ts';
@@ -175,6 +176,7 @@ export function JudgmentLog({ entries, conversation, historyReady }: Props) {
             ))}
           </div>
         )}
+        <CopyButton text={judgmentLogText(entries)} label="Copy all" className="log-copy" />
       </div>
       {/* Hidden, not unmounted, while collapsed: the stick-to-bottom scroll listener stays attached. */}
       <div id="judgment-log-body" className="log-body" hidden={!dock.open}>

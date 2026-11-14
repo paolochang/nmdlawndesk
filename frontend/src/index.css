@@ -400,3 +400,12 @@ button.danger { background: var(--err); border-color: var(--err); color: var(--s
 @media (prefers-reduced-motion: reduce) {
   .tour-map .area { transition: none; }
 }
+
+/* Copy buttons: the judgment log's Copy all, and the owner's phone copies (owner request, 2026-11-14). */
+.copy-btn { font-family: inherit; font-size: 0.72rem; font-weight: 600; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; cursor: pointer; white-space: nowrap; }
+.copy-btn:hover:not(:disabled) { border-color: var(--accent); }
+.copy-btn:disabled { opacity: 0.45; cursor: default; }
+.log-head .log-copy { margin-left: auto; }
+.log-head .seg + .log-copy { margin-left: 0; }
+.thread-head { position: relative; }
+.thread-head .phone-copy { position: absolute; top: 8px; right: 10px; }

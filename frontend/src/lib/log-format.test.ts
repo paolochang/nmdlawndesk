@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clockTime, jsonLines, jsonTokens, reasoningView, SUMMARY_MAX, withPrevious } from './log-format.ts';
+import { clockTime, jsonLines, jsonTokens, judgmentLogText, reasoningView, SUMMARY_MAX, withPrevious } from './log-format.ts';
 import type { JudgmentEntry } from './transcript.ts';
 
 describe('jsonLines (build-plan §7 judgment log)', () => {
@@ -100,5 +100,22 @@ describe('reasoningView (build-plan §17)', () => {
     expect(streaming.startsWith('…')).toBe(true);
     expect(streaming.endsWith('latest words')).toBe(true);
     expect(streaming.length).toBeLessThanOrEqual(SUMMARY_MAX);
+  });
+});
+
+describe('judgmentLogText (owner request)', () => {
+  it('copies every entry in order: tools with full input and output or error, reasoning in full', () => {
+    const entries: JudgmentEntry[] = [
+      { id: 'r', kind: 'reasoning', text: 'The customer wants a quote.\nQuote first.', done: true },
+      { id: 'a', kind: 'tool', toolName: 'quoteJob', state: 'output-available', input: { acres: 0.5 }, output: { price: '$45' } },
+      { id: 'b', kind: 'tool', toolName: 'bookSlot', state: 'output-error', input: { name: 'Sam' }, errorText: 'boom' },
+    ];
+    expect(judgmentLogText(entries)).toBe(
+      [
+        '--:--:-- REASONING\nThe customer wants a quote.\nQuote first.',
+        '--:--:-- TOOL quoteJob DONE\ninput: {"acres":0.5}\noutput: {"price":"$45"}',
+        '--:--:-- TOOL bookSlot ERROR\ninput: {"name":"Sam"}\nerror: boom',
+      ].join('\n\n'),
+    );
   });
 });

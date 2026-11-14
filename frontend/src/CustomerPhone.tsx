@@ -1,5 +1,6 @@
 import { type FormEvent } from 'react';
 import { useStickToBottom } from './useStickToBottom.ts';
+import { CopyButton } from './CopyButton.tsx';
 import type { Bubble } from './lib/transcript.ts';
 
 interface Props {
@@ -10,10 +11,12 @@ interface Props {
   draft: string;
   onDraftChange: (draft: string) => void;
   onSend: (text: string) => Promise<void>;
+  /** The whole thread as text, for the owner's copy button (absent for everyone else). */
+  copyText?: string;
 }
 
 // A phone at true proportions (390 × 844), texting Dave's desk.
-export function CustomerPhone({ bubbles, typing, ready, notice, draft, onDraftChange, onSend }: Props) {
+export function CustomerPhone({ bubbles, typing, ready, notice, draft, onDraftChange, onSend, copyText }: Props) {
   const thread = useStickToBottom<HTMLOListElement>([bubbles.length, typing]);
 
   function onSubmit(event: FormEvent<HTMLFormElement>) {
@@ -33,6 +36,7 @@ export function CustomerPhone({ bubbles, typing, ready, notice, draft, onDraftCh
           </div>
           <b>Dave's Lawn Desk</b>
           <small>Text message</small>
+          {copyText !== undefined && <CopyButton text={copyText} label="Copy" className="phone-copy" />}
         </div>
         <ol className="thread" aria-label="Conversation" ref={thread}>
           {bubbles.length === 0 && !typing && <li className="empty-thread">Text Dave's desk to ask for a price or a time.</li>}
