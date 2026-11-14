@@ -27,10 +27,18 @@ export function bookingText(booking: Booking, phone: string): string {
 	return `Booked ${booking.id}: ${booking.name}, ${when}, ${booking.address}, ${booking.town}. ${dollars(booking.priceCents)} (${hours(booking.durationMinutes)}). Phone ${phone}.`;
 }
 
-/** `Please call +15550102 (yard over 1 acre). They texted: "…" / "…"` */
-export function handoffText(reason: HandoffReason, phone: string, texts: readonly string[]): string {
-	// One line per quote, double quotes made single, so a quote cannot pose as another text.
-	const quote = (text: string) => `"${text.replace(/\s+/g, ' ').trim().replaceAll('"', "'")}"`;
-	const quoted = texts.slice(-QUOTED_TEXTS).map(quote).join(' / ');
-	return `Please call ${phone} (${REASON_LABELS[reason]}).${quoted ? ` They texted: ${quoted}` : ''}`;
+/** What the customer texted about themselves, when they did (the store checks it against their texts). */
+export interface HandoffDetails {
+	name?: string;
+	/** Street, and the town after it when the customer texted one. */
+	address?: string;
+}
+
+/** `Please call +15550102 (a complaint). Name: Ann Lee. Address: 9 Hill Rd, Ashford. They texted: "…" / "…"` */
+export function handoffText(reason: HandoffReason, phone: string, texts: readonly string[], details: HandoffDetails = {}): string {
+	// One line per value, double quotes made single, so nothing can pose as another field or text.
+	const line = (text: string) => text.replace(/\s+/g, ' ').trim().replaceAll('"', "'");
+	const quoted = texts.slice(-QUOTED_TEXTS).map((text) => `"${line(text)}"`).join(' / ');
+	const fields = [details.name && `Name: ${line(details.name)}.`, details.address && `Address: ${line(details.address)}.`].filter(Boolean);
+	return `Please call ${phone} (${REASON_LABELS[reason]}).${fields.length ? ` ${fields.join(' ')}` : ''}${quoted ? ` They texted: ${quoted}` : ''}`;
 }

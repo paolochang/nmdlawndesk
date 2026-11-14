@@ -205,14 +205,26 @@ export class VisitorLedger {
 	}
 
 	/**
-	 * Texts Dave that the desk handed this customer to him: the reason and the
-	 * customer's own latest texts. A handoff from another `generation` is refused.
+	 * Texts Dave that the desk handed this customer to him: the reason, the name and
+	 * address the desk passed when the customer's own texts contain them (anything else
+	 * is left out, never refused), and the customer's latest texts. A handoff from
+	 * another `generation` is refused.
 	 */
-	handoff(phone: string, reason: HandoffReason, generation: number): { ok: true } | { ok: false; reason: 'stale-generation' } {
+	handoff(
+		phone: string,
+		reason: HandoffReason,
+		generation: number,
+		details: { name?: string; address?: string; town?: string } = {},
+	): { ok: true } | { ok: false; reason: 'stale-generation' } {
 		const state = this.#load(this.#now());
 		if (generation !== state.generation) return { ok: false, reason: 'stale-generation' };
 		const id = `h${state.generation}-${state.daveTexts.length + 1}`;
-		const text = handoffText(reason, phone, state.texts?.[phone] ?? []);
+		const texts = state.texts?.[phone] ?? [];
+		const street = details.address && addressTexted(texts, details.address, details.town) ? details.address : undefined;
+		const town = details.town && addressTexted(texts, details.town) ? details.town : undefined;
+		const name = details.name && nameTexted(texts, details.name, details.address) ? details.name : undefined;
+		const address = [street, town && !street?.toLowerCase().includes(town.toLowerCase()) ? town : undefined].filter(Boolean).join(', ') || undefined;
+		const text = handoffText(reason, phone, texts, { name, address });
 		this.#save({ ...state, daveTexts: [...state.daveTexts, { id, text }] });
 		return { ok: true };
 	}

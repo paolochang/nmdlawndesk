@@ -18,7 +18,12 @@ export interface DeskStore {
 	add(request: BookingRequest): Promise<AddResult>;
 	addCustomer(phone: string, generation?: number): Promise<Customer[]>;
 	/** Texts Dave the handoff: the reason and the customer's own texts (build-plan §13). */
-	handoff(phone: string, reason: HandoffReason, generation: number): Promise<{ ok: boolean }>;
+	handoff(
+		phone: string,
+		reason: HandoffReason,
+		generation: number,
+		details?: { name?: string; address?: string; town?: string },
+	): Promise<{ ok: boolean }>;
 }
 
 export { HANDOFF_REASONS, type HandoffReason };
@@ -194,6 +199,9 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 						v.description('Required for yard-over-1-acre: the yard size the customer gave, in acres. Not needed for other reasons.'),
 					),
 				),
+				name: v.optional(v.pipe(v.string(), v.description("The customer's name, exactly as they texted it. Omit if they did not."))),
+				address: v.optional(v.pipe(v.string(), v.description('The street address the customer texted, e.g. 45 Oak Rd. Omit if they did not.'))),
+				town: v.optional(v.pipe(v.string(), v.description('The town the customer texted. Omit if they did not.'))),
 			}),
 			async run({ data }) {
 				// The model once read "1 acre" as over 1 acre (owner E2E, PR 9): the size decides, not the model.
@@ -202,7 +210,7 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 					if (data.acres <= MAX_ACRES) return { output: { ok: false, reason: 'not-over-1-acre', next: NOT_OVER_NEXT } };
 				}
 				const { phone, generation } = deps.conversation;
-				const result = await deps.store.handoff(phone, data.reason, generation);
+				const result = await deps.store.handoff(phone, data.reason, generation, { name: data.name, address: data.address, town: data.town });
 				if (!result.ok) return { output: { ok: false, reason: 'stale-generation', next: REJECTION_NEXT['stale-generation'] } };
 				return { output: { ok: true, reply: handoffReply(data.reason), next: HANDED_OFF_NEXT } };
 			},

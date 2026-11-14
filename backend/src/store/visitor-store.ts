@@ -44,8 +44,8 @@ export class VisitorStore extends DurableObject<Cloudflare.Env> {
 		this.#ledger.addCustomerText(phone, text, generation);
 	}
 
-	handoff(phone: string, reason: HandoffReason, generation: number) {
-		return this.#ledger.handoff(phone, reason, generation);
+	handoff(phone: string, reason: HandoffReason, generation: number, details?: { name?: string; address?: string; town?: string }) {
+		return this.#ledger.handoff(phone, reason, generation, details);
 	}
 
 	reset(): VisitorSnapshot {

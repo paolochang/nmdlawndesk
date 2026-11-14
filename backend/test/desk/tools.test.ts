@@ -20,7 +20,7 @@ function setup(generation = 1, clock = SUNDAY, texts = TEXTS) {
 		list: async () => ledger.list(),
 		add: async (request) => ledger.add(request),
 		addCustomer: async (phone, generation) => ledger.addCustomer(phone, generation),
-		handoff: async (phone, reason, generation) => ledger.handoff(phone, reason, generation),
+		handoff: async (phone, reason, generation, details) => ledger.handoff(phone, reason, generation, details),
 	};
 	for (const text of texts) ledger.addCustomerText('+15550101', text, 1);
 	const tools = deskTools({
@@ -210,6 +210,15 @@ describe('desk tools', () => {
 	});
 
 	describe('handoffToDave', () => {
+		// Owner E2E (2026-11-14): Dave's text names the customer and the address they texted.
+		it('puts the name and address the customer texted into Dave\'s text, and leaves out anything they did not text', async () => {
+			const { call, daveTexts } = setup(1, SUNDAY, ["Last time you missed half my yard. I'm Ann Lee, 9 Hill Rd, Ashford."]);
+			await call('handoffToDave', { reason: 'refund', name: 'Ann Lee', address: '9 Hill Rd', town: 'Ashford' });
+			expect(daveTexts().at(-1)).toMatch(/^Please call \+15550101 \(a refund request\)\. Name: Ann Lee\. Address: 9 Hill Rd, Ashford\. They texted: /);
+			await call('handoffToDave', { reason: 'complaint', name: 'Bob Stone', address: '1 Fake St', town: 'Ashford' });
+			expect(daveTexts().at(-1)).toMatch(/^Please call \+15550101 \(a complaint\)\. Address: Ashford\. They texted: /);
+		});
+
 		it("texts Dave the reason and the customer's own texts, and gives the customer reply", async () => {
 			const { call, daveTexts } = setup(1, SUNDAY, ['How much for my 2 acre lot at 9 Hill Rd, Ashford?']);
 			const output = await call('handoffToDave', { reason: 'yard-over-1-acre', acres: 2 });
