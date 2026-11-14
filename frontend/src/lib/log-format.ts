@@ -1,5 +1,6 @@
 // Formatting for the judgment log (build-plan §7): pretty JSON, the lines that
-// are new since the previous call of the same tool, colour tokens, and times.
+// are new since the previous call of the same tool, colour tokens, times, and the
+// one-line summary of a reasoning row (build-plan §17).
 import type { JudgmentEntry } from './transcript.ts';
 
 export interface JsonLine {
@@ -78,4 +79,29 @@ export function clockTime(iso: string | undefined): string | undefined {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return undefined;
   return [date.getHours(), date.getMinutes(), date.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':');
+}
+
+/** The longest reasoning summary, in characters (build-plan §17). */
+export const SUMMARY_MAX = 120;
+
+/**
+ * One line for a reasoning row: the first sentence of a finished thought, or the
+ * latest line of one still streaming, with think tags dropped, whitespace collapsed,
+ * and clipped to `SUMMARY_MAX` characters with "…" (build-plan §17).
+ */
+export function reasoningSummary(text: string, done: boolean): string {
+  const lines = text
+    .replace(/<\/?think>/gi, ' ')
+    .split('\n')
+    .map((line) => line.replace(/\s+/g, ' ').trim())
+    .filter(Boolean);
+  if (lines.length === 0) return '';
+  let line: string;
+  if (done) {
+    const flat = lines.join(' ');
+    line = /^.+?[.!?](?=\s|$)/.exec(flat)?.[0] ?? flat;
+  } else {
+    line = lines[lines.length - 1];
+  }
+  return line.length > SUMMARY_MAX ? `${line.slice(0, SUMMARY_MAX - 1).trimEnd()}…` : line;
 }

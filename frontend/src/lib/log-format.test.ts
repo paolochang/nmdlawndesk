@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { clockTime, jsonLines, jsonTokens, withPrevious } from './log-format.ts';
+import { clockTime, jsonLines, jsonTokens, reasoningSummary, SUMMARY_MAX, withPrevious } from './log-format.ts';
 import type { JudgmentEntry } from './transcript.ts';
 
 describe('jsonLines (build-plan §7 judgment log)', () => {
@@ -64,5 +64,21 @@ describe('clockTime', () => {
     expect(clockTime(new Date(2026, 10, 16, 9, 41, 2).toISOString())).toBe('09:41:02');
     expect(clockTime(undefined)).toBeUndefined();
     expect(clockTime('not a date')).toBeUndefined();
+  });
+});
+
+describe('reasoningSummary (build-plan §17)', () => {
+  it('shows one line: the first sentence of a finished thought, without think tags, clipped with an ellipsis', () => {
+    expect(reasoningSummary('<think>The customer gave 0.5 acre in Ashford.\nSo quote first, then find slots.</think>', true)).toBe(
+      'The customer gave 0.5 acre in Ashford.',
+    );
+    const long = reasoningSummary(`${'word '.repeat(60)}end.`, true);
+    expect(long).toHaveLength(SUMMARY_MAX);
+    expect(long.endsWith('…')).toBe(true);
+    expect(long).not.toContain('\n');
+  });
+
+  it('shows the latest line of a thought that is still streaming', () => {
+    expect(reasoningSummary('The town is Dunmore.\n\nNext I need the yard size', false)).toBe('Next I need the yard size');
   });
 });
