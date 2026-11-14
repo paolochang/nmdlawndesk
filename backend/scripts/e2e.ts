@@ -1,9 +1,10 @@
 // E2E score (build-plan §16, ROADMAP M3): the 10 scripted customer texts, scored on
 // tool outcomes and the calendar rather than wording, plus must-pass turns (greeting,
 // price question, a question after a handoff, off-topic texts) and style checks on
-// every desk reply (think tags, lists, symbols, internal ids, invented amounts). A
-// price without the on-site note is a warning only. Exits non-zero below 9/10 or on any
-// must-pass failure.
+// every desk reply (think tags, lists, symbols, internal ids, invented amounts, a
+// booking claimed without bookSlot). A price without the on-site note, a line break,
+// or a first reply without a thank-you is a warning only. Exits non-zero below 9/10 or
+// on any must-pass failure.
 //
 //   npx vite dev --port 8787 --strictPort        # in another terminal
 //   ACCESS_CODE=... NICKNAME=... node scripts/e2e.ts
@@ -280,6 +281,7 @@ async function mustPassTurns(): Promise<void> {
 		const hello = await c.say('Hi there!');
 		check('greeting: no tool call', !anyTool(hello), 'called a tool', hello);
 		check('greeting: no intake questions', !/address|acre|yard/i.test(said(hello)), 'asked for booking details', hello);
+		check('greeting: thanks them for reaching out', /thank/i.test(said(hello)), 'no thank-you', hello);
 		const prices = await c.say('What do you charge for mowing?');
 		check('price question: not haggling', !usedTool(prices, 'handoffToDave'), 'handed off', prices);
 		check('price question: gives $45', said(prices).includes('$45'), 'no price', prices);
@@ -306,6 +308,8 @@ async function mustPassTurns(): Promise<void> {
 // --- style checks on every reply ----------------------------------------------------
 
 const PRICE_TABLE = TABLE_PRICES.map((p) => p.slice(1));
+/** "You're booked", "booking confirmed", "I've scheduled you" … (owner E2E 2026-11-14: texted with no bookSlot call). */
+const CLAIMS_BOOKING = /\b(you'?re|you are|you'?ve been|you have been|it'?s|it is|that'?s|that is)\s+(all\s+)?(booked|scheduled|confirmed|reserved)\b|\bbooking (is )?confirmed\b|\bI'?ve (booked|scheduled|reserved)\b|\bI have (booked|scheduled|reserved)\b/i;
 /** Dollar amounts in a text, "$45.00" read as "45" and "$1,000" as "1000". */
 const amountsIn = (text: string) => [...text.matchAll(/\$\s?(\d[\d,]*(?:\.\d{2})?)/g)].map((m) => m[1].replaceAll(',', '').replace(/\.00$/, ''));
 const warnings: string[] = [];
@@ -314,8 +318,12 @@ function styleProblems(c: Convo): string[] {
 	const seen = JSON.stringify(c.replies.flatMap((r) => r.parts.filter((p) => p.type === 'dynamic-tool').map((p) => p.output)));
 	for (const source of [seen, ...c.customerTexts]) for (const amount of amountsIn(source)) allowed.add(amount);
 	const problems: string[] = [];
+	// Owner E2E (2026-11-14): the first reply of a conversation opens with a thank-you.
+	if (c.replies[0] && !/thank/i.test(said(c.replies[0]))) warnings.push(`(${c.id}) first reply has no thank-you: ${said(c.replies[0])}`);
 	for (const reply of c.replies) {
 		const t = said(reply);
+		const booked = toolOutputs(reply, 'bookSlot').some((p) => (p.output as { ok?: boolean }).ok === true);
+		if (CLAIMS_BOOKING.test(t) && !booked) problems.push(`says it is booked, but bookSlot did not book in this reply: ${t}`);
 		if (/<\/?think>/i.test(t)) problems.push(`think tag: ${t}`);
 		if (/(^|\n)\s*([-*•]|\d+[.)])\s+\S/.test(t)) problems.push(`list: ${t}`);
 		if (/\*\*|__/.test(t)) problems.push(`markdown: ${t}`);

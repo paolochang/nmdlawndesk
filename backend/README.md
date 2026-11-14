@@ -117,7 +117,8 @@ question, a misspelled town, out of area, 2 acres, exactly 1 acre, unknown size,
 haggling, a complaint, "next Tuesday"), judged by tool outcomes, the calendar, and
 the price texted to the customer, not by wording. It also runs must-pass turns (a greeting, a price question, a question
 after a handoff, an off-topic text) and checks every reply for think tags, lists,
-symbols, markdown, internal ids, and amounts the rules or tools did not give (a missing
+symbols, markdown, internal ids, a booking claimed without `bookSlot`, and amounts the
+rules or tools did not give (a missing
 on-site price note or a line break is a warning only). It
 exits non-zero below 9/10 or on any must-pass failure.
 

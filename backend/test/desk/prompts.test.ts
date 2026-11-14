@@ -34,7 +34,9 @@ describe('lawnDeskPrompt', () => {
 	// build-plan §4 "Conversation": not every text is a booking.
 	it('answers greetings and general questions from the rules, without intake questions', () => {
 		const prompt = lawnDeskPrompt(NOW);
-		expect(prompt).toContain('A greeting gets a short greeting back and an offer to help with their lawn');
+		// Owner E2E (2026-11-14): open with a thank-you, not a bare "Hi".
+		expect(prompt).toContain('Your first reply in a conversation starts with a short thank-you');
+		expect(prompt).toContain('A greeting gets that thank-you and an offer to help with their lawn');
 		expect(prompt).toContain('General questions (prices, the price table, towns and days, hours)');
 		expect(prompt).toContain('answer them directly from the rules above');
 		// A question about their own yard is a quote request (build-plan §16).
@@ -59,6 +61,8 @@ describe('lawnDeskPrompt', () => {
 		expect(prompt).toContain('Never call bookSlot before the customer has seen the price and picked a time');
 		// The desk once texted times findSlots never returned (build-plan §16, E2E case 10).
 		expect(prompt).toContain('Only state times findSlots returned in this conversation; never invent or change one.');
+		// Owner E2E (2026-11-14): the desk texted "You're booked" with no bookSlot call.
+		expect(prompt).toContain('Never say a job is booked, scheduled, confirmed, or reserved unless bookSlot succeeded in this same reply.');
 	});
 
 	// build-plan §16 (Day 11 checklist): unrelated texts are declined, not done.
