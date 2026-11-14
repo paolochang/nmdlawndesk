@@ -84,6 +84,7 @@ describe('lawnDeskPrompt', () => {
 		expect(lawnDeskPrompt(NOW, true)).toContain('This is your first reply to this customer: start with a short thank-you');
 		const later = lawnDeskPrompt(NOW, false);
 		expect(later).toContain('do not thank them for reaching out again');
+		expect(later).toContain("Respond to what they just said, and only about Dave's lawn mowing");
 		expect(later).not.toContain('start with a short thank-you');
 	});
 
