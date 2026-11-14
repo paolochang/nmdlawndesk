@@ -320,6 +320,10 @@ function styleProblems(c: Convo): string[] {
 	const problems: string[] = [];
 	// Owner E2E (2026-11-14): the first reply of a conversation opens with a thank-you.
 	if (c.replies[0] && !/thank/i.test(said(c.replies[0]))) warnings.push(`(${c.id}) first reply has no thank-you: ${said(c.replies[0])}`);
+	// …and only that one (owner E2E: the second reply thanked them again).
+	for (const reply of c.replies.slice(1)) {
+		if (/thanks? (you )?for (reaching out|contacting|texting)/i.test(said(reply))) problems.push(`thanked for reaching out again: ${said(reply)}`);
+	}
 	for (const reply of c.replies) {
 		const t = said(reply);
 		const booked = toolOutputs(reply, 'bookSlot').some((p) => (p.output as { ok?: boolean }).ok === true);

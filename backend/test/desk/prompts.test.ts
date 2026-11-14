@@ -34,9 +34,7 @@ describe('lawnDeskPrompt', () => {
 	// build-plan §4 "Conversation": not every text is a booking.
 	it('answers greetings and general questions from the rules, without intake questions', () => {
 		const prompt = lawnDeskPrompt(NOW);
-		// Owner E2E (2026-11-14): open with a thank-you, not a bare "Hi".
-		expect(prompt).toContain('Your first reply in a conversation starts with a short thank-you');
-		expect(prompt).toContain('A greeting gets that thank-you and an offer to help with their lawn');
+		expect(prompt).toContain('A greeting gets an offer to help with their lawn');
 		expect(prompt).toContain('General questions (prices, the price table, towns and days, hours)');
 		expect(prompt).toContain('answer them directly from the rules above');
 		// A question about their own yard is a quote request (build-plan §16).
@@ -79,6 +77,14 @@ describe('lawnDeskPrompt', () => {
 		expect(prompt).toContain('Only say prices from the rules or the tools, never a fee, discount, or other amount.');
 		expect(prompt).toContain('Never send internal ids such as the booking id.');
 		expect(prompt).toContain('the booking confirmation included, also says the final price may change on site');
+	});
+
+	// Owner E2E (2026-11-14): thank the customer for reaching out once, in the first reply only.
+	it('thanks the customer only in the first reply of a conversation', () => {
+		expect(lawnDeskPrompt(NOW, true)).toContain('This is your first reply to this customer: start with a short thank-you');
+		const later = lawnDeskPrompt(NOW, false);
+		expect(later).toContain('do not thank them for reaching out again');
+		expect(later).not.toContain('start with a short thank-you');
 	});
 
 	it('tells a price question apart from haggling', () => {

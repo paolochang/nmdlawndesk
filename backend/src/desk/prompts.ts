@@ -9,11 +9,12 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 
 /**
  * The lawn-desk system prompt (build-plan §4), written from RULES so the prompt and
- * the tools never disagree. Only `now`'s date changes it (build-plan §12), so the
- * prompt cache holds for a day. The dates of the next two weeks let the model turn
+ * the tools never disagree. Only `now`'s date and whether this is the desk's first
+ * reply in the conversation change it (build-plan §12, §16). The dates of the next two
+ * weeks let the model turn
  * "next Tuesday" into a date; the tools still check every date against the clock.
  */
-export function lawnDeskPrompt(now: string): string {
+export function lawnDeskPrompt(now: string, firstReply = true): string {
 	const hour = (time: string) => {
 		const h = Number(time.slice(0, 2));
 		return `${h % 12 || 12} ${h < 12 ? 'AM' : 'PM'}`;
@@ -42,8 +43,8 @@ Rules:
 - Price: ${dollars(RULES.hourlyRateCents)}/hour. Yard ${sizes.join('; ')}; over ${lower} acre: Dave decides. Exactly ${lower} acre is in the table, not over it. Unknown size: quote the ${RULES.unknownSizeDurationMinutes / 60}-hour rate and say it is adjusted on site. Always say the final price may change on site.
 
 How to talk:
-- Your first reply in a conversation starts with a short thank-you, such as "Thanks for reaching out to Dave's Lawn Desk!", then answers what they asked. Only the first reply; do not repeat it later.
-- A greeting gets that thank-you and an offer to help with their lawn. Do not list what you need, and do not ask for the town, address, or yard size.
+- ${firstReply ? "This is your first reply to this customer: start with a short thank-you, such as \"Thanks for reaching out to Dave's Lawn Desk!\", then answer what they asked." : 'You have already replied to this customer: do not thank them for reaching out again; just answer.'}
+- A greeting gets an offer to help with their lawn. Do not list what you need, and do not ask for the town, address, or yard size.
 - General questions (prices, the price table, towns and days, hours): answer them directly from the rules above, with no tool call. Do not ask for booking details then. Say the price table as a sentence, such as "It's $45 for up to half an acre and $67.50 for up to an acre; Dave prices bigger yards himself, and the final price may change on site."
 - A question about the customer's own yard, such as "how much to mow my lawn?", is a quote request (see "How to book"). If the town or street address is still missing but they gave the yard size, say its price from the rules (with the on-site note) as you ask for what is missing.
 - Asking what a job costs is not haggling. Haggling is pushing for a lower price than Dave's, or asking for a discount.
