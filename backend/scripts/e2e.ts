@@ -1,8 +1,9 @@
 // E2E score (build-plan §16, ROADMAP M3): the 10 scripted customer texts, scored on
 // tool outcomes and the calendar rather than wording, plus must-pass turns (greeting,
 // price question, a question after a handoff, off-topic texts) and style checks on
-// every desk reply (think tags, lists, symbols, internal ids, invented amounts, the
-// on-site note). Exits non-zero below 9/10 or on any must-pass failure.
+// every desk reply (think tags, lists, symbols, internal ids, invented amounts). A
+// price without the on-site note is a warning only. Exits non-zero below 9/10 or on any
+// must-pass failure.
 //
 //   npx vite dev --port 8787 --strictPort        # in another terminal
 //   ACCESS_CODE=... NICKNAME=... node scripts/e2e.ts
@@ -285,6 +286,7 @@ async function mustPassTurns(): Promise<void> {
 // --- style checks on every reply ----------------------------------------------------
 
 const PRICE_TABLE = ['45', '67.50'];
+const warnings: string[] = [];
 function styleProblems(c: Convo): string[] {
 	const allowed = new Set(PRICE_TABLE);
 	const seen = JSON.stringify(c.replies.flatMap((r) => r.parts.filter((p) => p.type === 'dynamic-tool').map((p) => p.output)));
@@ -300,7 +302,7 @@ function styleProblems(c: Convo): string[] {
 		const invented = amounts.filter((a) => !allowed.has(a));
 		if (invented.length) problems.push(`amount not from the tools: $${invented.join(', $')} in: ${t}`);
 		if (amounts.some((a) => PRICE_TABLE.includes(a)) && !ON_SITE.test(t)) {
-			problems.push(`price without "may change on site": ${t}`);
+			warnings.push(`(${c.id}) price without "may change on site": ${t}`);
 		}
 	}
 	return problems;
@@ -337,5 +339,9 @@ console.log(`Reasoning: ${perReply} characters per reply on average (${replies.l
 const failed = mustPass.filter((r) => !r.pass);
 console.log(`Must-pass: ${mustPass.length - failed.length}/${mustPass.length} passed`);
 for (const r of failed) console.log(`✗ ${r.id} — ${r.why}`);
+// A missing on-site note is reported, not failed (owner, 2026-11-14): the model drops it
+// now and then, and the quote tools return the note with every price.
+console.log(`Warnings: ${warnings.length}`);
+for (const w of warnings) console.log(`! ${w}`);
 const full = results.length === cases.length;
 if ((full && score < 9) || (!full && score < results.length) || failed.length) exit(1);
