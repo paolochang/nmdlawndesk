@@ -27,6 +27,8 @@ import {
 	toolOutputs,
 	usedTool,
 } from './desk-api.ts';
+import { dollars } from '../src/domain/quote.ts';
+import { RULES } from '../src/domain/rules.ts';
 
 const { ACCESS_CODE, NICKNAME } = env;
 if (!ACCESS_CODE || !NICKNAME) {
@@ -80,15 +82,26 @@ const inputsOf = (c: Convo, tool: string) => outputsOf(c, tool).map((p) => p.inp
 const quotes = (c: Convo) => outputsOf(c, 'quoteJob').map((p) => p.output as { price?: string; handoff?: string });
 const offers = (c: Convo) =>
 	outputsOf(c, 'findSlots').flatMap((p) => (p.output as { slots?: { start: string }[] }).slots ?? []).map((s) => s.start);
-const handoffReasons = (c: Convo) => inputsOf(c, 'handoffToDave').map((i) => i.reason);
+/** Reasons of handoffs that went through: a refused call (`ok: false`, e.g. missing acres) texted no one. */
+const handoffReasons = (c: Convo) =>
+	outputsOf(c, 'handoffToDave')
+		.filter((p) => (p.output as { ok?: boolean }).ok === true)
+		.map((p) => (p.input as { reason?: string }).reason);
 const weekday = (start: string) => new Date(`${start.slice(0, 10)}T00:00:00Z`).getUTCDay();
 const onDays = (starts: string[], days: number[]) => starts.length >= 2 && starts.every((s) => days.includes(weekday(s)));
 /** "may change on site", "changing on site", "adjusted on site" … */
 const ON_SITE = /(chang|adjust)\w* on site/i;
-/** The price reached the customer: quoteJob returned it or a desk text stated it (amounts are checked against the rules and tools below). */
-const quoted = (c: Convo, price: string) => quotes(c).some((q) => q.price === price) || c.replies.some((r) => said(r).includes(price));
-/** Asked for what is missing: no tool call, and the text names the address or the yard size. */
-const asksDetails = (m: Message | undefined) => !anyTool(m) && /town|address|street|where|size|acre|how big/i.test(said(m));
+/** The price table's prices, from the rules: ["$45", "$67.50"]. */
+const TABLE_PRICES = RULES.priceTable.map((row) => dollars(Math.round((row.durationMinutes / 60) * RULES.hourlyRateCents)));
+/**
+ * The case's price reached the customer: quoteJob returned it, or a desk text stated it
+ * and not another table price (a recited price table is not a quote).
+ */
+const quoted = (c: Convo, price: string) =>
+	quotes(c).some((q) => q.price === price) ||
+	c.replies.some((r) => said(r).includes(price) && !TABLE_PRICES.some((p) => p !== price && said(r).includes(p)));
+/** Asked for what is missing: no tool call, and the text asks for the address, town, or yard size. */
+const asksDetails = (m: Message | undefined) => !anyTool(m) && /address|street|town|where|how big|what size|yard size/i.test(said(m));
 const MON_THU = [1, 4];
 const TUE_FRI = [2, 5];
 
@@ -195,6 +208,8 @@ const cases: Case[] = [
 			const offered = await untilOffers(c, 'What times do you have?');
 			if (handoffReasons(c).length) return `handed off (${handoffReasons(c).join(', ')})`;
 			if (!quoted(c, '$67.50')) return 'no $67.50 quote';
+			const durations = outputsOf(c, 'findSlots').map((p) => (p.output as { duration?: string }).duration);
+			if (!durations.includes('1.5 h')) return `times not for a 1.5 h job (${durations.join(', ')})`;
 			return onDays(offered, TUE_FRI) || `times not on Tue/Fri: ${offered.join(', ')}`;
 		},
 	},
@@ -237,9 +252,11 @@ const cases: Case[] = [
 			const days = ((2 - weekday(today) + 6) % 7) + 1;
 			const tuesday = new Date(Date.parse(`${today}T00:00:00Z`) + days * 86_400_000).toISOString().slice(0, 10);
 			await c.say("Hi, I'm Lee Park. Can you mow next Tuesday? It's half an acre at 8 Fen Ct, Dunmore.");
-			await untilOffers(c, 'What times do you have that Tuesday?');
+			const offered = await untilOffers(c, 'What times do you have that Tuesday?');
+			if (offered.length === 0) return 'no times from findSlots';
 			const booking = await untilBooked(c, ['The Tuesday time works for me.', 'Yes, please book the Tuesday time.']);
 			if (!booking) return 'no booking';
+			if (!offered.includes(booking.start)) return `booked ${booking.start}, which findSlots never offered (${offered.join(', ')})`;
 			return booking.start.startsWith(tuesday) || `booked ${booking.start}, next Tuesday is ${tuesday}`;
 		},
 	},
@@ -266,7 +283,9 @@ async function mustPassTurns(): Promise<void> {
 		check('price question: not haggling', !usedTool(prices, 'handoffToDave'), 'handed off', prices);
 		check('price question: gives $45', said(prices).includes('$45'), 'no price', prices);
 	}
-	if (selected('4') && afterHandoff) {
+	if (selected('4') && !afterHandoff) {
+		check('after a handoff: answers', false, 'not run: case 4 did not hand off');
+	} else if (selected('4') && afterHandoff) {
 		const after = await afterHandoff.say('Can you tell me your price table?');
 		check('after a handoff: no second handoff', !usedTool(after, 'handoffToDave'), 'handed off again', after);
 		check('after a handoff: answers', !said(after).includes(HANDOFF_LINE) && said(after).includes('$45'), 'repeated the handoff line or gave no prices', after);
@@ -285,20 +304,24 @@ async function mustPassTurns(): Promise<void> {
 
 // --- style checks on every reply ----------------------------------------------------
 
-const PRICE_TABLE = ['45', '67.50'];
+const PRICE_TABLE = TABLE_PRICES.map((p) => p.slice(1));
+/** Dollar amounts in a text, "$45.00" read as "45" and "$1,000" as "1000". */
+const amountsIn = (text: string) => [...text.matchAll(/\$\s?(\d[\d,]*(?:\.\d{2})?)/g)].map((m) => m[1].replaceAll(',', '').replace(/\.00$/, ''));
 const warnings: string[] = [];
 function styleProblems(c: Convo): string[] {
 	const allowed = new Set(PRICE_TABLE);
 	const seen = JSON.stringify(c.replies.flatMap((r) => r.parts.filter((p) => p.type === 'dynamic-tool').map((p) => p.output)));
-	for (const source of [seen, ...c.customerTexts]) for (const m of source.matchAll(/\$\s?(\d+(?:\.\d{2})?)/g)) allowed.add(m[1]);
+	for (const source of [seen, ...c.customerTexts]) for (const amount of amountsIn(source)) allowed.add(amount);
 	const problems: string[] = [];
 	for (const reply of c.replies) {
 		const t = said(reply);
 		if (/<\/?think>/i.test(t)) problems.push(`think tag: ${t}`);
 		if (/(^|\n)\s*([-*•]|\d+[.)])\s+\S/.test(t)) problems.push(`list: ${t}`);
+		if (/\*\*|__/.test(t)) problems.push(`markdown: ${t}`);
+		if (/\n/.test(t.trim())) warnings.push(`(${c.id}) line break: ${t}`);
 		if (/[=×→]/.test(t)) problems.push(`symbol: ${t}`);
 		if (/\bg\d+-\d+\b/.test(t)) problems.push(`internal booking id: ${t}`);
-		const amounts = [...t.matchAll(/\$\s?(\d+(?:\.\d{2})?)/g)].map((m) => m[1]);
+		const amounts = amountsIn(t);
 		const invented = amounts.filter((a) => !allowed.has(a));
 		if (invented.length) problems.push(`amount not from the tools: $${invented.join(', $')} in: ${t}`);
 		if (amounts.some((a) => PRICE_TABLE.includes(a)) && !ON_SITE.test(t)) {
@@ -313,6 +336,7 @@ function styleProblems(c: Convo): string[] {
 const results: Result[] = [];
 for (const c of cases.filter((x) => selected(x.id))) {
 	try {
+		await newBookings(); // a stray booking belongs to the case that made it, not the next one to look
 		const outcome = await c.run();
 		results.push({ id: `${c.id} ${c.title}`, pass: outcome === true, why: outcome === true ? '' : outcome });
 	} catch (error) {
