@@ -28,14 +28,17 @@ describe('lawnDeskPrompt', () => {
 	});
 
 	it('asks for texts a person would write: no formulas, arrows, or calculation symbols (build-plan §13)', () => {
-		expect(lawnDeskPrompt(NOW)).toContain('never a formula, an arrow, or symbols such as × or →');
+		expect(lawnDeskPrompt(NOW)).toContain('never a formula, an arrow, or symbols such as =, × or →');
 	});
 
 	// build-plan §4 "Conversation": not every text is a booking.
 	it('answers greetings and general questions from the rules, without intake questions', () => {
 		const prompt = lawnDeskPrompt(NOW);
-		expect(prompt).toContain('Greetings and general questions (prices, the price table, towns and days, hours)');
+		expect(prompt).toContain('A greeting gets a short greeting back and an offer to help with their lawn');
+		expect(prompt).toContain('General questions (prices, the price table, towns and days, hours)');
 		expect(prompt).toContain('answer them directly from the rules above');
+		// A question about their own yard is a quote request (build-plan §16).
+		expect(prompt).toContain('is a quote request: if they gave the yard size, first say its price from the rules');
 		expect(prompt).toMatch(/only once the customer wants a quote or a booking:\s*1\. You need the town, street address, and yard size/);
 	});
 
@@ -51,7 +54,25 @@ describe('lawnDeskPrompt', () => {
 	it('offers the price and times before asking the name, and books only a time the customer picked', () => {
 		const prompt = lawnDeskPrompt(NOW);
 		expect(prompt).toContain("Ask the customer's name only after they pick one of the offered times");
+		// A size the customer does not know is not asked again (build-plan §16, E2E case 7).
+		expect(prompt).toContain('If the customer says they do not know the yard size, do not ask again');
 		expect(prompt).toContain('Never call bookSlot before the customer has seen the price and picked a time');
+	});
+
+	// build-plan §16 (Day 11 checklist): unrelated texts are declined, not done.
+	it('declines texts unrelated to lawn mowing in one sentence, with no tool call or handoff', () => {
+		const prompt = lawnDeskPrompt(NOW);
+		expect(prompt).toContain('Texts that are not about Dave\'s lawn mowing');
+		expect(prompt).toContain('reply in one short sentence that you only handle quotes and bookings for Dave\'s lawn mowing');
+		expect(prompt).toContain('Do not do the task, not even part of it. No tool call and no handoff.');
+	});
+
+	it('keeps SMS replies plain: no lists or markdown, no amounts the rules or tools did not give, no internal ids, and the on-site note with every price', () => {
+		const prompt = lawnDeskPrompt(NOW);
+		expect(prompt).toContain('No markdown, no bold, no lists, no line breaks.');
+		expect(prompt).toContain('Only say prices from the rules or the tools, never a fee, discount, or other amount.');
+		expect(prompt).toContain('Never send internal ids such as the booking id.');
+		expect(prompt).toContain('the booking confirmation included, also says the final price may change on site');
 	});
 
 	it('tells a price question apart from haggling', () => {
