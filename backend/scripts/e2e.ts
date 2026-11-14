@@ -11,7 +11,8 @@
 // NICKNAME must be an allowlisted made-up test nickname, never a member's. The run
 // resets that visitor's calendar once, then texts from a new phone per case. Every
 // run calls the real Workers AI model and spends the account's daily allowance
-// (about 35 neurons per customer text), so run the full suite only at checkpoints.
+// (about 40 neurons per customer text, about 1,000 per full run), so run the full
+// suite only at checkpoints.
 import { env, exit } from 'node:process';
 import {
 	anyTool,

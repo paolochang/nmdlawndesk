@@ -110,6 +110,25 @@ ACCESS_CODE=… NICKNAME=my-test-nickname node scripts/m1.ts
 Use a made-up test nickname from the local allowlist. `BASE_URL` defaults to
 `http://localhost:8787/api`. The script calls the real Workers AI model.
 
+## E2E score
+
+`scripts/e2e.ts` scores the desk on the 10 launch cases (a full request, a bare price
+question, a misspelled town, out of area, 2 acres, exactly 1 acre, unknown size,
+haggling, a complaint, "next Tuesday"), judged by tool outcomes and the calendar, not
+by wording. It also runs must-pass turns (a greeting, a price question, a question
+after a handoff, off-topic texts) and checks every reply for think tags, lists,
+symbols, internal ids, amounts the tools did not give, and the on-site price note. It
+exits non-zero below 9/10 or on any must-pass failure.
+
+```sh
+ACCESS_CODE=… NICKNAME=my-test-nickname node scripts/e2e.ts
+ONLY=4,7,offtopic ACCESS_CODE=… NICKNAME=my-test-nickname node scripts/e2e.ts   # a subset
+```
+
+A full run is about 25 customer texts, roughly 1,000 of the account's 10,000 free
+Workers AI neurons a day (local dev spends the same allowance), so run it at
+checkpoints only. Pass `BASE_URL` to point it at another server.
+
 ## Routes
 
 All routes are under `/api` (`src/app.ts`).
@@ -144,6 +163,7 @@ overlapping or rule-breaking bookings and also keeps the visitor's write counter
 | `npm run deploy` | Build and deploy the Worker |
 | `node scripts/allowlist.ts <list>` | Nickname list → allowlist KV entries (needs `SECRET` in the environment) |
 | `node scripts/m1.ts` | M1 check against the dev server (needs `ACCESS_CODE` and `NICKNAME`) |
+| `node scripts/e2e.ts` | E2E score: the 10 launch cases, must-pass turns, and reply style (needs `ACCESS_CODE` and `NICKNAME`) |
 
 ## Layout
 
