@@ -1,7 +1,8 @@
 // M1 evidence (ROADMAP Day 7): through the API alone, a scripted customer
 // conversation books a slot, and a handoff texts Dave's phone. Then the
 // off-script turns of build-plan §4 "Conversation": a question after a handoff, a
-// greeting, a price question, haggling, and a complaint with no booking intent.
+// greeting, a price question, haggling, and a complaint with no booking intent (name
+// and address asked first).
 // Then live dates (build-plan §12): "next Tuesday" books on the real date. Last,
 // chat-only bookings (build-plan §13): no booking before the customer texts a name.
 //
@@ -107,8 +108,11 @@ expectThat(haggled?.reason === 'haggling', 'did not hand off haggling', haggle);
 const unhappy = `/agents/lawn-desk/${visitorId}:${generation}:+15550104`;
 console.log(`\n# Off-script: a complaint in ${unhappy}`);
 const complaint = await text(unhappy, token, 'Your mowing yesterday damaged my fence. I want a refund.');
-const reason = (toolOutputs(complaint, 'handoffToDave')[0]?.input as { reason?: string } | undefined)?.reason;
-expectThat(reason === 'complaint' || reason === 'refund', 'did not hand off a complaint', complaint);
+// Dave needs to know whose job it was (owner E2E 2026-11-14): name and address first, then the handoff.
+expectThat(!usedTool(complaint, 'handoffToDave') && /name|address|street/i.test(said(complaint)), 'did not ask for the name and address first', complaint);
+const details = await text(unhappy, token, "I'm Ann Lee, 9 Hill Rd, Ashford.");
+const reason = (toolOutputs(details, 'handoffToDave')[0]?.input as { reason?: string } | undefined)?.reason;
+expectThat(reason === 'complaint' || reason === 'refund', 'did not hand off a complaint', details);
 console.log('\n✓ Off-script turns passed.');
 
 // 5. Live dates (build-plan §12): in a fresh generation, "next Tuesday" books on

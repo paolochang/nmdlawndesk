@@ -52,6 +52,7 @@ console.log(`signed in: visitorId=${visitorId}, generation=${generation}, today=
 /** A customer conversation from a new phone, keeping every reply for the style checks. */
 interface Convo {
 	id: string;
+	phone: string;
 	replies: Message[];
 	customerTexts: string[];
 	say(body: string): Promise<Message | undefined>;
@@ -64,6 +65,7 @@ function convo(label: string): Convo {
 	console.log(`\n# ${label} (${phone})`);
 	const c: Convo = {
 		id: label,
+		phone,
 		replies: [],
 		customerTexts: [],
 		async say(body) {
@@ -242,8 +244,15 @@ const cases: Case[] = [
 		title: 'Complaint',
 		async run() {
 			const c = convo('9 complaint');
-			await c.say('Dave missed a whole strip of my lawn last week and left clippings all over my driveway.');
-			return handoffReasons(c).includes('complaint') || `no complaint handoff (${handoffReasons(c).join(', ')})`;
+			const first = await c.say('Dave missed a whole strip of my lawn last week and left clippings all over my driveway.');
+			// Owner E2E (2026-11-14): Dave needs to know whose job it was, so the desk asks first.
+			if (handoffReasons(c).length) return 'handed off before asking for the name and address';
+			if (!/name|address|street/i.test(said(first))) return 'did not ask for the name and address';
+			await c.say("I'm Nora Hill, 21 Moor Ln, Clearwater.");
+			if (!handoffReasons(c).includes('complaint')) return `no complaint handoff (${handoffReasons(c).join(', ')})`;
+			const { daveTexts } = await api<{ daveTexts: { text: string }[] }>(`/calendar/${visitorId}`, { token });
+			const alert = daveTexts.find((t) => t.text.startsWith(`Please call ${c.phone} (a complaint).`));
+			return (alert?.text.includes('Nora Hill') && alert.text.includes('21 Moor Ln')) || `Dave's text lacks the name and address (${alert?.text})`;
 		},
 	},
 	{
