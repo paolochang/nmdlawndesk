@@ -114,13 +114,15 @@ Use a made-up test nickname from the local allowlist. `BASE_URL` defaults to
 
 `scripts/e2e.ts` scores the desk on the 10 launch cases (a full request, a bare price
 question, a misspelled town, out of area, 2 acres, exactly 1 acre, unknown size,
-haggling, a complaint, "next Tuesday"), judged by tool outcomes, the calendar, and
-the price texted to the customer, not by wording. It also runs must-pass turns (a greeting, a price question, a question
-after a handoff, an off-topic text) and checks every reply for think tags, lists,
-symbols, markdown, internal ids, a booking claimed without `bookSlot`, and amounts the
-rules or tools did not give (a missing
-on-site price note or a line break is a warning only). It
-exits non-zero below 9/10 or on any must-pass failure.
+haggling, a complaint, "next Tuesday"), judged by tool outcomes, the calendar, and the
+price texted to the customer, not by wording. It also runs must-pass turns (a
+greeting, a price question, a question after a handoff, a side question and "neither
+works" mid-booking, a payment question, a yard in square feet, an off-topic text) and
+checks every reply for think tags, lists, symbols, markdown, internal ids, a booking
+claimed without `bookSlot`, and amounts the rules or tools did not give. A missing
+on-site price note, a line break, a repeated set of times, or a greeting that does not
+say it is the booking assistant is a warning only. It exits non-zero below 9/10 or on
+any must-pass failure.
 
 ```sh
 ACCESS_CODE=… NICKNAME=my-test-nickname node scripts/e2e.ts

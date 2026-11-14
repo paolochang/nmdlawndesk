@@ -9,6 +9,7 @@
 //   npx vite dev --port 8787 --strictPort        # in another terminal
 //   ACCESS_CODE=... NICKNAME=... node scripts/e2e.ts
 //   ONLY=4,7,offtopic ACCESS_CODE=... NICKNAME=... node scripts/e2e.ts   # a subset
+//   (subset ids: 1-10, greeting, flow, policy, sqft, offtopic; 4 also runs the after-handoff turn)
 //
 // NICKNAME must be an allowlisted made-up test nickname, never a member's. The run
 // resets that visitor's calendar once, then texts from a new phone per case. Every
@@ -282,6 +283,7 @@ async function mustPassTurns(): Promise<void> {
 		check('greeting: no tool call', !anyTool(hello), 'called a tool', hello);
 		check('greeting: no intake questions', !/address|acre|yard/i.test(said(hello)), 'asked for booking details', hello);
 		check('greeting: thanks them for reaching out', /thank/i.test(said(hello)), 'no thank-you', hello);
+		if (!/assistant/i.test(said(hello))) warnings.push(`(greeting) first reply does not say it is Dave's booking assistant: ${said(hello)}`);
 		const prices = await c.say('What do you charge for mowing?');
 		check('price question: not haggling', !usedTool(prices, 'handoffToDave'), 'handed off', prices);
 		check('price question: gives $45', said(prices).includes('$45'), 'no price', prices);
@@ -292,6 +294,35 @@ async function mustPassTurns(): Promise<void> {
 		const after = await afterHandoff.say('Can you tell me your price table?');
 		check('after a handoff: no second handoff', !usedTool(after, 'handoffToDave'), 'handed off again', after);
 		check('after a handoff: answers', !said(after).includes(HANDOFF_LINE) && said(after).includes('$45'), 'repeated the handoff line or gave no prices', after);
+	}
+	// Owner review (2026-11-14): a side question mid-booking gets an answer, not the times
+	// again, and "neither works" gets new times from findSlots.
+	if (selected('flow')) {
+		const c = convo('flow: side question, then neither works');
+		await c.say("I'd like a quote. It's about half an acre at 14 Birch Ave, Birchwood.");
+		const first = await untilOffers(c, 'What times do you have?');
+		const side = await c.say('How long does the job take?');
+		check('side question: answered', /hour/i.test(said(side)) && !CLAIMS_BOOKING.test(said(side)), 'did not say how long it takes', side);
+		const neither = await c.say("Neither of those works for me, sorry. Anything later?");
+		const later = toolOutputs(neither, 'findSlots').flatMap((p) => (p.output as { slots?: { start: string }[] }).slots ?? []).map((x) => x.start);
+		check(
+			'neither works: new times from findSlots',
+			first.length > 0 && later.length > 0 && later.every((start) => !first.includes(start)),
+			`no new findSlots times (first ${first.join(', ')}; then ${later.join(', ')})`,
+			neither,
+		);
+	}
+	// Owner review (2026-11-14): a lawn question the rules do not answer goes to Dave, not a made-up policy.
+	if (selected('policy')) {
+		const c = convo('policy: payment question');
+		const pay = await c.say('Do you take credit cards?');
+		check('payment question: handed to Dave', handoffReasons(c).includes('other'), 'no handoff with reason other', pay);
+	}
+	// Owner review (2026-11-14): square feet are converted, not guessed.
+	if (selected('sqft')) {
+		const c = convo('sqft: 5,000 sq ft');
+		await c.say('How much to mow a 5,000 sq ft yard at 3 Cedar Ct, Dunmore?');
+		check('square feet: quoted as up to half an acre', quoted(c, '$45'), 'no $45 quote for 5,000 sq ft', c.replies.at(-1));
 	}
 	if (selected('offtopic')) {
 		for (const body of OFF_TOPIC) {
@@ -308,6 +339,8 @@ async function mustPassTurns(): Promise<void> {
 // --- style checks on every reply ----------------------------------------------------
 
 const PRICE_TABLE = TABLE_PRICES.map((p) => p.slice(1));
+/** A slot label as the desk texts it, e.g. "Mon Nov 16". */
+const TIME_LABEL = /\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)[a-z]*,? (Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]* \d{1,2}\b/g;
 /** "You're booked", "booking confirmed", "I've scheduled you" … (owner E2E 2026-11-14: texted with no bookSlot call). */
 const CLAIMS_BOOKING = /\b(you'?re|you are|you'?ve been|you have been|it'?s|it is|that'?s|that is)\s+(all\s+)?(booked|scheduled|confirmed|reserved)\b|\bbooking (is )?confirmed\b|\bI'?ve (booked|scheduled|reserved)\b|\bI have (booked|scheduled|reserved)\b/i;
 /** Dollar amounts in a text, "$45.00" read as "45" and "$1,000" as "1000". */
@@ -324,7 +357,9 @@ function styleProblems(c: Convo): string[] {
 	for (const reply of c.replies.slice(1)) {
 		if (/thanks? (you )?for (reaching out|contacting|texting)/i.test(said(reply))) problems.push(`thanked for reaching out again: ${said(reply)}`);
 	}
-	for (const reply of c.replies) {
+	let pricedBefore = false;
+	let previousTimes = new Set<string>();
+	for (const [index, reply] of c.replies.entries()) {
 		const t = said(reply);
 		const booked = toolOutputs(reply, 'bookSlot').some((p) => (p.output as { ok?: boolean }).ok === true);
 		if (CLAIMS_BOOKING.test(t) && !booked) problems.push(`says it is booked, but bookSlot did not book in this reply: ${t}`);
@@ -337,9 +372,15 @@ function styleProblems(c: Convo): string[] {
 		const amounts = amountsIn(t);
 		const invented = amounts.filter((a) => !allowed.has(a));
 		if (invented.length) problems.push(`amount not from the tools: $${invented.join(', $')} in: ${t}`);
-		if (amounts.some((a) => PRICE_TABLE.includes(a)) && !ON_SITE.test(t)) {
-			warnings.push(`(${c.id}) price without "may change on site": ${t}`);
-		}
+		// The on-site note belongs to the first price and the booking confirmation (owner review 2026-11-14).
+		const firstPrice = amounts.some((a) => PRICE_TABLE.includes(a)) && !pricedBefore;
+		if ((firstPrice || booked) && !ON_SITE.test(t)) warnings.push(`(${c.id}) ${booked ? 'booking confirmation' : 'first price'} without "may change on site": ${t}`);
+		if (amounts.some((a) => PRICE_TABLE.includes(a))) pricedBefore = true;
+		// Repeating the previous text's times or price unasked reads like a template (owner review).
+		const times = new Set(t.match(TIME_LABEL) ?? []);
+		const asked = /time|when|avail|slot|again|which|price|cost|how much/i.test(c.customerTexts[index] ?? '');
+		if (index > 0 && !asked && times.size > 0 && [...times].every((x) => previousTimes.has(x))) warnings.push(`(${c.id}) repeated the times: ${t}`);
+		previousTimes = times;
 	}
 	return problems;
 }
