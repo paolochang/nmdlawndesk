@@ -45,12 +45,12 @@ describe('lawnDeskPrompt', () => {
 	it('keeps the handoff rule outside the quote-or-booking gate', () => {
 		// A complaint or refund text wants neither a quote nor a booking (PR #8 post-E2E review).
 		const prompt = lawnDeskPrompt(NOW);
-		const rule = prompt.indexOf('When the customer complains or asks for a refund');
+		const rule = prompt.indexOf('A complaint or refund takes two steps');
 		expect(rule).toBeGreaterThan(-1);
 		expect(rule).toBeLessThan(prompt.indexOf('How to book, only once'));
 		expect(prompt).toContain('When to hand off, on any text:');
 		// Owner E2E (2026-11-14): Dave needs to know whose job a complaint is about.
-		expect(prompt).toContain('if they have not texted their name and street address, first say you are sorry and ask for both in one short question. Hand off on their next text, even if they did not give them.');
+		expect(prompt).toContain('Step 1, when they have not texted their name and street address: do not hand off yet; say you are sorry and ask for both in one short question. Step 2, on their next text: hand off with whatever they gave, even nothing.');
 	});
 
 	it('offers the price and times before asking the name, and books only a time the customer picked', () => {
@@ -128,6 +128,11 @@ describe('lawnDeskPrompt', () => {
 		expect(later).toContain('do not thank them for reaching out again');
 		expect(later).toContain("Respond to what they just said, and only about Dave's lawn mowing");
 		expect(later).not.toContain('start with a short thank-you');
+	});
+
+	// Owner E2E (2026-11-14): one complaint text produced a long reasoning that re-read the rules over and over.
+	it('asks for brief thinking that does not restate the rules', () => {
+		expect(lawnDeskPrompt(NOW)).toContain('Think briefly: decide in a few short sentences which rule applies, then act. Do not re-read, quote, or restate the rules in your thinking.');
 	});
 
 	it('tells a price question apart from haggling', () => {

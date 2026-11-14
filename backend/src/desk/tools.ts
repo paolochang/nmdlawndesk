@@ -190,7 +190,7 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 		defineTool({
 			name: 'handoffToDave',
 			description:
-				"Hand the customer to Dave: outside the service area, yard over 1 acre, complaint, refund, haggling (pushing for a lower price or a discount), or a lawn question the rules do not answer. Asking what a job costs is not haggling. Texts Dave with the reason and the customer's latest texts. For a complaint or refund, ask for the customer's name and street address first if they have not texted them, so Dave's text quotes them; otherwise do not collect more details. Once per issue.",
+				"Hand the customer to Dave: outside the service area, yard over 1 acre, complaint, refund, haggling (pushing for a lower price or a discount), or a lawn question the rules do not answer. Asking what a job costs is not haggling. Texts Dave with the reason, any name and address the customer texted, and their latest texts. Once per issue.",
 			input: v.object({
 				reason: v.picklist(HANDOFF_REASONS),
 				acres: v.optional(
