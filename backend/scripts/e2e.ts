@@ -79,7 +79,6 @@ function convo(label: string): Convo {
 
 const outputsOf = (c: Convo, tool: string) => c.replies.flatMap((r) => toolOutputs(r, tool));
 const inputsOf = (c: Convo, tool: string) => outputsOf(c, tool).map((p) => p.input as Record<string, unknown>);
-const quotes = (c: Convo) => outputsOf(c, 'quoteJob').map((p) => p.output as { price?: string; handoff?: string });
 const offers = (c: Convo) =>
 	outputsOf(c, 'findSlots').flatMap((p) => (p.output as { slots?: { start: string }[] }).slots ?? []).map((s) => s.start);
 /** Reasons of handoffs that went through: a refused call (`ok: false`, e.g. missing acres) texted no one. */
@@ -94,11 +93,11 @@ const ON_SITE = /(chang|adjust)\w* on site/i;
 /** The price table's prices, from the rules: ["$45", "$67.50"]. */
 const TABLE_PRICES = RULES.priceTable.map((row) => dollars(Math.round((row.durationMinutes / 60) * RULES.hourlyRateCents)));
 /**
- * The case's price reached the customer: quoteJob returned it, or a desk text stated it
- * and not another table price (a recited price table is not a quote).
+ * The case's price reached the customer: a desk text stated it and no other table price
+ * (a recited price table is not a quote, and a right quoteJob result with a wrong texted
+ * price is still a wrong quote).
  */
 const quoted = (c: Convo, price: string) =>
-	quotes(c).some((q) => q.price === price) ||
 	c.replies.some((r) => said(r).includes(price) && !TABLE_PRICES.some((p) => p !== price && said(r).includes(p)));
 /** Asked for what is missing: no tool call, and the text asks for the address, town, or yard size. */
 const asksDetails = (m: Message | undefined) => !anyTool(m) && /address|street|town|where|how big|what size|yard size/i.test(said(m));
@@ -147,6 +146,7 @@ const cases: Case[] = [
 			const offered = await untilOffers(c, 'Great, what times do you have?');
 			if (!quoted(c, '$45')) return 'no $45 quote';
 			if (!onDays(offered, MON_THU)) return `times not on Mon/Thu: ${offered.join(', ')}`;
+			if ((await newBookings()).length) return 'booked before the customer picked a time';
 			const booking = await untilBooked(c, ['The first time works for me.', 'Yes, please book the first time you offered.']);
 			if (!booking) return 'no booking';
 			if (booking.start !== offered[0]) return `booked ${booking.start}, first offer ${offered[0]}`;
@@ -221,7 +221,7 @@ const cases: Case[] = [
 			await c.say("Can you mow my lawn at 5 Rose Ln, Dunmore? I'm not sure how big it is.");
 			if (!inputsOf(c, 'quoteJob').some((i) => i.acres === null)) await c.say("I really don't know the size.");
 			if (!inputsOf(c, 'quoteJob').some((i) => i.acres === null)) return 'no quote for an unknown size';
-			if (!quotes(c).some((q) => q.price === '$45')) return 'not the 1-hour rate';
+			if (!quoted(c, '$45')) return 'the 1-hour rate was not texted';
 			return c.replies.some((r) => ON_SITE.test(said(r))) || 'did not say it is adjusted on site';
 		},
 	},
@@ -254,6 +254,7 @@ const cases: Case[] = [
 			await c.say("Hi, I'm Lee Park. Can you mow next Tuesday? It's half an acre at 8 Fen Ct, Dunmore.");
 			const offered = await untilOffers(c, 'What times do you have that Tuesday?');
 			if (offered.length === 0) return 'no times from findSlots';
+			if ((await newBookings()).length) return 'booked before the customer picked a time';
 			const booking = await untilBooked(c, ['The Tuesday time works for me.', 'Yes, please book the Tuesday time.']);
 			if (!booking) return 'no booking';
 			if (!offered.includes(booking.start)) return `booked ${booking.start}, which findSlots never offered (${offered.join(', ')})`;
