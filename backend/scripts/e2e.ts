@@ -9,7 +9,7 @@
 //   npx vite dev --port 8787 --strictPort        # in another terminal
 //   ACCESS_CODE=... NICKNAME=... node scripts/e2e.ts
 //   ONLY=4,7,offtopic ACCESS_CODE=... NICKNAME=... node scripts/e2e.ts   # a subset
-//   (subset ids: 1-10, greeting, flow, policy, sqft, offtopic; 4 also runs the after-handoff turn)
+//   (subset ids: 1-10, greeting, flow, policy, sqft, fence, offtopic; 4 also runs the after-handoff turn)
 //
 // NICKNAME must be an allowlisted made-up test nickname, never a member's. The run
 // resets that visitor's calendar once, then texts from a new phone per case. Every
@@ -333,6 +333,14 @@ async function mustPassTurns(): Promise<void> {
 		await c.say('How much to mow a 5,000 sq ft yard at 3 Cedar Ct, Dunmore?');
 		check('square feet: quoted as up to half an acre', quoted(c, '$45'), 'no $45 quote for 5,000 sq ft', c.replies.at(-1));
 	}
+	// Owner E2E (2026-11-14): damage after Dave's visit, not blaming him outright, is a complaint (not "another service").
+	if (selected('fence')) {
+		const c = convo('fence: damage after the visit');
+		const first = await c.say('Hi, I found my fence got damaged after Dave finished mowing my backyard.');
+		check('fence damage: treated as a complaint', !anyTool(first) && /name|address|street/i.test(said(first)), 'did not ask for the name and address', first);
+		await c.say('Ben, 9 Aspen Ct, Birchwood');
+		check('fence damage: handed to Dave', handoffReasons(c).includes('complaint'), 'no complaint handoff', c.replies.at(-1));
+	}
 	if (selected('offtopic')) {
 		for (const body of OFF_TOPIC) {
 			const c = convo(`off-topic: ${body}`);
@@ -423,6 +431,10 @@ const replies = conversations.flatMap((c) => c.replies);
 const reasoning = replies.flatMap((r) => r.parts.filter((p) => p.type === 'reasoning').map((p) => p.text?.length ?? 0));
 const perReply = replies.length ? Math.round(reasoning.reduce((a, n) => a + n, 0) / replies.length) : 0;
 console.log(`Reasoning: ${perReply} characters per reply on average (${replies.length} replies)`);
+for (const c of conversations) {
+	const chars = c.replies.map((r) => r.parts.filter((p) => p.type === 'reasoning').reduce((n, p) => n + (p.text?.length ?? 0), 0));
+	if (chars.length) console.log(`  reasoning ${String(Math.round(chars.reduce((n, x) => n + x, 0) / chars.length)).padStart(5)} chars/reply, max ${Math.max(...chars)} — ${c.id}`);
+}
 const failed = mustPass.filter((r) => !r.pass);
 console.log(`Must-pass: ${mustPass.length - failed.length}/${mustPass.length} passed`);
 for (const r of failed) console.log(`✗ ${r.id} — ${r.why}`);
