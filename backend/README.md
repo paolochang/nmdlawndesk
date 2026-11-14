@@ -116,7 +116,7 @@ Use a made-up test nickname from the local allowlist. `BASE_URL` defaults to
 question, a misspelled town, out of area, 2 acres, exactly 1 acre, unknown size,
 haggling, a complaint, "next Tuesday"), judged by tool outcomes and the calendar, not
 by wording. It also runs must-pass turns (a greeting, a price question, a question
-after a handoff, off-topic texts) and checks every reply for think tags, lists,
+after a handoff, an off-topic text) and checks every reply for think tags, lists,
 symbols, internal ids, amounts the tools did not give, and the on-site price note. It
 exits non-zero below 9/10 or on any must-pass failure.
 
@@ -125,9 +125,10 @@ ACCESS_CODE=… NICKNAME=my-test-nickname node scripts/e2e.ts
 ONLY=4,7,offtopic ACCESS_CODE=… NICKNAME=my-test-nickname node scripts/e2e.ts   # a subset
 ```
 
-A full run is about 25 customer texts, roughly 1,000 of the account's 10,000 free
-Workers AI neurons a day (local dev spends the same allowance), so run it at
-checkpoints only. Pass `BASE_URL` to point it at another server.
+A full run is about 20 customer texts, roughly 800 of the account's 10,000 free
+Workers AI neurons a day (local dev and production spend the same allowance). While
+fixing, run only the failing cases with `ONLY=`; keep full runs for the final check.
+Pass `BASE_URL` to point it at another server.
 
 ## Routes
 

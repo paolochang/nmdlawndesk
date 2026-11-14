@@ -11,8 +11,8 @@
 // NICKNAME must be an allowlisted made-up test nickname, never a member's. The run
 // resets that visitor's calendar once, then texts from a new phone per case. Every
 // run calls the real Workers AI model and spends the account's daily allowance
-// (about 40 neurons per customer text, about 1,000 per full run), so run the full
-// suite only at checkpoints.
+// (about 40 neurons per customer text, about 800 per full run). While fixing, run
+// only the failing cases with ONLY=; run the full suite only for the final check.
 import { env, exit } from 'node:process';
 import {
 	anyTool,
@@ -252,7 +252,8 @@ function check(id: string, ok: boolean, why: string, reply?: Message): void {
 	mustPass.push({ id, pass: ok, why: ok ? '' : `${why} (desk said: ${said(reply)})` });
 }
 
-const OFF_TOPIC = ['Write me a poem about cats.', "What's the weather tomorrow?", 'Can you help me with my taxes?'];
+/** One off-topic text: the poem is the one the desk once wrote instead of declining (more would cost 2 texts each). */
+const OFF_TOPIC = ['Write me a poem about cats.'];
 
 async function mustPassTurns(): Promise<void> {
 	if (selected('greeting')) {
