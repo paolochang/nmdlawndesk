@@ -39,6 +39,10 @@ const LARGEST = RULES.priceTable[RULES.priceTable.length - 1].maxAcres;
  * then that Dave will contact them directly. Fixed text, so the model never
  * invents a reason or a promise.
  */
+/** When Dave answers: after the day's last job (the business story, build-plan §1; owner review 2026-11-14). */
+const CLOSE_HOUR = Number(RULES.hours.close.slice(0, 2));
+const REPLY_TIME = ` He usually replies after ${CLOSE_HOUR % 12 || 12} ${CLOSE_HOUR < 12 ? 'AM' : 'PM'}, once he's done mowing for the day.`;
+
 const HANDOFF_REPLIES: Record<HandoffReason, string> = {
 	'out-of-area': `Sorry, Dave doesn't work in your area; he only mows in ${TOWN_LIST}. I've passed your request to Dave, and he will contact you directly to talk it over.`,
 	'yard-over-1-acre': `Sorry, I can't book yards over ${LARGEST} acre; Dave prices those himself. I've asked Dave to contact you directly to talk it over.`,
@@ -49,7 +53,7 @@ const HANDOFF_REPLIES: Record<HandoffReason, string> = {
 };
 
 export function handoffReply(reason: HandoffReason): string {
-	return HANDOFF_REPLIES[reason];
+	return HANDOFF_REPLIES[reason] + REPLY_TIME;
 }
 
 const HANDOFF_NEXT = `If this issue is not handed off yet, call handoffToDave now, then send the reply it returns, word for word. Otherwise do not hand it off again; answer the customer's question from the rules.`;

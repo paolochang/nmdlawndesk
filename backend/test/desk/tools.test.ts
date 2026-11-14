@@ -238,16 +238,18 @@ describe('desk tools', () => {
 			expect(daveTexts()).toEqual([]);
 		});
 
-		it('tells the customer why the desk cannot take it, then that Dave will contact them', () => {
+		it('tells the customer why the desk cannot take it, that Dave will contact them, and when he usually replies', () => {
 			expect(handoffReply('out-of-area')).toBe(
-				"Sorry, Dave doesn't work in your area; he only mows in Ashford, Clearwater, Birchwood, and Dunmore. I've passed your request to Dave, and he will contact you directly to talk it over.",
+				"Sorry, Dave doesn't work in your area; he only mows in Ashford, Clearwater, Birchwood, and Dunmore. I've passed your request to Dave, and he will contact you directly to talk it over. He usually replies after 1 PM, once he's done mowing for the day.",
 			);
 			expect(handoffReply('yard-over-1-acre')).toBe(
-				"Sorry, I can't book yards over 1 acre; Dave prices those himself. I've asked Dave to contact you directly to talk it over.",
+				"Sorry, I can't book yards over 1 acre; Dave prices those himself. I've asked Dave to contact you directly to talk it over. He usually replies after 1 PM, once he's done mowing for the day.",
 			);
 			for (const reason of ['complaint', 'refund', 'haggling', 'other'] as const) {
 				expect(handoffReply(reason)).toMatch(/contact you directly/);
 				expect(handoffReply(reason)).not.toBe('Dave will contact you directly.');
+				// Owner review (2026-11-14): the customer learns when Dave usually answers.
+				expect(handoffReply(reason)).toMatch(/He usually replies after 1 PM, once he's done mowing for the day\.$/);
 			}
 		});
 
