@@ -266,7 +266,7 @@ describe('desk tools', () => {
 			const output = (await setup().call('handoffToDave', { reason: 'out-of-area' })) as {
 				next?: string;
 			};
-			expect(output.next).toMatch(/once/);
+			expect(output.next).toMatch(/now, once, as it is/);
 			expect(output.next).toMatch(/keep answering/);
 			expect(output.next).toMatch(/do not call handoffToDave again/i);
 		});

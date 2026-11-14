@@ -67,8 +67,7 @@ const MAX_ACRES = Math.max(...RULES.priceTable.map((row) => row.maxAcres));
 const NOT_OVER_NEXT = `Not handed off: a yard of ${MAX_ACRES} acre or less is in the price table. Call quoteJob with the size and quote it; hand off only a yard larger than ${MAX_ACRES} acre.`;
 const MISSING_ACRES_NEXT = 'Not handed off: call handoffToDave again with the yard size in acres, or ask the customer for it.';
 
-const HANDED_OFF_NEXT =
-	"Send the reply once, now. After that keep answering the customer's general questions from the rules; do not call handoffToDave again for this issue.";
+const HANDED_OFF_NEXT = 'Send this reply now, once, as it is; then keep answering. Do not call handoffToDave again for this issue.';
 const PRICE_NOTE = 'Final price may change on site.';
 const UNKNOWN_SIZE_NOTE = 'Yard size unknown: this is the 1-hour rate, adjusted on site.';
 
@@ -210,7 +209,9 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 					if (data.acres <= MAX_ACRES) return { output: { ok: false, reason: 'not-over-1-acre', next: NOT_OVER_NEXT } };
 				}
 				const { phone, generation } = deps.conversation;
-				const result = await deps.store.handoff(phone, data.reason, generation, { name: data.name, address: data.address, town: data.town });
+				// An empty string is "not texted", the same as leaving the field out.
+				const details = { name: data.name?.trim() || undefined, address: data.address?.trim() || undefined, town: data.town?.trim() || undefined };
+				const result = await deps.store.handoff(phone, data.reason, generation, details);
 				if (!result.ok) return { output: { ok: false, reason: 'stale-generation', next: REJECTION_NEXT['stale-generation'] } };
 				return { output: { ok: true, reply: handoffReply(data.reason), next: HANDED_OFF_NEXT } };
 			},

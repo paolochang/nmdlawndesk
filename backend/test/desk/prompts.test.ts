@@ -45,12 +45,14 @@ describe('lawnDeskPrompt', () => {
 	it('keeps the handoff rule outside the quote-or-booking gate', () => {
 		// A complaint or refund text wants neither a quote nor a booking (PR #8 post-E2E review).
 		const prompt = lawnDeskPrompt(NOW);
-		const rule = prompt.indexOf('A complaint or refund takes two steps');
+		const rule = prompt.indexOf('Complaint or refund, including damage or a missed spot');
 		expect(rule).toBeGreaterThan(-1);
 		expect(rule).toBeLessThan(prompt.indexOf('How to book, only once'));
-		expect(prompt).toContain('When to hand off, on any text:');
+		expect(prompt).toContain('When to hand off, on any text, by reason:');
 		// Owner E2E (2026-11-14): Dave needs to know whose job a complaint is about.
-		expect(prompt).toContain('Step 1, when they have not texted their name and street address: do not hand off yet; say you are sorry and ask for both in one short question. Step 2, on their next text: hand off with whatever they gave, even nothing.');
+		expect(prompt).toContain('if they have not texted their name and street address, say sorry and ask for both in one question, then hand off on their next text with whatever they gave');
+		// Owner E2E: a damaged fence after Dave's visit was declined as another service.
+		expect(prompt).toContain("A report of damage or a problem after Dave's visit is not such a request: it is a complaint.");
 	});
 
 	it('offers the price and times before asking the name, and books only a time the customer picked', () => {
@@ -108,7 +110,7 @@ describe('lawnDeskPrompt', () => {
 
 	it('hands off lawn questions the rules do not answer instead of making up a policy', () => {
 		expect(lawnDeskPrompt(NOW)).toContain(
-			'(payment, rain or weather, recurring visits, insurance, equipment, cancelling or changing a booking): never make up an answer or a policy. Call handoffToDave with reason "other"',
+			'(payment, rain or weather, recurring visits, insurance, equipment, cancelling or changing a booking): never make up an answer or a policy; hand off with reason "other"',
 		);
 	});
 
@@ -135,6 +137,8 @@ describe('lawnDeskPrompt', () => {
 		// Owner (2026-11-14): thinking stays on, in key points only.
 		expect(lawnDeskPrompt(NOW)).toContain('Think briefly, in key points only: one short line each for what the customer just asked or gave, which rule applies, and what you will do. Then act.');
 		expect(lawnDeskPrompt(NOW)).toContain('Do not re-read, quote, or restate the rules, and do not second-guess a decision.');
+		// Repeated at the end, where the model reads it last (owner E2E, complaint reasoning).
+		expect(lawnDeskPrompt(NOW).trimEnd().endsWith('Never copy rules, examples, or a reply you will send into your thinking.')).toBe(true);
 	});
 
 	it('tells a price question apart from haggling', () => {
@@ -143,7 +147,7 @@ describe('lawnDeskPrompt', () => {
 
 	it('says the handoff line once, then keeps answering without handing off the same issue again', () => {
 		const prompt = lawnDeskPrompt(NOW);
-		expect(prompt).toContain('send the reply it returns, word for word');
+		expect(prompt).toContain('then send its reply as it is');
 		expect(prompt).toContain('Send that reply only on the turn you hand off');
 		expect(prompt).toContain('keep answering their general questions');
 		expect(prompt).toContain('Never call handoffToDave twice for the same issue');
