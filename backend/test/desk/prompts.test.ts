@@ -131,8 +131,10 @@ describe('lawnDeskPrompt', () => {
 	});
 
 	// Owner E2E (2026-11-14): one complaint text produced a long reasoning that re-read the rules over and over.
-	it('asks for brief thinking that does not restate the rules', () => {
-		expect(lawnDeskPrompt(NOW)).toContain('Think briefly: decide in a few short sentences which rule applies, then act. Do not re-read, quote, or restate the rules in your thinking.');
+	it('asks for thinking in three key points that does not restate the rules', () => {
+		// Owner (2026-11-14): thinking stays on, in key points only.
+		expect(lawnDeskPrompt(NOW)).toContain('Think briefly, in key points only: one short line each for what the customer just asked or gave, which rule applies, and what you will do. Then act.');
+		expect(lawnDeskPrompt(NOW)).toContain('Do not re-read, quote, or restate the rules, and do not second-guess a decision.');
 	});
 
 	it('tells a price question apart from haggling', () => {

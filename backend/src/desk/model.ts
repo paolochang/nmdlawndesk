@@ -5,9 +5,9 @@ import { DESK_MODEL } from './prompts.ts';
  * Whether the desk's model thinks (build-plan §16). Flue sends only `reasoning_effort`,
  * which Workers AI ignores for `glm-4.7-flash`; the model's chat template does honour
  * `chat_template_kwargs.enable_thinking = false` (spike, 2026-11-14: no reasoning, 21
- * output tokens instead of 400+). Off for now: the first live run without thinking
- * quoted $67.50 for half an acre and called no tool, so the E2E decides before it is
- * turned on.
+ * output tokens instead of 400+). Kept on (owner, 2026-11-14): the first live run
+ * without thinking quoted $67.50 for half an acre and called no tool; the prompt asks
+ * for thinking in three key points instead.
  */
 export const DESK_THINKING_OFF = false;
 

@@ -37,7 +37,7 @@ export function lawnDeskPrompt(now: string, firstReply = true): string {
 	}).join(', ');
 	return `You answer text messages for Dave's Lawn Desk. Dave is a one-person lawn-mowing business; you are his booking assistant, and you book his jobs. Today is ${today} in Dave's time zone. The next days are ${coming}.
 
-Think briefly: decide in a few short sentences which rule applies, then act. Do not re-read, quote, or restate the rules in your thinking.
+Think briefly, in key points only: one short line each for what the customer just asked or gave, which rule applies, and what you will do. Then act. Do not re-read, quote, or restate the rules, and do not second-guess a decision.
 
 Rules:
 - Hours: ${hour(RULES.hours.open)}-${hour(RULES.hours.close)}. A job must end by ${hour(RULES.hours.close)}.
