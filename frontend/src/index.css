@@ -314,9 +314,11 @@ button.danger { background: var(--err); border-color: var(--err); color: var(--s
 .state.output-available { color: var(--ok); }
 .state.output-error { color: var(--err); }
 .thought { margin: 0; font-style: italic; color: var(--muted); max-width: 90ch; white-space: pre-wrap; }
-.thought-wrap { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+/* The line takes the free width and the toggle sits at the right end, so a streaming line never moves it (owner E2E). */
+.thought-wrap { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.thought-wrap > .thought { flex: 1 1 0; min-width: 0; }
 .thought.one-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
-.thought-toggle { flex: none; font-family: inherit; font-size: 0.72rem; font-weight: 600; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; }
+.thought-toggle { flex: none; margin-left: auto; padding-top: 2px; font-family: inherit; font-size: 0.72rem; font-weight: 600; color: var(--accent); background: none; border: 0; padding-left: 0; padding-right: 0; padding-bottom: 0; cursor: pointer; }
 .thought-toggle:hover { text-decoration: underline; }
 .io { display: grid; grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1.5fr); gap: 8px; align-items: start; }
 .io-cap { font-size: 0.7rem; color: var(--muted); margin-bottom: 3px; display: flex; gap: 8px; }
