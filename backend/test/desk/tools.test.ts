@@ -1,7 +1,7 @@
 import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
 import { PRESETS, presetBookings } from '../../src/domain/presets.ts';
-import { type DeskStore, deskTools, handoffReply } from '../../src/desk/tools.ts';
+import { type DeskStore, deskTools, handoffReply, resetFindSlotsGuard } from '../../src/desk/tools.ts';
 import { type KvStorage, VisitorLedger } from '../../src/store/ledger.ts';
 
 // A ledger on an in-memory KV stands in for the Durable Object. The clock is Sun
@@ -13,6 +13,7 @@ const SUNDAY = () => Date.parse('2026-11-15T14:00:00Z');
 const TEXTS = ['Can you mow half an acre at 45 Oak Rd, Birchwood?', "I'm Sarah Lee."];
 
 function setup(generation = 1, clock = SUNDAY, texts = TEXTS) {
+	resetFindSlotsGuard();
 	const map = new Map<string, unknown>();
 	const kv: KvStorage = { get: <T>(k: string) => structuredClone(map.get(k)) as T, put: (k, v) => void map.set(k, structuredClone(v)) };
 	const ledger = new VisitorLedger(kv, () => 0, clock);
@@ -20,7 +21,7 @@ function setup(generation = 1, clock = SUNDAY, texts = TEXTS) {
 		list: async () => ledger.list(),
 		add: async (request) => ledger.add(request),
 		addCustomer: async (phone, generation) => ledger.addCustomer(phone, generation),
-		handoff: async (phone, reason, generation) => ledger.handoff(phone, reason, generation),
+		handoff: async (phone, reason, generation, details) => ledger.handoff(phone, reason, generation, details),
 	};
 	for (const text of texts) ledger.addCustomerText('+15550101', text, 1);
 	const tools = deskTools({
@@ -209,7 +210,35 @@ describe('desk tools', () => {
 		});
 	});
 
+	// E2E (2026-11-14): one reply called findSlots 78 times with the same input.
+	it('tells the model to send the times, and to stop after the same findSlots call repeats', async () => {
+		const { call } = setup();
+		const ask = { town: 'Birchwood', acres: 0.5 };
+		const first = (await call('findSlots', ask)) as { next?: string; slots?: unknown[] };
+		expect(first.next).toMatch(/^Send these times to the customer now/);
+		await call('findSlots', ask);
+		const third = (await call('findSlots', ask)) as { next?: string; slots?: unknown[] };
+		expect(third.next).toMatch(/^You already have these times from findSlots\. Do not call findSlots again/);
+		expect(third.slots).toEqual(first.slots);
+	});
+
 	describe('handoffToDave', () => {
+		// Owner E2E (2026-11-14): Dave's text names the customer and the address they texted.
+		it('puts the name and address the customer texted into Dave\'s text, and leaves out anything they did not text', async () => {
+			const { call, daveTexts } = setup(1, SUNDAY, ["Last time you missed half my yard. I'm Ann Lee, 9 Hill Rd, Ashford."]);
+			await call('handoffToDave', { reason: 'refund', name: 'Ann Lee', address: '9 Hill Rd', town: 'Ashford' });
+			expect(daveTexts().at(-1)).toMatch(/^Please call \+15550101 \(a refund request\)\. Name: Ann Lee\. Address: 9 Hill Rd, Ashford\. They texted: /);
+			await call('handoffToDave', { reason: 'complaint', name: 'Bob Stone', address: '1 Fake St', town: 'Ashford' });
+			expect(daveTexts().at(-1)).toMatch(/^Please call \+15550101 \(a complaint\)\. Address: Ashford\. They texted: /);
+		});
+
+		// Review: a town the model added after a texted street must not reach Dave's text.
+		it('leaves out a town the customer never texted, even when the model writes it after the street', async () => {
+			const { call, daveTexts } = setup(1, SUNDAY, ['Ann Lee, 45 Oak Rd. You damaged my fence.']);
+			await call('handoffToDave', { reason: 'complaint', name: 'Ann Lee', address: '45 Oak Rd, Ashford', town: 'Ashford' });
+			expect(daveTexts().at(-1)).toMatch(/^Please call \+15550101 \(a complaint\)\. Name: Ann Lee\. Address: 45 Oak Rd\. They texted: /);
+		});
+
 		it("texts Dave the reason and the customer's own texts, and gives the customer reply", async () => {
 			const { call, daveTexts } = setup(1, SUNDAY, ['How much for my 2 acre lot at 9 Hill Rd, Ashford?']);
 			const output = await call('handoffToDave', { reason: 'yard-over-1-acre', acres: 2 });
@@ -238,16 +267,18 @@ describe('desk tools', () => {
 			expect(daveTexts()).toEqual([]);
 		});
 
-		it('tells the customer why the desk cannot take it, then that Dave will contact them', () => {
+		it('tells the customer why the desk cannot take it, that Dave will contact them, and when he usually replies', () => {
 			expect(handoffReply('out-of-area')).toBe(
-				"Sorry, Dave doesn't work in your area; he only mows in Ashford, Clearwater, Birchwood, and Dunmore. I've passed your request to Dave, and he will contact you directly to talk it over.",
+				"Sorry, Dave doesn't work in your area; he only mows in Ashford, Clearwater, Birchwood, and Dunmore. I've passed your request to Dave, and he will contact you directly to talk it over. He usually replies after 1 PM, once he's done mowing for the day.",
 			);
 			expect(handoffReply('yard-over-1-acre')).toBe(
-				"Sorry, I can't book yards over 1 acre; Dave prices those himself. I've asked Dave to contact you directly to talk it over.",
+				"Sorry, I can't book yards over 1 acre; Dave prices those himself. I've asked Dave to contact you directly to talk it over. He usually replies after 1 PM, once he's done mowing for the day.",
 			);
 			for (const reason of ['complaint', 'refund', 'haggling', 'other'] as const) {
 				expect(handoffReply(reason)).toMatch(/contact you directly/);
 				expect(handoffReply(reason)).not.toBe('Dave will contact you directly.');
+				// Owner review (2026-11-14): the customer learns when Dave usually answers.
+				expect(handoffReply(reason)).toMatch(/He usually replies after 1 PM, once he's done mowing for the day\.$/);
 			}
 		});
 
@@ -255,7 +286,7 @@ describe('desk tools', () => {
 			const output = (await setup().call('handoffToDave', { reason: 'out-of-area' })) as {
 				next?: string;
 			};
-			expect(output.next).toMatch(/once/);
+			expect(output.next).toMatch(/now, once, as it is/);
 			expect(output.next).toMatch(/keep answering/);
 			expect(output.next).toMatch(/do not call handoffToDave again/i);
 		});

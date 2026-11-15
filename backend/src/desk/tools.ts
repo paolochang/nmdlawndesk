@@ -18,10 +18,26 @@ export interface DeskStore {
 	add(request: BookingRequest): Promise<AddResult>;
 	addCustomer(phone: string, generation?: number): Promise<Customer[]>;
 	/** Texts Dave the handoff: the reason and the customer's own texts (build-plan §13). */
-	handoff(phone: string, reason: HandoffReason, generation: number): Promise<{ ok: boolean }>;
+	handoff(
+		phone: string,
+		reason: HandoffReason,
+		generation: number,
+		details?: { name?: string; address?: string; town?: string },
+	): Promise<{ ok: boolean }>;
 }
 
 export { HANDOFF_REASONS, type HandoffReason };
+
+const SLOTS_NEXT = 'Send these times to the customer now and ask which works. Call findSlots again only if they turn both down.';
+const SLOTS_REPEAT_NEXT = 'You already have these times from findSlots. Do not call findSlots again; send them to the customer now.';
+/** A repeated identical findSlots call within this window counts toward the loop guard (E2E: 78 calls in one reply). */
+const REPEAT_WINDOW_MS = 120_000;
+/** Recent findSlots calls per conversation and input, kept in the agent's isolate across the turns of one reply. */
+const recentFindSlots = new Map<string, { at: number; count: number }>();
+/** Tests share one isolate: forget the loop guard's memory. */
+export function resetFindSlotsGuard(): void {
+	recentFindSlots.clear();
+}
 
 export interface DeskDeps {
 	conversation: CustomerConversation;
@@ -39,6 +55,10 @@ const LARGEST = RULES.priceTable[RULES.priceTable.length - 1].maxAcres;
  * then that Dave will contact them directly. Fixed text, so the model never
  * invents a reason or a promise.
  */
+/** When Dave answers: after the day's last job (the business story, build-plan §1; owner review 2026-11-14). */
+const CLOSE_HOUR = Number(RULES.hours.close.slice(0, 2));
+const REPLY_TIME = ` He usually replies after ${CLOSE_HOUR % 12 || 12} ${CLOSE_HOUR < 12 ? 'AM' : 'PM'}, once he's done mowing for the day.`;
+
 const HANDOFF_REPLIES: Record<HandoffReason, string> = {
 	'out-of-area': `Sorry, Dave doesn't work in your area; he only mows in ${TOWN_LIST}. I've passed your request to Dave, and he will contact you directly to talk it over.`,
 	'yard-over-1-acre': `Sorry, I can't book yards over ${LARGEST} acre; Dave prices those himself. I've asked Dave to contact you directly to talk it over.`,
@@ -49,7 +69,7 @@ const HANDOFF_REPLIES: Record<HandoffReason, string> = {
 };
 
 export function handoffReply(reason: HandoffReason): string {
-	return HANDOFF_REPLIES[reason];
+	return HANDOFF_REPLIES[reason] + REPLY_TIME;
 }
 
 const HANDOFF_NEXT = `If this issue is not handed off yet, call handoffToDave now, then send the reply it returns, word for word. Otherwise do not hand it off again; answer the customer's question from the rules.`;
@@ -58,8 +78,7 @@ const MAX_ACRES = Math.max(...RULES.priceTable.map((row) => row.maxAcres));
 const NOT_OVER_NEXT = `Not handed off: a yard of ${MAX_ACRES} acre or less is in the price table. Call quoteJob with the size and quote it; hand off only a yard larger than ${MAX_ACRES} acre.`;
 const MISSING_ACRES_NEXT = 'Not handed off: call handoffToDave again with the yard size in acres, or ask the customer for it.';
 
-const HANDED_OFF_NEXT =
-	"Send the reply once, now. After that keep answering the customer's general questions from the rules; do not call handoffToDave again for this issue.";
+const HANDED_OFF_NEXT = 'Send this reply now, once, as it is; then keep answering. Do not call handoffToDave again for this issue.';
 const PRICE_NOTE = 'Final price may change on site.';
 const UNKNOWN_SIZE_NOTE = 'Yard size unknown: this is the 1-hour rate, adjusted on site.';
 
@@ -129,6 +148,14 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 					bookings,
 					now: at,
 				});
+				// The same call again and again within one reply is a loop: from the third, say stop.
+				const { visitorId, generation, phone } = deps.conversation;
+				const key = `${visitorId}:${generation}:${phone}|${resolved}|${data.acres}|${data.from ?? ''}`;
+				const nowMs = (deps.clock ?? Date.now)();
+				const last = recentFindSlots.get(key);
+				const count = last && nowMs - last.at < REPEAT_WINDOW_MS ? last.count + 1 : 1;
+				recentFindSlots.set(key, { at: nowMs, count });
+				const next = slots.length ? (count >= 3 ? SLOTS_REPEAT_NEXT : SLOTS_NEXT) : `No open time in the next ${RULES.searchDays} days. ${HANDOFF_NEXT}`;
 				return {
 					output: {
 						town: resolved,
@@ -137,7 +164,7 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 							.join('/'),
 						duration: hours(q.durationMinutes),
 						slots: slots.map((s) => ({ start: s.start, label: slotLabel(s) })),
-						...(slots.length ? {} : { next: `No open time in the next ${RULES.searchDays} days. ${HANDOFF_NEXT}` }),
+						next,
 					},
 				};
 			},
@@ -181,7 +208,7 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 		defineTool({
 			name: 'handoffToDave',
 			description:
-				"Hand the customer to Dave: outside the service area, yard over 1 acre, complaint, refund, or haggling (pushing for a lower price or a discount). Asking what a job costs is not haggling. Texts Dave right away with the reason and the customer's own texts; do not collect more details first. Once per issue.",
+				"Hand the customer to Dave: outside the service area, yard over 1 acre, complaint, refund, haggling (pushing for a lower price or a discount), or a lawn question the rules do not answer. Asking what a job costs is not haggling. Texts Dave with the reason, any name and address the customer texted, and their latest texts. Once per issue.",
 			input: v.object({
 				reason: v.picklist(HANDOFF_REASONS),
 				acres: v.optional(
@@ -190,6 +217,9 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 						v.description('Required for yard-over-1-acre: the yard size the customer gave, in acres. Not needed for other reasons.'),
 					),
 				),
+				name: v.optional(v.pipe(v.string(), v.description("The customer's name, exactly as they texted it. Omit if they did not."))),
+				address: v.optional(v.pipe(v.string(), v.description('The street address the customer texted, e.g. 45 Oak Rd. Omit if they did not.'))),
+				town: v.optional(v.pipe(v.string(), v.description('The town the customer texted. Omit if they did not.'))),
 			}),
 			async run({ data }) {
 				// The model once read "1 acre" as over 1 acre (owner E2E, PR 9): the size decides, not the model.
@@ -198,7 +228,9 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 					if (data.acres <= MAX_ACRES) return { output: { ok: false, reason: 'not-over-1-acre', next: NOT_OVER_NEXT } };
 				}
 				const { phone, generation } = deps.conversation;
-				const result = await deps.store.handoff(phone, data.reason, generation);
+				// An empty string is "not texted", the same as leaving the field out.
+				const details = { name: data.name?.trim() || undefined, address: data.address?.trim() || undefined, town: data.town?.trim() || undefined };
+				const result = await deps.store.handoff(phone, data.reason, generation, details);
 				if (!result.ok) return { output: { ok: false, reason: 'stale-generation', next: REJECTION_NEXT['stale-generation'] } };
 				return { output: { ok: true, reply: handoffReply(data.reason), next: HANDED_OFF_NEXT } };
 			},

@@ -39,6 +39,19 @@ describe('toBubbles', () => {
     ]);
   });
 
+  it('never shows thinking the model leaked into a desk text (build-plan §16)', () => {
+    const messages = [
+      message('m1', 'assistant', [{ type: 'text', text: '<think>Quote first.</think>That is $45.', state: 'done' }]),
+      message('m2', 'assistant', [{ type: 'text', text: 'They want Tuesday.\n</think>\n\nTuesday works.', state: 'done' }]),
+      message('m3', 'assistant', [{ type: 'text', text: '<think>Only thoughts', state: 'done' }]),
+    ];
+
+    expect(toBubbles(messages)).toEqual([
+      { id: 'm1:0', from: 'desk', text: 'That is $45.' },
+      { id: 'm2:0', from: 'desk', text: 'Tuesday works.' },
+    ]);
+  });
+
   it('marks the text of a send that failed as not delivered', () => {
     const messages = [message('local-1', 'user', [{ type: 'text', text: 'Hi', state: 'done' }])];
     expect(toBubbles(messages, ['local-1'])).toEqual([

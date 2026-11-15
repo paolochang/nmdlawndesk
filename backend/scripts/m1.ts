@@ -1,7 +1,8 @@
 // M1 evidence (ROADMAP Day 7): through the API alone, a scripted customer
 // conversation books a slot, and a handoff texts Dave's phone. Then the
 // off-script turns of build-plan §4 "Conversation": a question after a handoff, a
-// greeting, a price question, haggling, and a complaint with no booking intent.
+// greeting, a price question, haggling, and a complaint with no booking intent (name
+// and address asked first).
 // Then live dates (build-plan §12): "next Tuesday" books on the real date. Last,
 // chat-only bookings (build-plan §13): no booking before the customer texts a name.
 //
@@ -13,107 +14,21 @@
 // http://localhost:8787/api. The script resets the visitor's calendar first, so
 // it runs against a fresh generation. It calls the real Workers AI model.
 import { env, exit } from 'node:process';
+import { api, type Booking, type DaveText, HANDOFF_LINE, type Message, said, signIn, text, toolOutputs, usedTool } from './desk-api.ts';
 
-const BASE = env.BASE_URL ?? 'http://localhost:8787/api';
 const { ACCESS_CODE, NICKNAME } = env;
 if (!ACCESS_CODE || !NICKNAME) {
 	console.error('Set ACCESS_CODE and NICKNAME (an allowlisted test nickname).');
 	exit(1);
 }
 
-interface Part {
-	type: string;
-	text?: string;
-	toolName?: string;
-	state?: string;
-	input?: unknown;
-	output?: unknown;
-	errorText?: string;
-}
-interface Message {
-	role: string;
-	purpose: string;
-	signal?: { tagName?: string; attributes?: Record<string, string> };
-	parts: Part[];
-}
-interface Snapshot {
-	messages: Message[];
-	settlements: { submissionId: string; outcome: string; answeredBySubmissionId?: string }[];
-}
-interface Booking {
-	id: string;
-	start: string;
-	name: string;
-	basis: string;
-}
-
-async function api<T>(path: string, init: RequestInit & { token?: string } = {}): Promise<T> {
-	const headers: Record<string, string> = { 'content-type': 'application/json' };
-	if (init.token) headers.authorization = `Bearer ${init.token}`;
-	const res = await fetch(`${BASE}${path}`, { ...init, headers });
-	const body = await res.text();
-	if (!res.ok) throw new Error(`${init.method ?? 'GET'} ${path} → ${res.status} ${body}`);
-	return JSON.parse(body) as T;
-}
-
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
-/** Polls the conversation until the submission settles (2 min cap). */
-async function settled(path: string, token: string, submissionId: string): Promise<Snapshot> {
-	for (let i = 0; i < 120; i++) {
-		const snap = await api<Snapshot>(path, { token });
-		const done = snap.settlements.find(
-			(s) => s.submissionId === submissionId || s.answeredBySubmissionId === submissionId,
-		);
-		if (done) {
-			if (done.outcome !== 'completed') throw new Error(`submission ${submissionId} ${done.outcome}`);
-			return snap;
-		}
-		await sleep(1000);
-	}
-	throw new Error(`submission ${submissionId} did not settle`);
-}
-
-/** Sends one customer text and prints the reply and the tool calls of that response. */
-async function text(path: string, token: string, body: string): Promise<Message | undefined> {
-	console.log(`\n  customer > ${body}`);
-	const { submissionId } = await api<{ submissionId: string }>(path, {
-		method: 'POST',
-		token,
-		body: JSON.stringify({ kind: 'user', body }),
-	});
-	const snap = await settled(path, token, submissionId);
-	const reply = snap.messages.at(-1);
-	for (const part of reply?.parts ?? []) {
-		if (part.type === 'dynamic-tool') {
-			const result = part.state === 'output-error' ? `ERROR ${part.errorText}` : JSON.stringify(part.output);
-			console.log(`  [tool] ${part.toolName}(${JSON.stringify(part.input)}) → ${result}`);
-		}
-	}
-	console.log(`  desk     < ${said(reply)}`);
-	return reply;
-}
-
-const toolOutputs = (m: Message | undefined, name: string) =>
-	(m?.parts ?? []).filter((p) => p.type === 'dynamic-tool' && p.toolName === name && p.state === 'output-available');
-const usedTool = (m: Message | undefined, name: string) => toolOutputs(m, name).length > 0;
-const said = (m: Message | undefined) =>
-	(m?.parts ?? [])
-		.filter((p) => p.type === 'text')
-		.map((p) => p.text)
-		.join(' ');
-/** Every handoff reply ends with this (`handoffReply` in src/desk/tools.ts). */
-const HANDOFF_LINE = 'contact you directly';
 /** Off-script check: fails the run with the reason. */
 function expectThat(ok: boolean, what: string, reply: Message | undefined): void {
 	if (!ok) throw new Error(`Off-script failed: ${what} (desk said: ${said(reply)})`);
 }
 
 // 1. Sign in and start a fresh generation.
-const { visitorId, token } = await api<{ visitorId: string; token: string }>('/auth', {
-	method: 'POST',
-	body: JSON.stringify({ accessCode: ACCESS_CODE, nickname: NICKNAME }),
-});
+const { visitorId, token } = await signIn(ACCESS_CODE, NICKNAME);
 const { generation, bookings: before } = await api<{ generation: number; bookings: Booking[] }>(
 	`/calendar/${visitorId}/reset`,
 	{ method: 'POST', token },
@@ -150,10 +65,6 @@ if (booked.name !== NAME) throw new Error(`M1 failed: booked under ${booked.name
 if (booked.start !== firstOffer) throw new Error(`M1 failed: booked ${booked.start}, first offer was ${firstOffer}`);
 console.log(`\n✓ booked in GET /calendar/${visitorId}: ${booked.id} ${booked.start} — ${booked.basis}`);
 console.log(`  (name ${NAME} asked for before booking; start = first slot offered)`);
-interface DaveText {
-	id: string;
-	text: string;
-}
 const daveTexts = async () => (await api<{ daveTexts: DaveText[] }>(`/calendar/${visitorId}`, { token })).daveTexts;
 const bookedText = (await daveTexts()).find((t) => t.id === booked.id);
 if (!bookedText?.text.startsWith(`Booked ${booked.id}: ${NAME},`)) {
@@ -197,8 +108,11 @@ expectThat(haggled?.reason === 'haggling', 'did not hand off haggling', haggle);
 const unhappy = `/agents/lawn-desk/${visitorId}:${generation}:+15550104`;
 console.log(`\n# Off-script: a complaint in ${unhappy}`);
 const complaint = await text(unhappy, token, 'Your mowing yesterday damaged my fence. I want a refund.');
-const reason = (toolOutputs(complaint, 'handoffToDave')[0]?.input as { reason?: string } | undefined)?.reason;
-expectThat(reason === 'complaint' || reason === 'refund', 'did not hand off a complaint', complaint);
+// Dave needs to know whose job it was (owner E2E 2026-11-14): name and address first, then the handoff.
+expectThat(!usedTool(complaint, 'handoffToDave') && /name|address|street/i.test(said(complaint)), 'did not ask for the name and address first', complaint);
+const details = await text(unhappy, token, "I'm Ann Lee, 9 Hill Rd, Ashford.");
+const reason = (toolOutputs(details, 'handoffToDave')[0]?.input as { reason?: string } | undefined)?.reason;
+expectThat(reason === 'complaint' || reason === 'refund', 'did not hand off a complaint', details);
 console.log('\n✓ Off-script turns passed.');
 
 // 5. Live dates (build-plan §12): in a fresh generation, "next Tuesday" books on

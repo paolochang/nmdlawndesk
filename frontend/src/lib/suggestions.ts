@@ -7,6 +7,7 @@ import type { FlueConversationMessage } from '@flue/react';
 import type { Customer } from './persona.ts';
 import { bookingUnconfirmed, textedStatus } from './status.ts';
 import { statesTime } from './texted.ts';
+import { visibleText } from './transcript.ts';
 
 export interface Slot {
   start: string;
@@ -16,6 +17,8 @@ export interface Slot {
 export type Stage =
   | { kind: 'start' }
   | { kind: 'details' }
+  /** The desk asked for the customer's name and street address before handing a complaint to Dave (§16). */
+  | { kind: 'contact' }
   /** `slots`: the offered times the desk's text stated; empty when it stated none. */
   | { kind: 'slots'; slots: Slot[]; searchedAgain: boolean }
   /** `slots` when the desk asked for the name in the same text that offered them, before any pick. */
@@ -51,6 +54,7 @@ export function conversationStage(messages: readonly FlueConversationMessage[]):
   let deskTextAfterOffer = '';
   let deskTextsSinceOffer = '';
   let customerTextAfterOffer = false;
+  let lastDeskText = '';
   for (const message of visible) {
     if (message.role === 'user' && offers > 0) customerTextAfterOffer = true;
     for (const part of message.parts) {
@@ -63,11 +67,18 @@ export function conversationStage(messages: readonly FlueConversationMessage[]):
           deskTextsSinceOffer = '';
           customerTextAfterOffer = false;
         }
-      } else if (part.type === 'text' && message.role === 'assistant' && offers > 0) {
-        deskTextAfterOffer = part.text;
-        deskTextsSinceOffer += `\n${part.text}`;
+      } else if (part.type === 'text' && message.role === 'assistant') {
+        lastDeskText = visibleText(part.text);
+        if (offers > 0) {
+          deskTextAfterOffer = lastDeskText;
+          deskTextsSinceOffer += `\n${deskTextAfterOffer}`;
+        }
       }
     }
+  }
+  // A complaint or refund: the desk asks who and where before handing off (owner E2E, §16).
+  if (!offers && /\bname\b/i.test(lastDeskText) && /address|street/i.test(lastDeskText) && !/size|acre|yard|how big/i.test(lastDeskText)) {
+    return { kind: 'contact' };
   }
   if (!offers) return { kind: 'details' };
   const stated = slots.filter((slot) => statesTime(deskTextsSinceOffer, slot.start));
@@ -123,6 +134,8 @@ export function suggestReplies(stage: Stage, customer: Customer): string[] {
         `hw much 2 mow ${acres === null ? 'my lawn, not sure how big,' : acresShort(acres)} at ${street.toLowerCase()} ${typo(town)}?`,
         'Last time you missed half my yard. I want a refund.',
       ];
+    case 'contact':
+      return [`I'm ${name}, ${place}`, `${name}. ${street}`];
     case 'details':
       return acres === null
         ? [`Not sure how big. It's ${place}`]

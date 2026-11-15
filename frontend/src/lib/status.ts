@@ -4,6 +4,7 @@
 // customer, which is all the customer's Booking status card shows (build-plan §13).
 import type { FlueConversationMessage } from '@flue/react';
 import { statesDuration, statesPrice, statesRange, statesStreet, statesTime, statesTown } from './texted.ts';
+import { visibleText } from './transcript.ts';
 
 export type BookingStatus =
   | { kind: 'open' }
@@ -139,7 +140,7 @@ export function textedStatus(messages: readonly FlueConversationMessage[], deskR
   for (const message of settled) {
     for (const part of message.parts) {
       if (part.type === 'text' && message.role === 'assistant') {
-        read(part.text);
+        read(visibleText(part.text));
         continue;
       }
       if (part.type !== 'dynamic-tool' || part.state !== 'output-available' || !isRecord(part.output)) continue;
@@ -180,7 +181,7 @@ export function bookingUnconfirmed(messages: readonly FlueConversationMessage[])
   let pending: string | undefined;
   for (const message of messages) {
     for (const part of message.parts) {
-      if (part.type === 'text' && message.role === 'assistant' && pending && statesTime(part.text, pending)) pending = undefined;
+      if (part.type === 'text' && message.role === 'assistant' && pending && statesTime(visibleText(part.text), pending)) pending = undefined;
       if (part.type === 'dynamic-tool' && part.toolName === 'bookSlot' && part.state === 'output-available') {
         if (isRecord(part.output) && part.output.ok === true) pending = str(isRecord(part.input) ? part.input.start : '');
       }

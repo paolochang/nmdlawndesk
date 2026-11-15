@@ -34,6 +34,17 @@ describe('conversationStage (build-plan §7)', () => {
     expect(conversationStage([hi, quoted, offered, later])).toEqual({ kind: 'slots', slots: [slots[1]], searchedAgain: true });
   });
 
+  // Owner E2E (2026-11-14): a complaint got yard-size chips when the desk asked for the name and address.
+  it('offers the name and address when the desk asks for them before handing a complaint to Dave', () => {
+    const complaint = message('m1', 'user', [text('Last time you missed half my yard. I want a refund.')]);
+    const asked = message('m2', 'assistant', [text("I'm sorry to hear that. Could you send your name and street address so Dave can look into it?")]);
+    const stage = conversationStage([complaint, asked]);
+    expect(stage).toEqual({ kind: 'contact' });
+    expect(suggestReplies(stage, maya)).toEqual(["I'm Maya Torres, 45 Oak Rd, Ashford", 'Maya Torres. 45 Oak Rd']);
+    const intake = message('m2', 'assistant', [text("What's your name, street address, and yard size?")]);
+    expect(conversationStage([complaint, intake])).toEqual({ kind: 'details' });
+  });
+
   it('asks for the name when the desk asks for it after offering slots', () => {
     const asked = message('m6', 'assistant', [text('Great. What name should I put the booking under?')]);
     expect(conversationStage([hi, quoted, offered, message('m5', 'user', [text('Monday')]), asked])).toEqual({ kind: 'name' });

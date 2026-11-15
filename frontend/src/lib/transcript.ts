@@ -24,17 +24,33 @@ export type JudgmentEntry =
     }
   | { id: string; kind: 'reasoning'; text: string; done: boolean; time?: string };
 
+/**
+ * The part of a desk text the customer would see. The model sometimes leaks its
+ * thinking into the reply (`<think>…</think>`, or only a closing `</think>` after the
+ * thoughts); none of that is part of the text message (build-plan §16).
+ */
+export function visibleText(text: string): string {
+  let shown = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+  const close = shown.toLowerCase().lastIndexOf('</think>');
+  if (close >= 0) shown = shown.slice(close + '</think>'.length);
+  const open = shown.toLowerCase().indexOf('<think>');
+  if (open >= 0) shown = shown.slice(0, open);
+  return shown.trim();
+}
+
 /** One bubble per finished `text` part of a visible user or assistant message. */
 export function toBubbles(messages: readonly FlueConversationMessage[], failedIds: readonly string[] = []): Bubble[] {
   const bubbles: Bubble[] = [];
   for (const message of messages) {
     if (message.display !== 'visible' || (message.role !== 'user' && message.role !== 'assistant')) continue;
     message.parts.forEach((part, index) => {
-      if (part.type !== 'text' || part.state !== 'done' || !part.text.trim()) return;
+      if (part.type !== 'text' || part.state !== 'done') return;
+      const text = message.role === 'assistant' ? visibleText(part.text) : part.text.trim() && part.text;
+      if (!text) return;
       const bubble: Bubble = {
         id: `${message.id}:${index}`,
         from: message.role === 'user' ? 'customer' : 'desk',
-        text: part.text,
+        text,
       };
       if (failedIds.includes(message.id)) bubble.failed = true;
       bubbles.push(bubble);

@@ -110,6 +110,30 @@ ACCESS_CODE=… NICKNAME=my-test-nickname node scripts/m1.ts
 Use a made-up test nickname from the local allowlist. `BASE_URL` defaults to
 `http://localhost:8787/api`. The script calls the real Workers AI model.
 
+## E2E score
+
+`scripts/e2e.ts` scores the desk on the 10 launch cases (a full request, a bare price
+question, a misspelled town, out of area, 2 acres, exactly 1 acre, unknown size,
+haggling, a complaint, "next Tuesday"), judged by tool outcomes, the calendar, and the
+price texted to the customer, not by wording. It also runs must-pass turns (a
+greeting, a price question, a question after a handoff, a side question and "neither
+works" mid-booking, a payment question, a yard in square feet, an off-topic text) and
+checks every reply for think tags, lists, symbols, markdown, internal ids, a booking
+claimed without `bookSlot`, and amounts the rules or tools did not give. A missing
+on-site price note, a line break, a repeated set of times, or a greeting that does not
+say it is the booking assistant is a warning only. It exits non-zero below 9/10 or on
+any must-pass failure.
+
+```sh
+ONLY=1 ACCESS_CODE=… NICKNAME=my-test-nickname node scripts/e2e.ts   # one scope the owner asked for
+```
+
+Live agent tests run only when the owner asks, for the scope they name, one example
+each, never repeated: the script refuses to start without `ONLY`. Each customer text
+costs about 40 of the account's 10,000 free Workers AI neurons a day, shared by local
+dev and production, and a tool loop can burn the rest of the day's allowance (it did
+on 2026-11-15).
+
 ## Routes
 
 All routes are under `/api` (`src/app.ts`).
@@ -144,6 +168,7 @@ overlapping or rule-breaking bookings and also keeps the visitor's write counter
 | `npm run deploy` | Build and deploy the Worker |
 | `node scripts/allowlist.ts <list>` | Nickname list → allowlist KV entries (needs `SECRET` in the environment) |
 | `node scripts/m1.ts` | M1 check against the dev server (needs `ACCESS_CODE` and `NICKNAME`) |
+| `node scripts/e2e.ts` | E2E score: the 10 launch cases, must-pass turns, and reply style (needs `ACCESS_CODE` and `NICKNAME`) |
 
 ## Layout
 
