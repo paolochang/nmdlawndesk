@@ -37,11 +37,12 @@ import {
   takenDetails,
   type RosterEntry,
 } from './lib/roster.ts';
-import { failedSendView, sendFailure, type Session } from './lib/session.ts';
+import { failedSendView, isOwner, sendFailure, type Session } from './lib/session.ts';
 import { bookingStatus, settledStatus, textedStatus, type BookingStatus } from './lib/status.ts';
 import { conversationStage, repliesNow } from './lib/suggestions.ts';
 import { markTourSeen, tourOpensItself } from './lib/tour.ts';
-import { isTyping, replyFailed, toBubbles, toJudgmentLog } from './lib/transcript.ts';
+import { isTyping, phoneText, replyFailed, toBubbles, toJudgmentLog } from './lib/transcript.ts';
+import { SiteFooter } from './SiteFooter.tsx';
 
 const LOAD_FAILED = "Could not load Dave's calendar. Reload the page to try again.";
 const NOT_SENT = 'Text not sent. Please try again.';
@@ -247,6 +248,8 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
   // What the desk's texts told the customer: all the customer's card shows (build-plan §13).
   const shownStatus = useMemo(() => textedStatus(agent.messages, typing), [agent.messages, typing]);
   const ready = client !== undefined;
+  // The owner can copy both phones' threads (owner request, 2026-11-14).
+  const owner = isOwner(nickname);
   const earlier = generation === undefined ? [] : earlierCustomers(roster, generation, phone);
   // The card locks once this customer has texted in this generation.
   const texted =
@@ -505,6 +508,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
                   draft={draft}
                   onDraftChange={setDraft}
                   onSend={send}
+                  copyText={owner ? phoneText(bubbles, { customer: 'Customer', desk: 'Desk' }) : undefined}
                 />
                 <div className="cust-side">
                   <CustomerCard
@@ -585,6 +589,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
                 today={calendar?.today}
                 landingId={landingId}
                 daveBubbles={shownDave}
+                daveCopyText={owner ? phoneText(shownDave, { customer: 'Dave', desk: 'Desk to Dave' }) : undefined}
                 daveTyping={false}
                 daveOpen={daveOpen}
                 daveUnread={unreadCount(shownDave.length, daveSeenCount)}
@@ -615,6 +620,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
         </section>
       </main>
       <JudgmentLog entries={log} conversation={url} historyReady={agent.historyReady} />
+      <SiteFooter />
       {tourOpen && <Tour onClose={closeTour} />}
     </div>
   );

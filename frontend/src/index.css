@@ -59,7 +59,7 @@ input, select { font: inherit; color: inherit; padding: 8px 10px; border-radius:
   max-width: 1600px; margin: 0 auto; padding: 0 16px 12px;
   height: 100dvh; min-height: 640px; display: flex; flex-direction: column;
 }
-.app-header, .judgment-log { flex: none; }
+.app-header, .judgment-log, .site-footer { flex: none; }
 .app-header { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 14px 4px; }
 .brand { display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px; margin-right: auto; }
 .who, .today { color: var(--muted); font-size: 0.9rem; }
@@ -314,6 +314,12 @@ button.danger { background: var(--err); border-color: var(--err); color: var(--s
 .state.output-available { color: var(--ok); }
 .state.output-error { color: var(--err); }
 .thought { margin: 0; font-style: italic; color: var(--muted); max-width: 90ch; white-space: pre-wrap; }
+/* The line takes the free width and the toggle sits at the right end, so a streaming line never moves it (owner E2E). */
+.thought-wrap { display: flex; align-items: flex-start; gap: 10px; min-width: 0; }
+.thought-wrap > .thought { flex: 1 1 0; min-width: 0; }
+.thought.one-line { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.thought-toggle { flex: none; margin-left: auto; padding-top: 2px; font-family: inherit; font-size: 0.72rem; font-weight: 600; color: var(--accent); background: none; border: 0; padding-left: 0; padding-right: 0; padding-bottom: 0; cursor: pointer; }
+.thought-toggle:hover { text-decoration: underline; }
 .io { display: grid; grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1.5fr); gap: 8px; align-items: start; }
 .io-cap { font-size: 0.7rem; color: var(--muted); margin-bottom: 3px; display: flex; gap: 8px; }
 .delta { color: var(--add); }
@@ -394,3 +400,19 @@ button.danger { background: var(--err); border-color: var(--err); color: var(--s
 @media (prefers-reduced-motion: reduce) {
   .tour-map .area { transition: none; }
 }
+
+/* Copy buttons: the judgment log's Copy all, and the owner's phone copies (owner request, 2026-11-14). */
+.copy-btn { font-family: inherit; font-size: 0.72rem; font-weight: 600; color: var(--accent); background: none; border: 1px solid var(--line); border-radius: 6px; padding: 2px 8px; cursor: pointer; white-space: nowrap; }
+.copy-btn:hover:not(:disabled) { border-color: var(--accent); }
+.copy-btn:disabled { opacity: 0.45; cursor: default; }
+.log-head .log-copy { margin-left: auto; }
+.log-head .seg + .log-copy { margin-left: 0; }
+/* Title and subtitle stay centred; the owner's Copy sits at the end of the same row (owner E2E). */
+.thread-title-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; width: 100%; }
+.thread-title { grid-column: 2; display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.thread-title-row .phone-copy { grid-column: 3; justify-self: end; }
+
+/* Footer with the privacy link, on the sign-in page and under the simulator (owner request, 2026-11-15). */
+.site-footer { display: flex; justify-content: center; align-items: center; gap: 12px; padding-top: 8px; font-size: 0.75rem; color: var(--muted); }
+.site-footer a { color: var(--muted); text-decoration: underline; }
+.sign-in .site-footer { margin-top: 20px; }

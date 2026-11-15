@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { signIn, statusOf } from './lib/api.ts';
 import { signInErrorMessage, type Session } from './lib/session.ts';
+import { SiteFooter } from './SiteFooter.tsx';
 
 interface Props {
   nickname: string;
@@ -65,6 +66,7 @@ export function SignIn({ nickname: savedNickname, expired, onSignedIn }: Props) 
           {busy ? 'Signing in…' : 'Sign in'}
         </button>
       </form>
+      <SiteFooter />
     </main>
   );
 }

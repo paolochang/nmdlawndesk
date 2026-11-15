@@ -1,5 +1,6 @@
 // Formatting for the judgment log (build-plan §7): pretty JSON, the lines that
-// are new since the previous call of the same tool, colour tokens, and times.
+// are new since the previous call of the same tool, colour tokens, times, and the
+// one-line summary of a reasoning row (build-plan §17).
 import type { JudgmentEntry } from './transcript.ts';
 
 export interface JsonLine {
@@ -78,4 +79,77 @@ export function clockTime(iso: string | undefined): string | undefined {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return undefined;
   return [date.getHours(), date.getMinutes(), date.getSeconds()].map((n) => String(n).padStart(2, '0')).join(':');
+}
+
+/** The longest reasoning summary, in characters (build-plan §17). */
+export const SUMMARY_MAX = 120;
+
+/** What a reasoning row shows: one line, the whole thought, and whether there is more than the line. */
+export interface ReasoningView {
+  summary: string;
+  full: string;
+  more: boolean;
+}
+
+/** Words a period can follow without ending the sentence ("12 Oak St. in Ashford", "10 a.m. Tuesday"). */
+const NO_SENTENCE_END = new Set(['st', 'rd', 'ave', 'dr', 'ln', 'ct', 'blvd', 'mr', 'mrs', 'ms', 'a.m', 'p.m', 'e.g', 'i.e', 'etc', 'vs', 'approx', 'no']);
+/** A first "sentence" shorter than this is a label ("Plan:", "1."), so the summary runs on. */
+const MIN_SENTENCE = 20;
+
+/** One line of the thought without list markers, headings, or markdown emphasis. */
+function plainLine(line: string): string {
+  return line
+    .replace(/^\s*(?:#+\s*|(?:\d+[.)]|[-*•])\s+)/, '')
+    .replace(/\*\*|__|`/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** The first sentence end that is not an abbreviation, a number, or a too-short label. */
+function firstSentence(flat: string): string {
+  for (const match of flat.matchAll(/[.!?](?=\s|$)/g)) {
+    const end = match.index + 1;
+    const word = /(\S+)$/.exec(flat.slice(0, match.index))?.[1].toLowerCase() ?? '';
+    if (NO_SENTENCE_END.has(word.replace(/\.$/, '')) || /^\d+$|^[a-z]$/.test(word) || end < MIN_SENTENCE) continue;
+    return flat.slice(0, end);
+  }
+  return flat;
+}
+
+const clipEnd = (line: string) => (line.length > SUMMARY_MAX ? `${line.slice(0, SUMMARY_MAX - 1).trimEnd()}…` : line);
+const clipStart = (line: string) => (line.length > SUMMARY_MAX ? `…${line.slice(line.length - SUMMARY_MAX + 1).trimStart()}` : line);
+
+/**
+ * A reasoning row (build-plan §17). Think tags are dropped once, for both the line and
+ * the whole thought. A finished thought shows its first sentence; one still streaming
+ * shows its latest line, ending at the newest words. Either is clipped to
+ * `SUMMARY_MAX` characters, and `more` says the whole thought has more to show.
+ */
+export function reasoningView(text: string, done: boolean): ReasoningView {
+  const full = text.replace(/<\/?think>/gi, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  const lines = full.split('\n').map(plainLine).filter(Boolean);
+  if (lines.length === 0) return { summary: '', full, more: false };
+  const last = lines.length - 1;
+  const flat = lines.map((line, i) => (i < last && !/[.!?:;,]$/.test(line) ? `${line};` : line)).join(' ');
+  const summary = done ? clipEnd(firstSentence(flat)) : clipStart(lines[last]);
+  return { summary, full, more: summary !== flat };
+}
+
+/**
+ * The whole judgment log as plain text for the clipboard (owner request, build-plan §17):
+ * every entry in order, whatever the filter shows, tool calls with their full input and
+ * output and reasoning in full.
+ */
+export function judgmentLogText(entries: readonly JudgmentEntry[]): string {
+  return entries
+    .map((entry) => {
+      const time = clockTime(entry.time) ?? '--:--:--';
+      if (entry.kind === 'reasoning') return `${time} REASONING${entry.done ? '' : ' (streaming)'}\n${entry.text.trim()}`;
+      const state = { 'input-available': 'RUNNING', 'output-available': 'DONE', 'output-error': 'ERROR' }[entry.state];
+      const lines = [`${time} TOOL ${entry.toolName} ${state}`, `input: ${JSON.stringify(entry.input)}`];
+      if (entry.state === 'output-available') lines.push(`output: ${JSON.stringify(entry.output)}`);
+      if (entry.state === 'output-error') lines.push(`error: ${entry.errorText ?? ''}`);
+      return lines.join('\n');
+    })
+    .join('\n\n');
 }

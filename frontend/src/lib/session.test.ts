@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   authReducer,
   failedSendView,
+  isOwner,
   loadAuth,
   NICKNAME_KEY,
   saveAuth,
@@ -128,5 +129,13 @@ describe('failedSendView', () => {
     expect(failedSendView(429, false)).toEqual({ restoreDraft: false });
     expect(failedSendView(500, false)).toEqual({ restoreDraft: false });
     expect(failedSendView(401, true)).toEqual({ restoreDraft: false });
+  });
+});
+
+describe('isOwner (owner request)', () => {
+  it("gives the copy buttons only to the owner's nickname, however it is typed", () => {
+    expect(isOwner('paolochang')).toBe(true);
+    expect(isOwner('  PaoloChang ')).toBe(true);
+    expect(isOwner('paolo')).toBe(false);
   });
 });

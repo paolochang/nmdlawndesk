@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { useStickToBottom } from './useStickToBottom.ts';
-import { clockTime, jsonLines, jsonTokens, withPrevious } from './lib/log-format.ts';
+import { CopyButton } from './CopyButton.tsx';
+import { clockTime, jsonLines, jsonTokens, judgmentLogText, reasoningView, withPrevious } from './lib/log-format.ts';
 import { clampLogHeight, LOG_DOCK_KEY, loadLogDock, type LogDock } from './lib/log-dock.ts';
 import { unreadCount } from './lib/reveal.ts';
 import type { JudgmentEntry } from './lib/transcript.ts';
@@ -38,6 +39,24 @@ function newSince(value: unknown, previous: unknown, label: string) {
   return added > 0 ? <span className="delta">+{added} new since the last {label}</span> : null;
 }
 
+/**
+ * A reasoning row: one line by default, the full thought when opened (build-plan §17).
+ * A thought with nothing more than its line wraps instead of clipping, since it has no toggle.
+ */
+function Thought({ text, done, open, onToggle }: { text: string; done: boolean; open: boolean; onToggle: () => void }) {
+  const { summary, full, more } = reasoningView(text, done);
+  return (
+    <div className="thought-wrap">
+      <p className={`thought${more && !open ? ' one-line' : ''}`}>{more && open ? full : summary}</p>
+      {more && (
+        <button type="button" className="thought-toggle" aria-expanded={open} onClick={onToggle}>
+          {open ? 'Show less' : 'Show all'}
+        </button>
+      )}
+    </div>
+  );
+}
+
 const RESIZE_STEP_PX = 24;
 
 function readDock(): LogDock {
@@ -60,6 +79,14 @@ interface Props {
 
 export function JudgmentLog({ entries, conversation, historyReady }: Props) {
   const [filter, setFilter] = useState<Filter>('all');
+  // Reasoning rows opened to their full text; every row starts as one line (build-plan §17).
+  const [opened, setOpened] = useState<ReadonlySet<string>>(new Set());
+  const toggleThought = (id: string) =>
+    setOpened((old) => {
+      const next = new Set(old);
+      if (!next.delete(id)) next.add(id);
+      return next;
+    });
   const [dock, setDock] = useState(readDock);
   useEffect(() => {
     try {
@@ -149,6 +176,7 @@ export function JudgmentLog({ entries, conversation, historyReady }: Props) {
             ))}
           </div>
         )}
+        <CopyButton text={judgmentLogText(entries)} label="Copy all" className="log-copy" />
       </div>
       {/* Hidden, not unmounted, while collapsed: the stick-to-bottom scroll listener stays attached. */}
       <div id="judgment-log-body" className="log-body" hidden={!dock.open}>
@@ -195,7 +223,12 @@ export function JudgmentLog({ entries, conversation, historyReady }: Props) {
                   <span className="kind reasoning">reasoning</span>
                   <span className="tool-name">—</span>
                   <span />
-                  <p className="thought">{entry.text}</p>
+                  <Thought
+                    text={entry.text}
+                    done={entry.done}
+                    open={opened.has(entry.id)}
+                    onToggle={() => toggleThought(entry.id)}
+                  />
                 </>
               )}
             </li>

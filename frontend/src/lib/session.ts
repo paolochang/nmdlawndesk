@@ -98,3 +98,11 @@ export function failedSendView(status: number | undefined, sameCustomer: boolean
   if (failure === 'sign-in-again' || !sameCustomer) return { restoreDraft: false };
   return { notice: failure === 'slow-down' ? 'slow-down' : 'not-sent', restoreDraft: true };
 }
+
+/** Nicknames that get the owner's copy buttons on the phones (owner request, 2026-11-14). */
+export const OWNER_NICKNAMES: readonly string[] = ['paolochang'];
+
+/** Whether this nickname is the owner's: compared trimmed and lowercased, like the sign-in. */
+export function isOwner(nickname: string): boolean {
+  return OWNER_NICKNAMES.includes(nickname.trim().toLowerCase());
+}
