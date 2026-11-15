@@ -28,6 +28,17 @@ export interface DeskStore {
 
 export { HANDOFF_REASONS, type HandoffReason };
 
+const SLOTS_NEXT = 'Send these times to the customer now and ask which works. Call findSlots again only if they turn both down.';
+const SLOTS_REPEAT_NEXT = 'You already have these times from findSlots. Do not call findSlots again; send them to the customer now.';
+/** A repeated identical findSlots call within this window counts toward the loop guard (E2E: 78 calls in one reply). */
+const REPEAT_WINDOW_MS = 120_000;
+/** Recent findSlots calls per conversation and input, kept in the agent's isolate across the turns of one reply. */
+const recentFindSlots = new Map<string, { at: number; count: number }>();
+/** Tests share one isolate: forget the loop guard's memory. */
+export function resetFindSlotsGuard(): void {
+	recentFindSlots.clear();
+}
+
 export interface DeskDeps {
 	conversation: CustomerConversation;
 	store: DeskStore;
@@ -137,6 +148,14 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 					bookings,
 					now: at,
 				});
+				// The same call again and again within one reply is a loop: from the third, say stop.
+				const { visitorId, generation, phone } = deps.conversation;
+				const key = `${visitorId}:${generation}:${phone}|${resolved}|${data.acres}|${data.from ?? ''}`;
+				const nowMs = (deps.clock ?? Date.now)();
+				const last = recentFindSlots.get(key);
+				const count = last && nowMs - last.at < REPEAT_WINDOW_MS ? last.count + 1 : 1;
+				recentFindSlots.set(key, { at: nowMs, count });
+				const next = slots.length ? (count >= 3 ? SLOTS_REPEAT_NEXT : SLOTS_NEXT) : `No open time in the next ${RULES.searchDays} days. ${HANDOFF_NEXT}`;
 				return {
 					output: {
 						town: resolved,
@@ -145,7 +164,7 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 							.join('/'),
 						duration: hours(q.durationMinutes),
 						slots: slots.map((s) => ({ start: s.start, label: slotLabel(s) })),
-						...(slots.length ? {} : { next: `No open time in the next ${RULES.searchDays} days. ${HANDOFF_NEXT}` }),
+						next,
 					},
 				};
 			},

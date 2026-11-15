@@ -1,7 +1,7 @@
 import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
 import { PRESETS, presetBookings } from '../../src/domain/presets.ts';
-import { type DeskStore, deskTools, handoffReply } from '../../src/desk/tools.ts';
+import { type DeskStore, deskTools, handoffReply, resetFindSlotsGuard } from '../../src/desk/tools.ts';
 import { type KvStorage, VisitorLedger } from '../../src/store/ledger.ts';
 
 // A ledger on an in-memory KV stands in for the Durable Object. The clock is Sun
@@ -13,6 +13,7 @@ const SUNDAY = () => Date.parse('2026-11-15T14:00:00Z');
 const TEXTS = ['Can you mow half an acre at 45 Oak Rd, Birchwood?', "I'm Sarah Lee."];
 
 function setup(generation = 1, clock = SUNDAY, texts = TEXTS) {
+	resetFindSlotsGuard();
 	const map = new Map<string, unknown>();
 	const kv: KvStorage = { get: <T>(k: string) => structuredClone(map.get(k)) as T, put: (k, v) => void map.set(k, structuredClone(v)) };
 	const ledger = new VisitorLedger(kv, () => 0, clock);
@@ -207,6 +208,18 @@ describe('desk tools', () => {
 				reason: 'stale-generation',
 			});
 		});
+	});
+
+	// E2E (2026-11-14): one reply called findSlots 78 times with the same input.
+	it('tells the model to send the times, and to stop after the same findSlots call repeats', async () => {
+		const { call } = setup();
+		const ask = { town: 'Birchwood', acres: 0.5 };
+		const first = (await call('findSlots', ask)) as { next?: string; slots?: unknown[] };
+		expect(first.next).toMatch(/^Send these times to the customer now/);
+		await call('findSlots', ask);
+		const third = (await call('findSlots', ask)) as { next?: string; slots?: unknown[] };
+		expect(third.next).toMatch(/^You already have these times from findSlots\. Do not call findSlots again/);
+		expect(third.slots).toEqual(first.slots);
 	});
 
 	describe('handoffToDave', () => {
