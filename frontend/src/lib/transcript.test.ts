@@ -1,6 +1,6 @@
 import type { FlueConversationMessage, FlueConversationPart } from '@flue/react';
 import { describe, expect, it } from 'vitest';
-import { GREETING, isTyping, phoneText, replyFailed, toBubbles, toJudgmentLog } from './transcript.ts';
+import { deliver, GREETING, isTyping, phoneText, replyFailed, toBubbles, toJudgmentLog } from './transcript.ts';
 
 function message(
   id: string,
@@ -279,5 +279,35 @@ describe('a details retry', () => {
   it('keeps the question when nothing followed the retry, and shows nothing while the desk replies', () => {
     expect(toBubbles([message('m1', 'assistant', [asked, marker])]).map((b) => b.text)).toHaveLength(1);
     expect(toBubbles([message('m1', 'assistant', [asked, marker, quoted])], [], true)).toEqual([]);
+  });
+});
+
+// Owner E2E (2026-11-15): the simulator is a phone. A text the desk sent cannot be edited or
+// taken back, and a reply in progress shows only "typing…".
+describe('sending like a phone', () => {
+  const user = (id: string, value: string) => message(id, 'user', [done(value)]);
+  const signal = { ...message('s1', 'system', [done('<details-given>…</details-given>')]), purpose: 'dispatch', display: 'hidden' } as FlueConversationMessage;
+
+  it('shows nothing of the reply being written, even with a signal appended after it', () => {
+    const messages = [user('m0', 'Not sure how big it is. 52 Reed St, Clearwater'), message('m1', 'assistant', [done("What's the yard size?")]), signal];
+    expect(toBubbles(messages, [], true).map((b) => b.text)).toEqual(['Not sure how big it is. 52 Reed St, Clearwater']);
+  });
+
+  it('never takes back or edits a sent text, and adds new texts after it', () => {
+    const sent = [
+      { id: 'm0:0', from: 'customer' as const, text: 'Hi' },
+      { id: 'm1:0', from: 'desk' as const, text: "What's the yard size?" },
+    ];
+    const next = [
+      { id: 'm0:0', from: 'customer' as const, text: 'Hi' },
+      { id: 'm1:3', from: 'desk' as const, text: "It's $45. Mon 8 AM or Thu 9 AM?" },
+    ];
+    expect(deliver(sent, next)).toEqual([...sent, next[1]]);
+    expect(deliver(sent, [{ ...sent[0] }, { ...sent[1], text: 'changed' }])).toEqual(sent);
+  });
+
+  it('marks a customer text that failed to send, without moving it', () => {
+    const sent = [{ id: 'm0:0', from: 'customer' as const, text: 'Hi' }];
+    expect(deliver(sent, [{ ...sent[0], failed: true }])).toEqual([{ ...sent[0], failed: true }]);
   });
 });

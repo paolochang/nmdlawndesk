@@ -140,9 +140,14 @@ export function toBubbles(
   greeting?: string,
 ): Bubble[] {
   const bubbles: Bubble[] = [];
+  // The reply in progress: the last assistant message after the customer's last text, even
+  // when a signal (a details retry, #22) was appended after it.
+  const lastText = messages.findLastIndex((message) => message.role === 'user');
+  const lastReply = messages.findLastIndex((message) => message.role === 'assistant');
+  const writing = replying && lastReply > lastText ? lastReply : -1;
   messages.forEach((message, position) => {
     if (message.display !== 'visible' || (message.role !== 'user' && message.role !== 'assistant')) return;
-    if (message.role === 'assistant' && replying && position === messages.length - 1) return;
+    if (position === writing) return;
     const texts =
       message.role === 'assistant'
         ? deskTexts(message)
@@ -204,4 +209,17 @@ export function toJudgmentLog(messages: readonly FlueConversationMessage[]): Jud
  */
 export function phoneText(bubbles: readonly Bubble[], names: { customer: string; desk: string }): string {
   return bubbles.map((bubble) => `${bubble.from === 'customer' ? names.customer : names.desk}: ${bubble.text}`).join('\n');
+}
+
+/**
+ * What the customer's phone shows: `sent` (what it showed so far) unchanged, then the new
+ * texts of `next`. Like a real phone, a text once shown is never edited or taken back, and a
+ * new one only comes after it (owner E2E 2026-11-15). A customer text may still be marked as
+ * failed to send.
+ */
+export function deliver(sent: readonly Bubble[], next: readonly Bubble[]): Bubble[] {
+  const latest = new Map(next.map((bubble) => [bubble.id, bubble]));
+  const shown = sent.map((bubble) => (bubble.from === 'customer' && latest.get(bubble.id)?.failed && !bubble.failed ? { ...bubble, failed: true as const } : bubble));
+  const known = new Set(sent.map((bubble) => bubble.id));
+  return [...shown, ...next.filter((bubble) => !known.has(bubble.id))];
 }
