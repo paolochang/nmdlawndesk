@@ -92,6 +92,8 @@ export interface DeskText {
  * triggers the out-of-area rule…"), unless the reply also booked, whose confirmation the
  * customer needs; the sentences of the reply copied after the call are not sent twice, and a
  * greeting the model wrote is dropped (the app adds its own, `toBubbles`).
+ * A text written before a `data-details-retry` marker (#22: the desk was sent back to the
+ * tools after asking again for details it had) is not sent once a text follows the marker.
  * `replying`: this message is still being written, so a handoff call under way already
  * holds back the text before it. Every reader of desk texts (bubbles, status, suggestions)
  * uses this, so they agree.
@@ -105,7 +107,11 @@ export function deskTexts(message: FlueConversationMessage, replying = false): D
     return reply ? [{ index, reply }] : [];
   });
   const pending = replying ? parts.findLastIndex((part) => part.type === 'dynamic-tool' && part.toolName === 'handoffToDave' && part.state === 'input-available') : -1;
-  const holdBefore = booked ? -1 : Math.max(handoffs.at(-1)?.index ?? -1, pending);
+  // #22: the agent sent the desk back to quoteJob and findSlots after it asked again for details
+  // it had; what it wrote before the marker is replaced by what follows (or will follow, while replying).
+  const retry = parts.findLastIndex((part) => part.type === 'data-details-retry');
+  const retryHold = retry >= 0 && (replying || parts.some((part, index) => index > retry && part.type === 'text')) ? retry : -1;
+  const holdBefore = Math.max(booked ? -1 : Math.max(handoffs.at(-1)?.index ?? -1, pending), retryHold);
   const texts: DeskText[] = [];
   parts.forEach((part, index) => {
     const reply = handoffReply(part);

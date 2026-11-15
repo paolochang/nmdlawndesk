@@ -256,3 +256,20 @@ describe('the greeting', () => {
     expect(desk.map((b) => b.text)).toEqual([`${GREETING} It's $45.`, "Thanks! What's your name?"]);
   });
 });
+
+// #22: when the desk asked again for details it had, the agent sent it back to the tools with a
+// `data-details-retry` marker; the question written before the marker is not sent.
+describe('a details retry', () => {
+  const marker = { type: 'data-details-retry', data: { at: 2 } } as unknown as FlueConversationPart;
+  const asked = done("That would be $45. What's the rough yard size at 52 Reed St?");
+  const quoted = done("That's $45 for about an hour, and the final price may change on site. Dave can come Mon Nov 16, 8-9 AM or Thu Nov 19, 9-10 AM; which works?");
+
+  it('sends the reply that followed the retry, not the question before it', () => {
+    expect(toBubbles([message('m1', 'assistant', [asked, marker, quoted])]).map((b) => b.text)).toEqual([quoted.type === 'text' ? quoted.text : '']);
+  });
+
+  it('keeps the question while nothing has followed the retry yet, unless the desk is still replying', () => {
+    expect(toBubbles([message('m1', 'assistant', [asked, marker])]).map((b) => b.text)).toHaveLength(1);
+    expect(toBubbles([message('m1', 'assistant', [asked, marker])], [], true)).toEqual([]);
+  });
+});
