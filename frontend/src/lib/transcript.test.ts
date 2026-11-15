@@ -49,14 +49,15 @@ describe('toBubbles around a handoff (a customer text gets one desk text)', () =
     expect(bubbles.map((b) => b.text)).toEqual([confirmation, REPLY]);
   });
 
-  // Holistic review of #20 (P2): while the desk is still replying, the sentence before the call must not flash.
-  it('hides the text before a handoff call while the desk is still replying', () => {
-    const pending: FlueConversationPart = { ...(handoff({}) as object), state: 'input-available', output: undefined } as FlueConversationPart;
-    const earlyText = 'Your text triggers the out-of-area rule.';
-    const early = done(earlyText);
-    expect(toBubbles([message('m1', 'assistant', [early, pending])], [], true)).toEqual([]);
-    expect(toBubbles([message('m1', 'assistant', [early, handoff({ ok: true, reply: REPLY })])], [], true).map((b) => b.text)).toEqual([REPLY]);
-    expect(toBubbles([message('m1', 'assistant', [early, handoff({ ok: false, reason: 'not-over-1-acre' })])], [], true).map((b) => b.text)).toEqual([earlyText]);
+  // Owner E2E (2026-11-15): a desk text that appeared while the desk was replying later changed.
+  // While it replies the customer sees only "typing…"; its texts come once, when the reply is done.
+  it('shows none of the reply being written, then its final texts once it is done', () => {
+    const early = done('Your text triggers the out-of-area rule.');
+    const writing = [message('m0', 'user', [done('Half acre at 4 Bay St, Kestrel Bay')]), message('m1', 'assistant', [early, handoff({ ok: true, reply: REPLY })])];
+    expect(toBubbles(writing, [], true).map((b) => b.text)).toEqual(['Half acre at 4 Bay St, Kestrel Bay']);
+    expect(toBubbles(writing, [], false).map((b) => b.text)).toEqual(['Half acre at 4 Bay St, Kestrel Bay', REPLY]);
+    const pending = { ...(handoff({}) as object), state: 'input-available', output: undefined } as FlueConversationPart;
+    expect(toBubbles([message('m1', 'assistant', [done('Let me check.'), pending])], [], true)).toEqual([]);
   });
 
   // Codex review of #20 (P3): the replying guard is for the message being written, not for history.
@@ -275,8 +276,8 @@ describe('a details retry', () => {
     expect(bubbles).toEqual(['We take cash or card on the day.', quoted.type === 'text' ? quoted.text : '']);
   });
 
-  it('keeps the question while nothing has followed the retry yet, unless the desk is still replying', () => {
+  it('keeps the question when nothing followed the retry, and shows nothing while the desk replies', () => {
     expect(toBubbles([message('m1', 'assistant', [asked, marker])]).map((b) => b.text)).toHaveLength(1);
-    expect(toBubbles([message('m1', 'assistant', [asked, marker])], [], true)).toEqual([]);
+    expect(toBubbles([message('m1', 'assistant', [asked, marker, quoted])], [], true)).toEqual([]);
   });
 });
