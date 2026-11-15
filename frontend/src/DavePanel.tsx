@@ -183,9 +183,13 @@ function DavePhone({ bubbles, typing, copyText }: PhoneProps) {
           <div className="avatar" aria-hidden="true">
             L
           </div>
-          <b>Lawn Desk assistant</b>
-          <small>Texts to Dave</small>
-          {copyText !== undefined && <CopyButton text={copyText} label="Copy" className="phone-copy" />}
+          <div className="thread-title-row">
+            <div className="thread-title">
+              <b>Lawn Desk assistant</b>
+              <small>Texts to Dave</small>
+            </div>
+            {copyText !== undefined && <CopyButton text={copyText} label="Copy" className="phone-copy" />}
+          </div>
         </div>
         <ol className="thread" aria-label="Dave's texts" ref={thread}>
           {bubbles.length === 0 && !typing && (

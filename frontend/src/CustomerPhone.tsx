@@ -34,9 +34,13 @@ export function CustomerPhone({ bubbles, typing, ready, notice, draft, onDraftCh
           <div className="avatar" aria-hidden="true">
             D
           </div>
-          <b>Dave's Lawn Desk</b>
-          <small>Text message</small>
-          {copyText !== undefined && <CopyButton text={copyText} label="Copy" className="phone-copy" />}
+          <div className="thread-title-row">
+            <div className="thread-title">
+              <b>Dave's Lawn Desk</b>
+              <small>Text message</small>
+            </div>
+            {copyText !== undefined && <CopyButton text={copyText} label="Copy" className="phone-copy" />}
+          </div>
         </div>
         <ol className="thread" aria-label="Conversation" ref={thread}>
           {bubbles.length === 0 && !typing && <li className="empty-thread">Text Dave's desk to ask for a price or a time.</li>}
