@@ -157,7 +157,7 @@ describe('lawnDeskPrompt', () => {
 		const prompt = lawnDeskPrompt(NOW);
 		expect(prompt).toContain('call handoffToDave first, before you write anything');
 		expect(prompt).toContain('Then send one text: its reply as it is (on the first text, with the thank-you in front, in the same text).');
-		expect(prompt).toContain('never name a rule or say you are handing them off');
+		expect(prompt).toContain('Write no words of your own about the handoff and never name a rule: its reply already says it. If you booked in the same turn, still confirm the booking.');
 	});
 
 	it('says the handoff line once, then keeps answering without handing off the same issue again', () => {

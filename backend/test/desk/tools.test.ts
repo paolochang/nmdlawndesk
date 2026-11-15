@@ -125,6 +125,7 @@ describe('desk tools', () => {
 		it('says to hand off a town outside the service area', async () => {
 			expect(await setup().call('findSlots', { town: 'Riverside', acres: 0.5 })).toMatchObject({
 				handoff: 'out-of-area',
+				next: expect.stringContaining('call handoffToDave now, before you write anything'),
 			});
 		});
 
@@ -282,11 +283,11 @@ describe('desk tools', () => {
 			}
 		});
 
-		it('says to send the reply once and keep answering, without handing off again', async () => {
+		it('says to send the reply as the only text, then keep answering without handing off again', async () => {
 			const output = (await setup().call('handoffToDave', { reason: 'out-of-area' })) as {
 				next?: string;
 			};
-			expect(output.next).toMatch(/now, once, as it is/);
+			expect(output.next).toMatch(/now as your only text this turn, as it is/);
 			expect(output.next).toMatch(/keep answering/);
 			expect(output.next).toMatch(/do not call handoffToDave again/i);
 		});

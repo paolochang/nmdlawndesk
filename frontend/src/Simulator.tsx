@@ -237,8 +237,8 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
   const [daveSeen, setDaveSeen] = useState<{ url: string; count: number }>();
 
   const bubbles = useMemo(
-    () => toBubbles(agent.messages, failedSends.map((failed) => failed.id)),
-    [agent.messages, failedSends],
+    () => toBubbles(agent.messages, failedSends.map((failed) => failed.id), isTyping(agent.status)),
+    [agent.messages, agent.status, failedSends],
   );
   const log = useMemo(() => toJudgmentLog(agent.messages), [agent.messages]);
   const status = useMemo(() => bookingStatus(agent.messages), [agent.messages]);

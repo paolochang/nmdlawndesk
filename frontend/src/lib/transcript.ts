@@ -39,31 +39,40 @@ export function visibleText(text: string): string {
 }
 
 /**
- * Where a handoff's reply starts in an assistant message: the index of a successful
- * `handoffToDave` call that has a text after it. The reply is the one text the customer
- * gets for a handoff, so a text the model wrote before the call (once, "Your text
- * triggers the out-of-area rule…") is not shown. -1 when there is no such call: a
- * refused handoff, or one the desk never texted about, keeps every text.
+ * Where a handoff's reply starts in an assistant message: the index of the last
+ * `handoffToDave` call that succeeded (or is still running, while the desk replies). The
+ * reply is the one text the customer gets for a handoff, so a text the model wrote before
+ * the call (once, "Your text triggers the out-of-area rule…") is not shown. A handoff that
+ * was refused, one that has no text after it once the desk is done, and any reply that
+ * also booked (its confirmation is a text the customer needs) keep every text: -1.
  */
-function handoffReplyAt(message: FlueConversationMessage): number {
-  const call = message.parts.findIndex(
-    (part) =>
-      part.type === 'dynamic-tool' &&
-      part.toolName === 'handoffToDave' &&
-      part.state === 'output-available' &&
-      typeof part.output === 'object' &&
-      part.output !== null &&
-      (part.output as { ok?: unknown }).ok === true,
-  );
-  return call >= 0 && message.parts.some((part, index) => index > call && part.type === 'text') ? call : -1;
+function handoffReplyAt(message: FlueConversationMessage, replying: boolean): number {
+  const succeeded = (part: FlueConversationMessage['parts'][number]) =>
+    part.type === 'dynamic-tool' &&
+    part.toolName === 'bookSlot' &&
+    part.state === 'output-available' &&
+    typeof part.output === 'object' &&
+    part.output !== null &&
+    (part.output as { ok?: unknown }).ok === true;
+  if (message.parts.some(succeeded)) return -1;
+  const call = message.parts.findLastIndex((part) => {
+    if (part.type !== 'dynamic-tool' || part.toolName !== 'handoffToDave') return false;
+    if (part.state === 'output-available') return typeof part.output === 'object' && part.output !== null && (part.output as { ok?: unknown }).ok === true;
+    return replying && part.state === 'input-available';
+  });
+  if (call < 0) return -1;
+  return replying || message.parts.some((part, index) => index > call && part.type === 'text') ? call : -1;
 }
 
-/** One bubble per finished `text` part of a visible user or assistant message. */
-export function toBubbles(messages: readonly FlueConversationMessage[], failedIds: readonly string[] = []): Bubble[] {
+/**
+ * One bubble per finished `text` part of a visible user or assistant message. `replying`:
+ * the desk is still answering, so a handoff call under way already hides the text before it.
+ */
+export function toBubbles(messages: readonly FlueConversationMessage[], failedIds: readonly string[] = [], replying = false): Bubble[] {
   const bubbles: Bubble[] = [];
   for (const message of messages) {
     if (message.display !== 'visible' || (message.role !== 'user' && message.role !== 'assistant')) continue;
-    const replyAt = message.role === 'assistant' ? handoffReplyAt(message) : -1;
+    const replyAt = message.role === 'assistant' ? handoffReplyAt(message, replying) : -1;
     message.parts.forEach((part, index) => {
       if (part.type !== 'text' || part.state !== 'done' || index < replyAt) return;
       const text = message.role === 'assistant' ? visibleText(part.text) : part.text.trim() && part.text;

@@ -111,19 +111,23 @@ export const said = (m: Message | undefined) =>
 		.map((p) => p.text)
 		.join(' ');
 /**
- * What the desk texted before a successful `handoffToDave` call that a text follows (issue #19):
- * the customer should get the handoff reply only, so this is empty when the prompt is followed.
+ * What the desk texted before its last successful `handoffToDave` call that a text follows
+ * (issue #19): the customer should get the handoff reply only, so this is empty when the
+ * prompt is followed. Mirrors the bubbles (`toBubbles`): think blocks and unfinished texts
+ * do not count, and a reply that also booked keeps its confirmation.
  */
 export const textBeforeHandoff = (m: Message | undefined): string => {
 	const parts = m?.parts ?? [];
-	const call = parts.findIndex((p) => p.type === 'dynamic-tool' && p.toolName === 'handoffToDave' && p.state === 'output-available' && (p.output as { ok?: boolean } | undefined)?.ok === true);
+	const ok = (p: Part, name: string) => p.type === 'dynamic-tool' && p.toolName === name && p.state === 'output-available' && (p.output as { ok?: boolean } | undefined)?.ok === true;
+	if (parts.some((p) => ok(p, 'bookSlot'))) return '';
+	const call = parts.findLastIndex((p) => ok(p, 'handoffToDave'));
 	if (call < 0 || !parts.some((p, i) => i > call && p.type === 'text')) return '';
 	return parts
 		.slice(0, call)
-		.filter((p) => p.type === 'text')
-		.map((p) => p.text)
-		.join(' ')
-		.trim();
+		.filter((p) => p.type === 'text' && p.state === 'done')
+		.map((p) => (p.text ?? '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim())
+		.filter(Boolean)
+		.join(' ');
 };
 /** Every handoff reply ends with this (`handoffReply` in src/desk/tools.ts). */
 export const HANDOFF_LINE = 'contact you directly';

@@ -41,6 +41,24 @@ describe('toBubbles around a handoff (a customer text gets one desk text)', () =
     expect(bubbles.map((b) => b.text)).toEqual(['Could you mow 14 Bracken Way, Fernhill?', REPLY]);
   });
 
+  // Holistic review of #20 (P1): a booking and a handoff in one reply must still confirm the booking.
+  it('keeps the booking confirmation written before a handoff in the same reply', () => {
+    const book: FlueConversationPart = { type: 'dynamic-tool', toolName: 'bookSlot', toolCallId: 'call-b', state: 'output-available', input: {}, output: { ok: true } };
+    const confirmation = "You're booked for Mon Nov 16, 8-9 AM at 12 Elm St for $45.";
+    const bubbles = toBubbles([message('m1', 'assistant', [book, done(confirmation), handoff({ ok: true, reply: REPLY }), done(REPLY)])]);
+    expect(bubbles.map((b) => b.text)).toEqual([confirmation, REPLY]);
+  });
+
+  // Holistic review of #20 (P2): while the desk is still replying, the sentence before the call must not flash.
+  it('hides the text before a handoff call while the desk is still replying', () => {
+    const pending: FlueConversationPart = { ...(handoff({}) as object), state: 'input-available', output: undefined } as FlueConversationPart;
+    const earlyText = 'Your text triggers the out-of-area rule.';
+    const early = done(earlyText);
+    expect(toBubbles([message('m1', 'assistant', [early, pending])], [], true)).toEqual([]);
+    expect(toBubbles([message('m1', 'assistant', [early, handoff({ ok: true, reply: REPLY })])], [], true)).toEqual([]);
+    expect(toBubbles([message('m1', 'assistant', [early, handoff({ ok: false, reason: 'not-over-1-acre' })])], [], true).map((b) => b.text)).toEqual([earlyText]);
+  });
+
   it('keeps the text before a handoff that was refused or got no reply after it', () => {
     const refused = toBubbles([message('m1', 'assistant', [done('One moment.'), handoff({ ok: false, reason: 'not-over-1-acre' }), done('It is $45.')])]);
     expect(refused.map((b) => b.text)).toEqual(['One moment.', 'It is $45.']);
