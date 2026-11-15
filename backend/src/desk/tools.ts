@@ -23,7 +23,7 @@ export interface DeskStore {
 		reason: HandoffReason,
 		generation: number,
 		details?: { name?: string; address?: string; town?: string },
-	): Promise<{ ok: boolean; firstText?: boolean }>;
+	): Promise<{ ok: boolean }>;
 }
 
 export { HANDOFF_REASONS, type HandoffReason };
@@ -79,8 +79,6 @@ const NOT_OVER_NEXT = `Not handed off: a yard of ${MAX_ACRES} acre or less is in
 const MISSING_ACRES_NEXT = 'Not handed off: call handoffToDave again with the yard size in acres, or ask the customer for it.';
 
 const HANDED_OFF_NEXT = 'Handed off: this reply was sent to the customer as your text. Do not call handoffToDave again for this issue; keep answering their later questions from the rules.';
-/** The desk's opening on a customer's first text (build-plan §16), put in front of a handoff reply by the server. */
-export const FIRST_TEXT_THANKS = "Thanks for reaching out to Dave's Lawn Desk! I'm Dave's booking assistant.";
 const PRICE_NOTE = 'Final price may change on site.';
 const UNKNOWN_SIZE_NOTE = 'Yard size unknown: this is the 1-hour rate, adjusted on site.';
 
@@ -234,10 +232,9 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 				const details = { name: data.name?.trim() || undefined, address: data.address?.trim() || undefined, town: data.town?.trim() || undefined };
 				const result = await deps.store.handoff(phone, data.reason, generation, details);
 				if (!result.ok) return { output: { ok: false, reason: 'stale-generation', next: REJECTION_NEXT['stale-generation'] } };
-				// The reply is the customer's text for this turn (#19, #21): the turn ends here, so
-				// the model never copies it or adds to it, and the server adds the first-text thanks.
-				const reply = result.firstText ? `${FIRST_TEXT_THANKS} ${handoffReply(data.reason)}` : handoffReply(data.reason);
-				return { output: { ok: true, reply, next: HANDED_OFF_NEXT }, terminate: true };
+				// The reply is the customer's text for this turn (#19, #21): the turn ends here, so the
+				// model never copies it or adds to it. The greeting is the app's (frontend `GREETING`).
+				return { output: { ok: true, reply: handoffReply(data.reason), next: HANDED_OFF_NEXT }, terminate: true };
 			},
 		}),
 	];

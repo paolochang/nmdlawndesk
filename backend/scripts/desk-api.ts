@@ -105,32 +105,82 @@ export const toolOutputs = (m: Message | undefined, name: string) =>
 	(m?.parts ?? []).filter((p) => p.type === 'dynamic-tool' && p.toolName === name && p.state === 'output-available');
 export const usedTool = (m: Message | undefined, name: string) => toolOutputs(m, name).length > 0;
 export const anyTool = (m: Message | undefined) => (m?.parts ?? []).some((p) => p.type === 'dynamic-tool');
-/**
- * What the customer got: the desk's texts and, since #21, a successful handoff's
- * `reply` (the turn ends at the handoff, so that reply is the desk's text).
- */
-export const said = (m: Message | undefined) =>
+/** The model's own text in a reply, as written: for checks on what the model did. */
+export const wrote = (m: Message | undefined) =>
 	(m?.parts ?? [])
-		.map((p) => {
-			if (p.type === 'text') return p.text;
-			const output = p.output as { ok?: boolean; reply?: unknown } | undefined;
-			if (p.type === 'dynamic-tool' && p.toolName === 'handoffToDave' && p.state === 'output-available' && output?.ok === true && typeof output.reply === 'string') return output.reply;
-			return undefined;
-		})
-		.filter((t): t is string => typeof t === 'string')
+		.filter((p) => p.type === 'text')
+		.map((p) => p.text ?? '')
 		.join(' ');
+
+const sentencesOf = (text: string) => text.trim().split(/(?<=[.!?])\s+/).filter(Boolean);
+const withoutThink = (text: string) => {
+	let shown = text.replace(/<think>[\s\S]*?<\/think>/gi, '');
+	const close = shown.toLowerCase().lastIndexOf('</think>');
+	if (close >= 0) shown = shown.slice(close + '</think>'.length);
+	const open = shown.toLowerCase().indexOf('<think>');
+	return (open >= 0 ? shown.slice(0, open) : shown).trim();
+};
+/** A greeting sentence the model wrote; the app adds its own (frontend `GREETING`, `withoutGreeting`). */
+export const GREETING_SENTENCE =
+	/^(?:(?:hi|hello|hey)[^.!?]*[.!?]\s*)?(?:thanks?(?: you)?(?: so much)? for (?:reaching out|contacting|texting|getting in touch|your (?:message|text))[^.!?]*[.!?]|i'?m dave'?s (?:booking )?assistant[^.!?]*[.!?]|this is dave'?s lawn desk[^.!?]*[.!?])\s*/i;
+const withoutGreeting = (text: string) => {
+	let rest = text.trim();
+	for (let match = GREETING_SENTENCE.exec(rest); match && match[0]; match = GREETING_SENTENCE.exec(rest)) rest = rest.slice(match[0].length);
+	return rest.trim();
+};
+const handoffReplyOf = (p: Part): string | undefined => {
+	const output = p.output as { ok?: boolean; reply?: unknown } | undefined;
+	return p.type === 'dynamic-tool' && p.toolName === 'handoffToDave' && p.state === 'output-available' && output?.ok === true && typeof output.reply === 'string'
+		? output.reply
+		: undefined;
+};
+
 /**
- * What the desk texted before its last successful `handoffToDave` call that a text follows
- * (issue #19): the customer should get the handoff reply only, so this is empty when the
- * prompt is followed. Mirrors the bubbles (`toBubbles`): think blocks and unfinished texts
- * do not count, and a reply that also booked keeps its confirmation.
+ * What the customer got from a reply, by the same rules as the simulator's bubbles
+ * (frontend `deskTexts`, #19, #21, holistic review P3-1): a successful handoff's reply is
+ * the desk's text, the model's text before it is held back unless the reply also booked,
+ * sentences copied from the reply are not counted twice, and greetings are dropped (the
+ * app adds its own greeting, which is not counted here).
+ */
+export const said = (m: Message | undefined) => {
+	const parts = m?.parts ?? [];
+	const booked = parts.some((p) => p.type === 'dynamic-tool' && p.toolName === 'bookSlot' && p.state === 'output-available' && (p.output as { ok?: boolean } | undefined)?.ok === true);
+	const handoffs = parts.flatMap((p, index) => {
+		const reply = handoffReplyOf(p);
+		return reply ? [{ index, reply }] : [];
+	});
+	const holdBefore = booked ? -1 : (handoffs.at(-1)?.index ?? -1);
+	const texts: string[] = [];
+	parts.forEach((p, index) => {
+		const reply = handoffReplyOf(p);
+		if (reply) {
+			texts.push(reply);
+			return;
+		}
+		if (p.type !== 'text' || (p.state ?? 'done') !== 'done' || index < holdBefore) return;
+		const copied = new Set(handoffs.filter((h) => h.index < index).flatMap((h) => sentencesOf(h.reply)));
+		const text = sentencesOf(withoutGreeting(withoutThink(p.text ?? '')))
+			.filter((sentence) => !copied.has(sentence))
+			.join(' ');
+		if (text) texts.push(text);
+	});
+	return texts.join(' ');
+};
+/**
+ * What the desk texted before its last successful `handoffToDave` call (issue #19): the
+ * customer should get the handoff reply only, so this is empty when the prompt is followed.
+ * Mirrors the bubbles (`deskTexts`): think blocks and unfinished texts do not count, and a
+ * reply that also booked keeps its confirmation.
  */
 export const textBeforeHandoff = (m: Message | undefined): string => {
 	const parts = m?.parts ?? [];
 	const ok = (p: Part, name: string) => p.type === 'dynamic-tool' && p.toolName === name && p.state === 'output-available' && (p.output as { ok?: boolean } | undefined)?.ok === true;
 	if (parts.some((p) => ok(p, 'bookSlot'))) return '';
 	const call = parts.findLastIndex((p) => ok(p, 'handoffToDave'));
-	if (call < 0 || !parts.some((p, i) => i > call && p.type === 'text')) return '';
+	// Since #21 the reply is in the tool output and the turn ends at the call; an older
+	// handoff without a reply counts only when the desk texted after it.
+	const replied = call >= 0 && typeof (parts[call].output as { reply?: unknown }).reply === 'string';
+	if (call < 0 || (!replied && !parts.some((p, i) => i > call && p.type === 'text'))) return '';
 	return parts
 		.slice(0, call)
 		.filter((p) => p.type === 'text' && p.state === 'done')

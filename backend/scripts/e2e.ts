@@ -3,8 +3,8 @@
 // price question, a question after a handoff, off-topic texts) and style checks on
 // every desk reply (think tags, lists, symbols, internal ids, invented amounts, a
 // booking claimed without bookSlot). A price without the on-site note, a line break,
-// a first reply without a thank-you, or a text written before a handoff reply (#19) is
-// a warning only. Exits non-zero below 9/10 or
+// a greeting the desk wrote (the app adds the greeting), or a text written before a
+// handoff reply (#19) is a warning only. Exits non-zero below 9/10 or
 // on any must-pass failure.
 //
 //   npx vite dev --port 8787 --strictPort        # in another terminal
@@ -29,6 +29,7 @@ import {
 	textBeforeHandoff,
 	toolOutputs,
 	usedTool,
+	wrote,
 } from './desk-api.ts';
 import { dollars } from '../src/domain/quote.ts';
 import { RULES } from '../src/domain/rules.ts';
@@ -298,8 +299,6 @@ async function mustPassTurns(): Promise<void> {
 		const hello = await c.say('Hi there!');
 		check('greeting: no tool call', !anyTool(hello), 'called a tool', hello);
 		check('greeting: no intake questions', !/address|acre|yard/i.test(said(hello)), 'asked for booking details', hello);
-		check('greeting: thanks them for reaching out', /thank/i.test(said(hello)), 'no thank-you', hello);
-		if (!/assistant/i.test(said(hello))) warnings.push(`(greeting) first reply does not say it is Dave's booking assistant: ${said(hello)}`);
 		const prices = await c.say('What do you charge for mowing?');
 		check('price question: not haggling', !usedTool(prices, 'handoffToDave'), 'handed off', prices);
 		check('price question: gives $45', said(prices).includes('$45'), 'no price', prices);
@@ -375,11 +374,10 @@ function styleProblems(c: Convo): string[] {
 	const seen = JSON.stringify(c.replies.flatMap((r) => r.parts.filter((p) => p.type === 'dynamic-tool').map((p) => p.output)));
 	for (const source of [seen, ...c.customerTexts]) for (const amount of amountsIn(source)) allowed.add(amount);
 	const problems: string[] = [];
-	// Owner E2E (2026-11-14): the first reply of a conversation opens with a thank-you.
-	if (c.replies[0] && !/thank/i.test(said(c.replies[0]))) warnings.push(`(${c.id}) first reply has no thank-you: ${said(c.replies[0])}`);
-	// …and only that one (owner E2E: the second reply thanked them again).
-	for (const reply of c.replies.slice(1)) {
-		if (/thanks? (you )?for (reaching out|contacting|texting)/i.test(said(reply))) problems.push(`thanked for reaching out again: ${said(reply)}`);
+	// Owner E2E (2026-11-15): the greeting is the app's; one the model writes is dropped before the
+	// customer sees it, so it is a warning that the prompt is not followed, not a failure.
+	for (const reply of c.replies) {
+		if (/thanks? (you )?for (reaching out|contacting|texting)|booking assistant/i.test(wrote(reply))) warnings.push(`(${c.id}) the desk wrote a greeting (the app drops it): ${wrote(reply)}`);
 	}
 	let pricedBefore = false;
 	let previousTimes = new Set<string>();

@@ -56,8 +56,28 @@ function handoffReply(part: Part): string | undefined {
   return typeof reply === 'string' && reply.trim() ? reply : undefined;
 }
 
-/** The last sentence of a reply, which a copy of it contains ("…once he's done mowing for the day."). */
-const lastSentence = (reply: string) => reply.trim().split(/(?<=[.!?])\s+/).at(-1) ?? reply;
+const sentences = (text: string) => text.trim().split(/(?<=[.!?])\s+/).filter(Boolean);
+
+/** `text` without the sentences it copied from `reply` (a copy of the handoff reply, written after the call). */
+function withoutCopy(text: string, reply: string): string {
+  const copied = new Set(sentences(reply));
+  return sentences(text)
+    .filter((sentence) => !copied.has(sentence))
+    .join(' ');
+}
+
+/** The desk's opening, added by the app to the first desk text of a conversation (build-plan §16). */
+export const GREETING = "Thanks for reaching out to Dave's Lawn Desk! I'm Dave's booking assistant.";
+
+/** A sentence that thanks them for reaching out or says who the desk is: the app's greeting, never the model's. */
+const GREETING_SENTENCE = /^(?:(?:hi|hello|hey)[^.!?]*[.!?]\s*)?(?:thanks?(?: you)?(?: so much)? for (?:reaching out|contacting|texting|getting in touch|your (?:message|text))[^.!?]*[.!?]|i'?m dave'?s (?:booking )?assistant[^.!?]*[.!?]|this is dave'?s lawn desk[^.!?]*[.!?])\s*/i;
+
+/** `text` without the greeting sentences it opens with. */
+function withoutGreeting(text: string): string {
+  let rest = text.trim();
+  for (let match = GREETING_SENTENCE.exec(rest); match && match[0]; match = GREETING_SENTENCE.exec(rest)) rest = rest.slice(match[0].length);
+  return rest.trim();
+}
 
 export interface DeskText {
   /** The part the text comes from: a `text` part, or the `handoffToDave` call whose reply it is. */
@@ -70,7 +90,8 @@ export interface DeskText {
  * successful `handoffToDave` call's reply is the desk's text for that turn (#21: the turn
  * ends there). What the model wrote before the call is not sent (#19: once, "Your text
  * triggers the out-of-area rule…"), unless the reply also booked, whose confirmation the
- * customer needs; a copy of the reply written after the call is not sent twice.
+ * customer needs; the sentences of the reply copied after the call are not sent twice, and a
+ * greeting the model wrote is dropped (the app adds its own, `toBubbles`).
  * `replying`: this message is still being written, so a handoff call under way already
  * holds back the text before it. Every reader of desk texts (bubbles, status, suggestions)
  * uses this, so they agree.
@@ -93,10 +114,10 @@ export function deskTexts(message: FlueConversationMessage, replying = false): D
       return;
     }
     if (part.type !== 'text' || part.state !== 'done' || index < holdBefore) return;
-    const text = visibleText(part.text);
-    if (!text) return;
-    if (handoffs.some((h) => h.index < index && text.includes(lastSentence(h.reply)))) return;
-    texts.push({ index, text });
+    const text = handoffs
+      .filter((h) => h.index < index)
+      .reduce((rest, h) => withoutCopy(rest, h.reply), withoutGreeting(visibleText(part.text)));
+    if (text) texts.push({ index, text });
   });
   return texts;
 }
@@ -104,8 +125,14 @@ export function deskTexts(message: FlueConversationMessage, replying = false): D
 /**
  * One bubble per text the customer got: their own finished `text` parts, and the desk's
  * texts (`deskTexts`). `replying`: the desk is still answering the last message.
+ * `greeting`: put in front of the conversation's first desk text (the app's opening).
  */
-export function toBubbles(messages: readonly FlueConversationMessage[], failedIds: readonly string[] = [], replying = false): Bubble[] {
+export function toBubbles(
+  messages: readonly FlueConversationMessage[],
+  failedIds: readonly string[] = [],
+  replying = false,
+  greeting?: string,
+): Bubble[] {
   const bubbles: Bubble[] = [];
   messages.forEach((message, position) => {
     if (message.display !== 'visible' || (message.role !== 'user' && message.role !== 'assistant')) return;
@@ -114,7 +141,9 @@ export function toBubbles(messages: readonly FlueConversationMessage[], failedId
         ? deskTexts(message, replying && position === messages.length - 1)
         : message.parts.flatMap((part, index) => (part.type === 'text' && part.state === 'done' && part.text.trim() ? [{ index, text: part.text }] : []));
     for (const { index, text } of texts) {
-      const bubble: Bubble = { id: `${message.id}:${index}`, from: message.role === 'user' ? 'customer' : 'desk', text };
+      const from = message.role === 'user' ? 'customer' : 'desk';
+      const first = from === 'desk' && greeting && !bubbles.some((b) => b.from === 'desk');
+      const bubble: Bubble = { id: `${message.id}:${index}`, from, text: first ? `${greeting} ${text}` : text };
       if (failedIds.includes(message.id)) bubble.failed = true;
       bubbles.push(bubble);
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookingStatus, settledStatus, textedStatus } from './status.ts';
+import { bookingStatus, bookingUnconfirmed, settledStatus, textedStatus } from './status.ts';
 import { done, message, running, text } from './test-messages.ts';
 
 const booked = done(
@@ -130,5 +130,16 @@ describe('textedStatus', () => {
   it('keeps what was settled before the last text while the desk replies', () => {
     const first = reply('Booked for Nov 16 at 8 AM.');
     expect(textedStatus([first, message('m5', 'user', [text('Can I move it?')])], true)).toMatchObject({ kind: 'booked' });
+  });
+});
+
+// Holistic review (P3-4): a confirmation the customer never got does not settle the booking.
+describe('bookingUnconfirmed', () => {
+  it('reads the same desk texts as the bubbles', () => {
+    const handoff = done('c4', 'handoffToDave', { reason: 'complaint' }, { ok: true, reply: 'He will contact you directly.' });
+    const first = message('m2', 'assistant', [booked]);
+    const later = message('m4', 'assistant', [text("You're booked for Monday Nov 16 at 8 AM."), handoff]);
+    expect(bookingUnconfirmed([first, later])).toBe(true);
+    expect(bookingUnconfirmed([first, message('m4', 'assistant', [text("You're booked for Monday Nov 16 at 8 AM.")])])).toBe(false);
   });
 });

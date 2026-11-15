@@ -4,7 +4,7 @@
 // customer, which is all the customer's Booking status card shows (build-plan §13).
 import type { FlueConversationMessage } from '@flue/react';
 import { statesDuration, statesPrice, statesRange, statesStreet, statesTime, statesTown } from './texted.ts';
-import { deskTexts, visibleText } from './transcript.ts';
+import { deskTexts } from './transcript.ts';
 
 export type BookingStatus =
   | { kind: 'open' }
@@ -186,12 +186,15 @@ export function textedStatus(messages: readonly FlueConversationMessage[], deskR
 export function bookingUnconfirmed(messages: readonly FlueConversationMessage[]): boolean {
   let pending: string | undefined;
   for (const message of messages) {
-    for (const part of message.parts) {
-      if (part.type === 'text' && message.role === 'assistant' && pending && statesTime(visibleText(part.text), pending)) pending = undefined;
+    // Only what the customer got confirms it (shared with the bubbles, holistic review P3-4).
+    const sent = new Map(deskTexts(message).map((t) => [t.index, t.text]));
+    message.parts.forEach((part, index) => {
+      const text = sent.get(index);
+      if (part.type === 'text' && text !== undefined && pending && statesTime(text, pending)) pending = undefined;
       if (part.type === 'dynamic-tool' && part.toolName === 'bookSlot' && part.state === 'output-available') {
         if (isRecord(part.output) && part.output.ok === true) pending = str(isRecord(part.input) ? part.input.start : '');
       }
-    }
+    });
   }
   return pending !== undefined;
 }

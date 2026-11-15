@@ -1,6 +1,6 @@
 'use agent';
-import { type AgentProps, useAgentStart, useModel, usePersistentState, useTool } from '@flue/runtime';
-import { DESK_MODEL, FIRST_TEXT_NOTE, lawnDeskPrompt } from '../desk/prompts.ts';
+import { type AgentProps, useAgentStart, useModel, useTool } from '@flue/runtime';
+import { DESK_MODEL, lawnDeskPrompt } from '../desk/prompts.ts';
 import { parseConversationId } from '../domain/conversation.ts';
 import { RULES } from '../domain/rules.ts';
 import { localDateTime } from '../domain/time.ts';
@@ -19,17 +19,10 @@ export function LawnDesk({ id }: AgentProps) {
 	if (conversation?.kind !== 'customer') throw new Error(`LawnDesk serves customer conversations only, got ${id}`);
 	const store = visitorStore(conversation.visitorId);
 
-	// The customer's texts so far. Only their first text gets a note asking the desk to
-	// open with a thank-you (owner E2E, build-plan §16): a signal, because changing the
-	// prompt mid-conversation made Flue post an "instructions changed" notice.
-	const [texts, setTexts] = usePersistentState('customerTexts', 0);
-	const firstText = texts === 0;
-
 	// Every delivered message records the phone; the store ignores a known one
 	// and one from a generation a reset has left behind.
-	useAgentStart(async ({ append }) => {
-		if (firstText) append(FIRST_TEXT_NOTE);
-		setTexts((count) => count + 1);
+	// The greeting is the app's (frontend `GREETING`, build-plan §16): the desk never writes one.
+	useAgentStart(async () => {
 		await store.addCustomer(conversation.phone, conversation.generation);
 	});
 

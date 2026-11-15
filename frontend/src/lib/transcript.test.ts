@@ -1,6 +1,6 @@
 import type { FlueConversationMessage, FlueConversationPart } from '@flue/react';
 import { describe, expect, it } from 'vitest';
-import { isTyping, phoneText, replyFailed, toBubbles, toJudgmentLog } from './transcript.ts';
+import { GREETING, isTyping, phoneText, replyFailed, toBubbles, toJudgmentLog } from './transcript.ts';
 
 function message(
   id: string,
@@ -71,6 +71,15 @@ describe('toBubbles around a handoff (a customer text gets one desk text)', () =
   it("shows the handoff's reply as the desk's text, once", () => {
     expect(toBubbles([message('m1', 'assistant', [handoff({ ok: true, reply: REPLY })])]).map((b) => b.text)).toEqual([REPLY]);
     expect(toBubbles([message('m1', 'assistant', [handoff({ ok: true, reply: REPLY }), done(REPLY)])]).map((b) => b.text)).toEqual([REPLY]);
+  });
+
+  // Holistic review (P2-1): bookSlot and handoffToDave in one batch keep the turn going, and the model may put
+  // the confirmation and a copy of the reply in one text; only the copy goes.
+  it('keeps the booking confirmation written in the same text as a copy of the reply', () => {
+    const book: FlueConversationPart = { type: 'dynamic-tool', toolName: 'bookSlot', toolCallId: 'call-b', state: 'output-available', input: {}, output: { ok: true } };
+    const confirmation = "You're booked for Mon Nov 16, 8-9 AM at 12 Elm St for $45.";
+    const bubbles = toBubbles([message('m1', 'assistant', [book, handoff({ ok: true, reply: REPLY }), done(`${confirmation} ${REPLY}`)])]);
+    expect(bubbles.map((b) => b.text)).toEqual([REPLY, confirmation]);
   });
 
   it('keeps the texts around a refused handoff', () => {
@@ -220,5 +229,30 @@ describe('phoneText (owner request)', () => {
       { id: '2', from: 'desk' as const, text: 'It is $45.' },
     ];
     expect(phoneText(thread, { customer: 'Customer', desk: 'Desk' })).toBe('Customer: Hi! How much?\nDesk: It is $45.');
+  });
+});
+
+// Owner E2E (2026-11-15): with no first-text note the model still wrote "Thanks for reaching out…" again.
+// The greeting is the app's: the first desk text opens with it, and greetings the model writes are dropped.
+describe('the greeting', () => {
+  const hi = message('m1', 'user', [done('Hi! How much do you charge to mow a lawn?')]);
+  const details = message('m3', 'user', [done('About three quarters of an acre, 45 Oak Rd, Ashford')]);
+  const greeted = (value: string) => `Thanks for reaching out to Dave's Lawn Desk! I'm Dave's booking assistant. ${value}`;
+
+  it('opens the first desk text with the greeting and drops the ones the model wrote', () => {
+    const messages = [
+      hi,
+      message('m2', 'assistant', [done(greeted("It's $45 for up to half an acre."))]),
+      details,
+      message('m4', 'assistant', [done(greeted("That's $67.50 for about 1.5 hours."))]),
+    ];
+    const desk = toBubbles(messages, [], false, GREETING).filter((b) => b.from === 'desk');
+    expect(desk.map((b) => b.text)).toEqual([`${GREETING} It's $45 for up to half an acre.`, "That's $67.50 for about 1.5 hours."]);
+  });
+
+  it('greets once when the model wrote no greeting, and leaves a plain thanks alone', () => {
+    const messages = [hi, message('m2', 'assistant', [done("It's $45.")]), details, message('m4', 'assistant', [done("Thanks! What's your name?")])];
+    const desk = toBubbles(messages, [], false, GREETING).filter((b) => b.from === 'desk');
+    expect(desk.map((b) => b.text)).toEqual([`${GREETING} It's $45.`, "Thanks! What's your name?"]);
   });
 });

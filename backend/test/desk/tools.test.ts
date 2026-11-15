@@ -252,8 +252,7 @@ describe('desk tools', () => {
 			expect(daveTexts()).toEqual([
 				'Please call +15550101 (yard over 1 acre). They texted: "How much for my 2 acre lot at 9 Hill Rd, Ashford?"',
 			]);
-			// Their first text, so the server's reply opens with the thank-you (#21).
-			expect(output).toMatchObject({ ok: true, reply: `Thanks for reaching out to Dave's Lawn Desk! I'm Dave's booking assistant. ${handoffReply('yard-over-1-acre')}` });
+			expect(output).toMatchObject({ ok: true, reply: handoffReply('yard-over-1-acre') });
 		});
 
 		it('refuses an over-1-acre handoff for a yard of 1 acre or less, and says to quote it (owner E2E, PR 9)', async () => {
@@ -291,11 +290,11 @@ describe('desk tools', () => {
 		});
 
 		// #19, #21: the reply is the customer's text, not a copy the model writes, so the
-		// handoff ends the turn and the server adds the first-text thank-you itself.
-		it('ends the turn with the reply as the text, thanking the customer only on their first text', async () => {
+		// handoff ends the turn. The greeting is the app's (frontend `GREETING`), never in the reply.
+		it('ends the turn with the reply as the text, with no greeting in it', async () => {
 			const first = await setup(1, SUNDAY, ['Can you mow 4 Bay St, Kestrel Bay?']).run('handoffToDave', { reason: 'out-of-area' });
 			expect(first.terminate).toBe(true);
-			expect(first.output.reply).toBe(`Thanks for reaching out to Dave's Lawn Desk! I'm Dave's booking assistant. ${handoffReply('out-of-area')}`);
+			expect(first.output.reply).toBe(handoffReply('out-of-area'));
 			const later = await setup(1, SUNDAY, ['Hi! How much do you charge?', 'About half an acre, 4 Bay St, Kestrel Bay']).run('handoffToDave', { reason: 'out-of-area' });
 			expect(later.terminate).toBe(true);
 			expect(later.output.reply).toBe(handoffReply('out-of-area'));
