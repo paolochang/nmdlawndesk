@@ -42,6 +42,7 @@ import { bookingStatus, settledStatus, textedStatus, type BookingStatus } from '
 import { conversationStage, repliesNow } from './lib/suggestions.ts';
 import { markTourSeen, tourOpensItself } from './lib/tour.ts';
 import { isTyping, phoneText, replyFailed, toBubbles, toJudgmentLog } from './lib/transcript.ts';
+import { SiteFooter } from './SiteFooter.tsx';
 
 const LOAD_FAILED = "Could not load Dave's calendar. Reload the page to try again.";
 const NOT_SENT = 'Text not sent. Please try again.';
@@ -619,6 +620,7 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
         </section>
       </main>
       <JudgmentLog entries={log} conversation={url} historyReady={agent.historyReady} />
+      <SiteFooter />
       {tourOpen && <Tour onClose={closeTour} />}
     </div>
   );
