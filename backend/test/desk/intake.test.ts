@@ -44,6 +44,8 @@ describe('detailsGiven', () => {
 		expect(detailsGiven(['An acre and a half at 52 Reed St, Clearwater'])).toMatchObject({ acres: 1.5 });
 		expect(detailsGiven(['52 Reed St, Clearwater, half acre', "Actually can you do my mom's place in Dunmore instead?"])).toBeUndefined();
 		expect(detailsGiven(['52 Reed St', 'Clearwater, half an acre'])).toMatchObject({ town: 'Clearwater', street: '52 Reed St' });
+		// Codex review of #23, round 2: a corrected street is the one that counts.
+		expect(detailsGiven(['Half acre at 52 Reed St, Clearwater', 'Sorry, the street address is 99 Oak Rd'])).toMatchObject({ town: 'Clearwater', street: '99 Oak Rd' });
 	});
 
 	it('reads "not sure" as an unknown size only when it is about the size', () => {

@@ -99,8 +99,8 @@ export function detailsGiven(texts: readonly string[]): GivenDetails | undefined
 	});
 	const withTown = read.find((r) => r.town !== undefined);
 	const town = withTown?.town;
-	// A street from another text counts only if that text named no town or the same one.
-	const street = withTown?.street ?? read.find((r) => r.street !== undefined && (r.town === undefined || r.town === town))?.street;
+	// The latest street counts (a correction wins), but not one from a text that named a different town.
+	const street = read.find((r) => r.street !== undefined && (r.town === undefined || r.town === town))?.street;
 	const acres = read.map((r) => r.acres).find((a) => a !== undefined);
 	if (!town || !street || acres === undefined) return undefined;
 	return { town, street, acres };
