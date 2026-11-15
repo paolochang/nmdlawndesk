@@ -7,7 +7,7 @@ import type { FlueConversationMessage } from '@flue/react';
 import type { Customer } from './persona.ts';
 import { bookingUnconfirmed, textedStatus } from './status.ts';
 import { statesTime } from './texted.ts';
-import { visibleText } from './transcript.ts';
+import { deskTexts } from './transcript.ts';
 
 export interface Slot {
   start: string;
@@ -57,7 +57,9 @@ export function conversationStage(messages: readonly FlueConversationMessage[]):
   let lastDeskText = '';
   for (const message of visible) {
     if (message.role === 'user' && offers > 0) customerTextAfterOffer = true;
-    for (const part of message.parts) {
+    // The desk's texts as the customer got them (shared with the bubbles, #19 and #21).
+    const sent = new Map(deskTexts(message).map((t) => [t.index, t.text]));
+    message.parts.forEach((part, index) => {
       if (part.type === 'dynamic-tool' && part.toolName === 'findSlots' && part.state === 'output-available') {
         const found = slotsOf(part.output);
         if (found.length) {
@@ -67,14 +69,14 @@ export function conversationStage(messages: readonly FlueConversationMessage[]):
           deskTextsSinceOffer = '';
           customerTextAfterOffer = false;
         }
-      } else if (part.type === 'text' && message.role === 'assistant') {
-        lastDeskText = visibleText(part.text);
+      } else if (sent.has(index)) {
+        lastDeskText = sent.get(index) ?? '';
         if (offers > 0) {
           deskTextAfterOffer = lastDeskText;
           deskTextsSinceOffer += `\n${deskTextAfterOffer}`;
         }
       }
-    }
+    });
   }
   // A complaint or refund: the desk asks who and where before handing off (owner E2E, §16).
   if (!offers && /\bname\b/i.test(lastDeskText) && /address|street/i.test(lastDeskText) && !/size|acre|yard|how big/i.test(lastDeskText)) {

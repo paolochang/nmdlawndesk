@@ -216,14 +216,15 @@ export class VisitorLedger {
 	 * Texts Dave that the desk handed this customer to him: the reason, the name and
 	 * address the desk passed when the customer's own texts contain them (anything else
 	 * is left out, never refused), and the customer's latest texts. A handoff from
-	 * another `generation` is refused.
+	 * another `generation` is refused. `firstText`: this handoff answers the customer's
+	 * first text.
 	 */
 	handoff(
 		phone: string,
 		reason: HandoffReason,
 		generation: number,
 		details: { name?: string; address?: string; town?: string } = {},
-	): { ok: true } | { ok: false; reason: 'stale-generation' } {
+	): { ok: true; firstText: boolean } | { ok: false; reason: 'stale-generation' } {
 		const state = this.#load(this.#now());
 		if (generation !== state.generation) return { ok: false, reason: 'stale-generation' };
 		const id = `h${state.generation}-${state.daveTexts.length + 1}`;
@@ -236,7 +237,9 @@ export class VisitorLedger {
 		const address = [street, town].filter(Boolean).join(', ') || undefined;
 		const text = handoffText(reason, phone, texts, { name, address });
 		this.#save({ ...state, daveTexts: [...state.daveTexts, { id, text }] });
-		return { ok: true };
+		// The app records each customer text before the desk runs (src/app.ts), so one
+		// recorded text means this is their first: the handoff reply then opens with thanks.
+		return { ok: true, firstText: texts.length <= 1 };
 	}
 
 	/**

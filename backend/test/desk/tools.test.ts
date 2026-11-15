@@ -37,8 +37,14 @@ function setup(generation = 1, clock = SUNDAY, texts = TEXTS) {
 		const result = await tool.run({ data, toolCallId: 'call-1', log: console } as never);
 		return typeof result === 'object' && result && 'output' in result ? result.output : result;
 	};
+	/** The whole result envelope, `{ output, terminate }`. */
+	const run = async (name: string, data: unknown) => {
+		const tool = tools.find((t) => t.name === name);
+		if (!tool) throw new Error(`no tool ${name}`);
+		return (await tool.run({ data: v.parse(tool.input!, data), toolCallId: 'call-1', log: console } as never)) as { output: Record<string, unknown>; terminate?: boolean };
+	};
 	const daveTexts = () => ledger.list().daveTexts.map((t) => t.text);
-	return { ledger, daveTexts, call };
+	return { ledger, daveTexts, call, run };
 }
 
 describe('desk tools', () => {
@@ -125,7 +131,7 @@ describe('desk tools', () => {
 		it('says to hand off a town outside the service area', async () => {
 			expect(await setup().call('findSlots', { town: 'Riverside', acres: 0.5 })).toMatchObject({
 				handoff: 'out-of-area',
-				next: expect.stringContaining('call handoffToDave now, before you write anything'),
+				next: expect.stringContaining('call handoffToDave now, before you write anything; its reply is sent to the customer for you'),
 			});
 		});
 
@@ -246,7 +252,8 @@ describe('desk tools', () => {
 			expect(daveTexts()).toEqual([
 				'Please call +15550101 (yard over 1 acre). They texted: "How much for my 2 acre lot at 9 Hill Rd, Ashford?"',
 			]);
-			expect(output).toMatchObject({ ok: true, reply: handoffReply('yard-over-1-acre') });
+			// Their first text, so the server's reply opens with the thank-you (#21).
+			expect(output).toMatchObject({ ok: true, reply: `Thanks for reaching out to Dave's Lawn Desk! I'm Dave's booking assistant. ${handoffReply('yard-over-1-acre')}` });
 		});
 
 		it('refuses an over-1-acre handoff for a yard of 1 acre or less, and says to quote it (owner E2E, PR 9)', async () => {
@@ -283,13 +290,23 @@ describe('desk tools', () => {
 			}
 		});
 
-		it('says to send the reply as the only text, then keep answering without handing off again', async () => {
-			const output = (await setup().call('handoffToDave', { reason: 'out-of-area' })) as {
-				next?: string;
-			};
-			expect(output.next).toMatch(/now as your only text this turn, as it is/);
-			// #20: the thank-you rides only on the first text; a later handoff reply gets none.
-			expect(output.next).toMatch(/only if the <first-text> note came with this customer text/i);
+		// #19, #21: the reply is the customer's text, not a copy the model writes, so the
+		// handoff ends the turn and the server adds the first-text thank-you itself.
+		it('ends the turn with the reply as the text, thanking the customer only on their first text', async () => {
+			const first = await setup(1, SUNDAY, ['Can you mow 4 Bay St, Kestrel Bay?']).run('handoffToDave', { reason: 'out-of-area' });
+			expect(first.terminate).toBe(true);
+			expect(first.output.reply).toBe(`Thanks for reaching out to Dave's Lawn Desk! I'm Dave's booking assistant. ${handoffReply('out-of-area')}`);
+			const later = await setup(1, SUNDAY, ['Hi! How much do you charge?', 'About half an acre, 4 Bay St, Kestrel Bay']).run('handoffToDave', { reason: 'out-of-area' });
+			expect(later.terminate).toBe(true);
+			expect(later.output.reply).toBe(handoffReply('out-of-area'));
+			const refused = await setup().run('handoffToDave', { reason: 'yard-over-1-acre' });
+			expect(refused.output.ok).toBe(false);
+			expect(refused.terminate).toBeUndefined();
+		});
+
+		it('tells the model on later turns that the reply was sent, and not to hand off again', async () => {
+			const output = (await setup().call('handoffToDave', { reason: 'out-of-area' })) as { next?: string };
+			expect(output.next).toMatch(/this reply was sent to the customer as your text/i);
 			expect(output.next).toMatch(/keep answering/);
 			expect(output.next).toMatch(/do not call handoffToDave again/i);
 		});

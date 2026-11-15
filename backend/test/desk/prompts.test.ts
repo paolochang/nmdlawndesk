@@ -156,13 +156,13 @@ describe('lawnDeskPrompt', () => {
 	it('makes a handoff one text: the tool call first, then its reply, with no text before it', () => {
 		const prompt = lawnDeskPrompt(NOW);
 		expect(prompt).toContain('call handoffToDave first, before you write anything');
-		expect(prompt).toContain('Then send one text: its reply as it is. Only when the <first-text> note came with this customer text, put the thank-you in front of it, in the same text; without that note, no thank-you.');
-		expect(prompt).toContain('Write no words of your own about the handoff and never name a rule: its reply already says it. If you booked in the same turn, still confirm the booking.');
+		expect(prompt).toContain('Its reply is sent to the customer as your text for this turn (with the thank-you on a first text), so write nothing yourself, before or after the call, and never name a rule.');
+		expect(prompt).toContain('If you booked in the same turn, confirm the booking before you call handoffToDave.');
 	});
 
 	it('says the handoff line once, then keeps answering without handing off the same issue again', () => {
 		const prompt = lawnDeskPrompt(NOW);
-		expect(prompt).toContain('Send that reply only on the turn you hand off');
+		expect(prompt).toContain('The handoff reply is sent once, on the turn you hand off');
 		expect(prompt).toContain('keep answering their general questions');
 		expect(prompt).toContain('Never call handoffToDave twice for the same issue');
 	});

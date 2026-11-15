@@ -105,10 +105,19 @@ export const toolOutputs = (m: Message | undefined, name: string) =>
 	(m?.parts ?? []).filter((p) => p.type === 'dynamic-tool' && p.toolName === name && p.state === 'output-available');
 export const usedTool = (m: Message | undefined, name: string) => toolOutputs(m, name).length > 0;
 export const anyTool = (m: Message | undefined) => (m?.parts ?? []).some((p) => p.type === 'dynamic-tool');
+/**
+ * What the customer got: the desk's texts and, since #21, a successful handoff's
+ * `reply` (the turn ends at the handoff, so that reply is the desk's text).
+ */
 export const said = (m: Message | undefined) =>
 	(m?.parts ?? [])
-		.filter((p) => p.type === 'text')
-		.map((p) => p.text)
+		.map((p) => {
+			if (p.type === 'text') return p.text;
+			const output = p.output as { ok?: boolean; reply?: unknown } | undefined;
+			if (p.type === 'dynamic-tool' && p.toolName === 'handoffToDave' && p.state === 'output-available' && output?.ok === true && typeof output.reply === 'string') return output.reply;
+			return undefined;
+		})
+		.filter((t): t is string => typeof t === 'string')
 		.join(' ');
 /**
  * What the desk texted before its last successful `handoffToDave` call that a text follows
