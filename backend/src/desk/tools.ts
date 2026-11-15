@@ -46,6 +46,8 @@ export interface DeskDeps {
 	clock?: Clock;
 	/** Called when findSlots offers times, so the agent knows the details step is over (#22). */
 	onSlotsOffered?: () => void;
+	/** Called when handoffToDave hands the customer to Dave: no quote retry after that (#22). */
+	onHandedOff?: () => void;
 }
 
 /** `Ashford, Clearwater, Birchwood, and Dunmore`. */
@@ -237,6 +239,7 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 				if (!result.ok) return { output: { ok: false, reason: 'stale-generation', next: REJECTION_NEXT['stale-generation'] } };
 				// The reply is the customer's text for this turn (#19, #21): the turn ends here, so the
 				// model never copies it or adds to it. The greeting is the app's (frontend `GREETING`).
+				deps.onHandedOff?.();
 				return { output: { ok: true, reply: handoffReply(data.reason), next: HANDED_OFF_NEXT }, terminate: true };
 			},
 		}),

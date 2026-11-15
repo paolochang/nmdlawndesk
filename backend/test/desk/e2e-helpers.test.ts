@@ -43,5 +43,6 @@ describe('said after a details retry', () => {
 		const marker = { type: 'data-details-retry' };
 		expect(said(reply([text("What's the yard size?"), marker, tool('findSlots', { slots: [] }), text("It's $45. Mon 8 AM or Thu 9 AM?")]))).toBe("It's $45. Mon 8 AM or Thu 9 AM?");
 		expect(said(reply([text("What's the yard size?"), marker]))).toBe("What's the yard size?");
+		expect(said(reply([text('We take cash.'), text("What's the yard size?"), marker, text("It's $45.")]))).toBe("We take cash. It's $45.");
 	});
 });
