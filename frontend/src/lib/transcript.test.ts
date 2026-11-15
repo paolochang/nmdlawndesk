@@ -21,6 +21,34 @@ const quote: FlueConversationPart = {
   output: { price: '$45' },
 };
 
+const handoff = (output: Record<string, unknown>): FlueConversationPart => ({
+  type: 'dynamic-tool',
+  toolName: 'handoffToDave',
+  toolCallId: 'call-h',
+  state: 'output-available',
+  input: { reason: 'out-of-area' },
+  output,
+});
+const done = (text: string): FlueConversationPart => ({ type: 'text', text, state: 'done' });
+const REPLY = "Sorry, Dave doesn't work in your area. I've passed your request to Dave.";
+
+describe('toBubbles around a handoff (a customer text gets one desk text)', () => {
+  it("shows only the handoff reply when the desk wrote a text before calling handoffToDave", () => {
+    const bubbles = toBubbles([
+      message('m1', 'user', [done('Could you mow 14 Bracken Way, Fernhill?')]),
+      message('m2', 'assistant', [done('Your text triggers the out-of-area rule. Handing you to Dave now.'), handoff({ ok: true, reply: REPLY }), done(REPLY)]),
+    ]);
+    expect(bubbles.map((b) => b.text)).toEqual(['Could you mow 14 Bracken Way, Fernhill?', REPLY]);
+  });
+
+  it('keeps the text before a handoff that was refused or got no reply after it', () => {
+    const refused = toBubbles([message('m1', 'assistant', [done('One moment.'), handoff({ ok: false, reason: 'not-over-1-acre' }), done('It is $45.')])]);
+    expect(refused.map((b) => b.text)).toEqual(['One moment.', 'It is $45.']);
+    const noReply = toBubbles([message('m1', 'assistant', [done('Dave will be in touch.'), handoff({ ok: true, reply: REPLY })])]);
+    expect(noReply.map((b) => b.text)).toEqual(['Dave will be in touch.']);
+  });
+});
+
 describe('toBubbles', () => {
   it('shows a bubble only for text parts that are done', () => {
     const messages = [

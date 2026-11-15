@@ -110,5 +110,20 @@ export const said = (m: Message | undefined) =>
 		.filter((p) => p.type === 'text')
 		.map((p) => p.text)
 		.join(' ');
+/**
+ * What the desk texted before a successful `handoffToDave` call that a text follows (issue #19):
+ * the customer should get the handoff reply only, so this is empty when the prompt is followed.
+ */
+export const textBeforeHandoff = (m: Message | undefined): string => {
+	const parts = m?.parts ?? [];
+	const call = parts.findIndex((p) => p.type === 'dynamic-tool' && p.toolName === 'handoffToDave' && p.state === 'output-available' && (p.output as { ok?: boolean } | undefined)?.ok === true);
+	if (call < 0 || !parts.some((p, i) => i > call && p.type === 'text')) return '';
+	return parts
+		.slice(0, call)
+		.filter((p) => p.type === 'text')
+		.map((p) => p.text)
+		.join(' ')
+		.trim();
+};
 /** Every handoff reply ends with this (`handoffReply` in src/desk/tools.ts). */
 export const HANDOFF_LINE = 'contact you directly';

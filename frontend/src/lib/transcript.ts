@@ -38,13 +38,34 @@ export function visibleText(text: string): string {
   return shown.trim();
 }
 
+/**
+ * Where a handoff's reply starts in an assistant message: the index of a successful
+ * `handoffToDave` call that has a text after it. The reply is the one text the customer
+ * gets for a handoff, so a text the model wrote before the call (once, "Your text
+ * triggers the out-of-area rule…") is not shown. -1 when there is no such call: a
+ * refused handoff, or one the desk never texted about, keeps every text.
+ */
+function handoffReplyAt(message: FlueConversationMessage): number {
+  const call = message.parts.findIndex(
+    (part) =>
+      part.type === 'dynamic-tool' &&
+      part.toolName === 'handoffToDave' &&
+      part.state === 'output-available' &&
+      typeof part.output === 'object' &&
+      part.output !== null &&
+      (part.output as { ok?: unknown }).ok === true,
+  );
+  return call >= 0 && message.parts.some((part, index) => index > call && part.type === 'text') ? call : -1;
+}
+
 /** One bubble per finished `text` part of a visible user or assistant message. */
 export function toBubbles(messages: readonly FlueConversationMessage[], failedIds: readonly string[] = []): Bubble[] {
   const bubbles: Bubble[] = [];
   for (const message of messages) {
     if (message.display !== 'visible' || (message.role !== 'user' && message.role !== 'assistant')) continue;
+    const replyAt = message.role === 'assistant' ? handoffReplyAt(message) : -1;
     message.parts.forEach((part, index) => {
-      if (part.type !== 'text' || part.state !== 'done') return;
+      if (part.type !== 'text' || part.state !== 'done' || index < replyAt) return;
       const text = message.role === 'assistant' ? visibleText(part.text) : part.text.trim() && part.text;
       if (!text) return;
       const bubble: Bubble = {

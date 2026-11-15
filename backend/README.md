@@ -120,8 +120,9 @@ greeting, a price question, a question after a handoff, a side question and "nei
 works" mid-booking, a payment question, a yard in square feet, an off-topic text) and
 checks every reply for think tags, lists, symbols, markdown, internal ids, a booking
 claimed without `bookSlot`, and amounts the rules or tools did not give. A missing
-on-site price note, a line break, a repeated set of times, or a greeting that does not
-say it is the booking assistant is a warning only. It exits non-zero below 9/10 or on
+on-site price note, a line break, a repeated set of times, a text written before the
+handoff reply, or a greeting that does not say it is the booking assistant is a warning
+only. It exits non-zero below 9/10 or on
 any must-pass failure.
 
 ```sh

@@ -151,9 +151,17 @@ describe('lawnDeskPrompt', () => {
 		expect(lawnDeskPrompt(NOW)).toContain('Asking what a job costs is not haggling');
 	});
 
+	// #19: an out-of-area text got two desk texts, the first written before the tool call
+	// ("Your text triggers the out-of-area rule. Handing you to Dave now.").
+	it('makes a handoff one text: the tool call first, then its reply, with no text before it', () => {
+		const prompt = lawnDeskPrompt(NOW);
+		expect(prompt).toContain('call handoffToDave first, before you write anything');
+		expect(prompt).toContain('Then send one text: its reply as it is (on the first text, with the thank-you in front, in the same text).');
+		expect(prompt).toContain('never name a rule or say you are handing them off');
+	});
+
 	it('says the handoff line once, then keeps answering without handing off the same issue again', () => {
 		const prompt = lawnDeskPrompt(NOW);
-		expect(prompt).toContain('then send its reply as it is');
 		expect(prompt).toContain('Send that reply only on the turn you hand off');
 		expect(prompt).toContain('keep answering their general questions');
 		expect(prompt).toContain('Never call handoffToDave twice for the same issue');

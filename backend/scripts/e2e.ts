@@ -3,7 +3,8 @@
 // price question, a question after a handoff, off-topic texts) and style checks on
 // every desk reply (think tags, lists, symbols, internal ids, invented amounts, a
 // booking claimed without bookSlot). A price without the on-site note, a line break,
-// or a first reply without a thank-you is a warning only. Exits non-zero below 9/10 or
+// a first reply without a thank-you, or a text written before a handoff reply (#19) is
+// a warning only. Exits non-zero below 9/10 or
 // on any must-pass failure.
 //
 //   npx vite dev --port 8787 --strictPort        # in another terminal
@@ -25,6 +26,7 @@ import {
 	said,
 	signIn,
 	text,
+	textBeforeHandoff,
 	toolOutputs,
 	usedTool,
 } from './desk-api.ts';
@@ -386,6 +388,8 @@ function styleProblems(c: Convo): string[] {
 		const booked = toolOutputs(reply, 'bookSlot').some((p) => (p.output as { ok?: boolean }).ok === true);
 		if (CLAIMS_BOOKING.test(t) && !booked) problems.push(`says it is booked, but bookSlot did not book in this reply: ${t}`);
 		if (/<\/?think>/i.test(t)) problems.push(`think tag: ${t}`);
+		const beforeHandoff = textBeforeHandoff(reply);
+		if (beforeHandoff) warnings.push(`(${c.id}) text before the handoff reply: ${beforeHandoff}`);
 		if (/(^|\n)\s*([-*•]|\d+[.)])\s+\S/.test(t)) problems.push(`list: ${t}`);
 		if (/\*\*|__/.test(t)) problems.push(`markdown: ${t}`);
 		if (/\n/.test(t.trim())) warnings.push(`(${c.id}) line break: ${t}`);

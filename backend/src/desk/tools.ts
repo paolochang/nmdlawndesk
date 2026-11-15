@@ -72,7 +72,7 @@ export function handoffReply(reason: HandoffReason): string {
 	return HANDOFF_REPLIES[reason] + REPLY_TIME;
 }
 
-const HANDOFF_NEXT = `If this issue is not handed off yet, call handoffToDave now, then send the reply it returns, word for word. Otherwise do not hand it off again; answer the customer's question from the rules.`;
+const HANDOFF_NEXT = `If this issue is not handed off yet, call handoffToDave now, before you write anything, then send the reply it returns, word for word, as your only text. Otherwise do not hand it off again; answer the customer's question from the rules.`;
 /** The largest yard the price table covers; anything larger goes to Dave. */
 const MAX_ACRES = Math.max(...RULES.priceTable.map((row) => row.maxAcres));
 const NOT_OVER_NEXT = `Not handed off: a yard of ${MAX_ACRES} acre or less is in the price table. Call quoteJob with the size and quote it; hand off only a yard larger than ${MAX_ACRES} acre.`;
