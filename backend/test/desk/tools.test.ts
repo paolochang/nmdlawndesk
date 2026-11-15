@@ -288,6 +288,8 @@ describe('desk tools', () => {
 				next?: string;
 			};
 			expect(output.next).toMatch(/now as your only text this turn, as it is/);
+			// #20: the thank-you rides only on the first text; a later handoff reply gets none.
+			expect(output.next).toMatch(/only if the <first-text> note came with this customer text/i);
 			expect(output.next).toMatch(/keep answering/);
 			expect(output.next).toMatch(/do not call handoffToDave again/i);
 		});

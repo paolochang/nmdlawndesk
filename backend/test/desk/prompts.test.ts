@@ -156,7 +156,7 @@ describe('lawnDeskPrompt', () => {
 	it('makes a handoff one text: the tool call first, then its reply, with no text before it', () => {
 		const prompt = lawnDeskPrompt(NOW);
 		expect(prompt).toContain('call handoffToDave first, before you write anything');
-		expect(prompt).toContain('Then send one text: its reply as it is (on the first text, with the thank-you in front, in the same text).');
+		expect(prompt).toContain('Then send one text: its reply as it is. Only when the <first-text> note came with this customer text, put the thank-you in front of it, in the same text; without that note, no thank-you.');
 		expect(prompt).toContain('Write no words of your own about the handoff and never name a rule: its reply already says it. If you booked in the same turn, still confirm the booking.');
 	});
 
