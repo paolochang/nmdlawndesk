@@ -47,6 +47,7 @@ export function visibleText(text: string): string {
  * also booked (its confirmation is a text the customer needs) keep every text: -1.
  */
 function handoffReplyAt(message: FlueConversationMessage, replying: boolean): number {
+  // `replying` is about the message being written: the last one, not the history.
   const succeeded = (part: FlueConversationMessage['parts'][number]) =>
     part.type === 'dynamic-tool' &&
     part.toolName === 'bookSlot' &&
@@ -66,13 +67,14 @@ function handoffReplyAt(message: FlueConversationMessage, replying: boolean): nu
 
 /**
  * One bubble per finished `text` part of a visible user or assistant message. `replying`:
- * the desk is still answering, so a handoff call under way already hides the text before it.
+ * the desk is still answering, so a handoff call under way in the last message already
+ * hides the text before it.
  */
 export function toBubbles(messages: readonly FlueConversationMessage[], failedIds: readonly string[] = [], replying = false): Bubble[] {
   const bubbles: Bubble[] = [];
   for (const message of messages) {
     if (message.display !== 'visible' || (message.role !== 'user' && message.role !== 'assistant')) continue;
-    const replyAt = message.role === 'assistant' ? handoffReplyAt(message, replying) : -1;
+    const replyAt = message.role === 'assistant' ? handoffReplyAt(message, replying && message === messages.at(-1)) : -1;
     message.parts.forEach((part, index) => {
       if (part.type !== 'text' || part.state !== 'done' || index < replyAt) return;
       const text = message.role === 'assistant' ? visibleText(part.text) : part.text.trim() && part.text;

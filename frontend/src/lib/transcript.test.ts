@@ -59,6 +59,13 @@ describe('toBubbles around a handoff (a customer text gets one desk text)', () =
     expect(toBubbles([message('m1', 'assistant', [early, handoff({ ok: false, reason: 'not-over-1-acre' })])], [], true).map((b) => b.text)).toEqual([earlyText]);
   });
 
+  // Codex review of #20 (P3): the replying guard is for the message being written, not for history.
+  it('does not hide an earlier handoff message\'s text when the customer texts again', () => {
+    const earlier = message('m1', 'assistant', [done('Dave will be in touch.'), handoff({ ok: true, reply: REPLY })]);
+    const again = message('m2', 'user', [done('Any news?')]);
+    expect(toBubbles([earlier, again], [], true).map((b) => b.text)).toEqual(['Dave will be in touch.', 'Any news?']);
+  });
+
   it('keeps the text before a handoff that was refused or got no reply after it', () => {
     const refused = toBubbles([message('m1', 'assistant', [done('One moment.'), handoff({ ok: false, reason: 'not-over-1-acre' }), done('It is $45.')])]);
     expect(refused.map((b) => b.text)).toEqual(['One moment.', 'It is $45.']);
