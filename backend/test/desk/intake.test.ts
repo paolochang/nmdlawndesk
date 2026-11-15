@@ -19,6 +19,39 @@ describe('detailsGiven', () => {
 		expect(detailsGiven(['It is 20,000 sq ft at 7 Hollow Ln, Ashford'])).toMatchObject({ acres: 0.46 });
 	});
 
+	// Codex review of #23 (P2): wrong facts must not reach the retry signal.
+	it('reads whole size expressions, never a part of one', () => {
+		expect(detailsGiven(['.5 acre at 52 Reed St, Clearwater'])).toMatchObject({ acres: 0.5 });
+		expect(detailsGiven(['1 1/2 acres at 52 Reed St, Clearwater'])).toMatchObject({ acres: 1.5 });
+		expect(detailsGiven(['0.75 acres at 52 Reed St, Clearwater'])).toMatchObject({ acres: 0.75 });
+	});
+
+	it('takes the town from outside the street address', () => {
+		expect(detailsGiven(['52 Ashford Rd, Clearwater, half an acre'])).toMatchObject({ town: 'Clearwater', street: '52 Ashford Rd' });
+		expect(detailsGiven(['52 Ashford Rd, half an acre'])).toBeUndefined();
+	});
+
+	// Holistic review of #23: none of these may send the desk back with wrong facts.
+	it('does not read unrelated words as a street, a size, or a town', () => {
+		expect(detailsGiven(["Hi, I don't know your prices. How much to mow?", '52 Reed St, Clearwater'])).toBeUndefined();
+		expect(detailsGiven(['Not sure if you do hedges too? 52 Reed St, Clearwater'])).toBeUndefined();
+		expect(detailsGiven(['Half acre in Ashford. I have 2 dogs by the way'])).toBeUndefined();
+		expect(detailsGiven(["Half acre, I'm a 10 minute drive from Dunmore"])).toBeUndefined();
+		expect(detailsGiven(['Half acre at 14 Ashford Rd, Fernhill'])).toBeUndefined();
+	});
+
+	it('reads "an acre and a half", and never mixes a street with another text\'s town', () => {
+		expect(detailsGiven(['An acre and a half at 52 Reed St, Clearwater'])).toMatchObject({ acres: 1.5 });
+		expect(detailsGiven(['52 Reed St, Clearwater, half acre', "Actually can you do my mom's place in Dunmore instead?"])).toBeUndefined();
+		expect(detailsGiven(['52 Reed St', 'Clearwater, half an acre'])).toMatchObject({ town: 'Clearwater', street: '52 Reed St' });
+	});
+
+	it('reads "not sure" as an unknown size only when it is about the size', () => {
+		expect(detailsGiven(['Not sure which day yet. 52 Reed St, Clearwater'])).toBeUndefined();
+		expect(detailsGiven(["I don't know the size. 52 Reed St, Clearwater"])).toMatchObject({ acres: null });
+		expect(detailsGiven(['No idea how big the yard is, 52 Reed St, Clearwater'])).toMatchObject({ acres: null });
+	});
+
 	it('finds nothing when a detail is missing or the town is not one of Dave\'s', () => {
 		expect(detailsGiven(['Half an acre in Ashford'])).toBeUndefined();
 		expect(detailsGiven(['About 1 acre, 2 Hill Ct, Fernhill'])).toBeUndefined();
@@ -29,7 +62,7 @@ describe('detailsGiven', () => {
 
 describe('shouldRetryForDetails', () => {
 	const details = { town: 'Clearwater' as const, street: '52 Reed St', acres: null };
-	const base = { toolCalls: [] as string[], details, offered: false, retriedAt: -1, texts: 2 };
+	const base = { toolCalls: [] as string[], details, offered: false, handedOff: false, retriedAt: -1, texts: 2 };
 
 	it('sends the desk back when it had every detail, offered no times, and called no slot tool', () => {
 		expect(shouldRetryForDetails(base)).toBe(true);
@@ -41,5 +74,9 @@ describe('shouldRetryForDetails', () => {
 		expect(shouldRetryForDetails({ ...base, offered: true })).toBe(false);
 		for (const tool of ['findSlots', 'bookSlot', 'handoffToDave']) expect(shouldRetryForDetails({ ...base, toolCalls: [tool] })).toBe(false);
 		expect(shouldRetryForDetails({ ...base, retriedAt: 2 })).toBe(false);
+		// Holistic review of #23: a customer already handed to Dave, or a yard over 1 acre, is Dave's.
+		expect(shouldRetryForDetails({ ...base, handedOff: true })).toBe(false);
+		expect(shouldRetryForDetails({ ...base, details: { ...details, acres: 2 } })).toBe(false);
+		expect(shouldRetryForDetails({ ...base, details: { ...details, acres: 1 } })).toBe(true);
 	});
 });

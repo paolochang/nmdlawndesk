@@ -268,6 +268,13 @@ describe('a details retry', () => {
     expect(toBubbles([message('m1', 'assistant', [asked, marker, quoted])]).map((b) => b.text)).toEqual([quoted.type === 'text' ? quoted.text : '']);
   });
 
+  // Holistic review of #23 (P3-6): only the text the retry replaces goes, not an answer written before it.
+  it('drops only the last text before the retry', () => {
+    const answer = done('We take cash or card on the day.');
+    const bubbles = toBubbles([message('m1', 'assistant', [answer, asked, marker, quoted])]).map((b) => b.text);
+    expect(bubbles).toEqual(['We take cash or card on the day.', quoted.type === 'text' ? quoted.text : '']);
+  });
+
   it('keeps the question while nothing has followed the retry yet, unless the desk is still replying', () => {
     expect(toBubbles([message('m1', 'assistant', [asked, marker])]).map((b) => b.text)).toHaveLength(1);
     expect(toBubbles([message('m1', 'assistant', [asked, marker])], [], true)).toEqual([]);

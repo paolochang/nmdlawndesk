@@ -26,6 +26,7 @@ export function LawnDesk({ id }: AgentProps) {
 	const [texts, setTexts] = usePersistentState<string[]>('customerTexts', []);
 	const [textCount, setTextCount] = usePersistentState('customerTextCount', 0);
 	const [offered, setOffered] = usePersistentState('slotsOffered', false);
+	const [handedOff, setHandedOff] = usePersistentState('handedOff', false);
 	const [retriedAt, setRetriedAt] = usePersistentState('detailsRetriedAt', -1);
 	const writeRetry = useDataWriter('details-retry');
 
@@ -47,7 +48,7 @@ export function LawnDesk({ id }: AgentProps) {
 	useAgentFinish(({ response, append, log }) => {
 		const details = detailsGiven(texts);
 		const toolCalls = response.toolCalls.filter((call) => !call.isError).map((call) => call.tool);
-		if (!details || !shouldRetryForDetails({ toolCalls, details, offered, retriedAt, texts: textCount })) return;
+		if (!details || !shouldRetryForDetails({ toolCalls, details, offered, handedOff, retriedAt, texts: textCount })) return;
 		setRetriedAt(textCount);
 		try {
 			writeRetry({ at: textCount });
@@ -57,7 +58,7 @@ export function LawnDesk({ id }: AgentProps) {
 		append(detailsRetrySignal(details));
 	});
 
-	const tools = deskTools({ conversation, store, onSlotsOffered: () => setOffered(true) });
+	const tools = deskTools({ conversation, store, onSlotsOffered: () => setOffered(true), onHandedOff: () => setHandedOff(true) });
 	for (const tool of tools) useTool(tool);
 
 	return lawnDeskPrompt(localDateTime(Date.now(), RULES.timeZone));
