@@ -92,11 +92,11 @@ export interface DeskText {
  * triggers the out-of-area rule…"), unless the reply also booked, whose confirmation the
  * customer needs; the sentences of the reply copied after the call are not sent twice, and a
  * greeting the model wrote is dropped (the app adds its own, `toBubbles`).
- * `replying`: this message is still being written, so a handoff call under way already
- * holds back the text before it. Every reader of desk texts (bubbles, status, suggestions)
+ * The last text written before a `data-details-retry` marker (#22: the desk was sent back to
+ * the tools after asking again for details it had) is not sent once a text follows the marker.
  * uses this, so they agree.
  */
-export function deskTexts(message: FlueConversationMessage, replying = false): DeskText[] {
+export function deskTexts(message: FlueConversationMessage): DeskText[] {
   if (message.role !== 'assistant') return [];
   const parts = message.parts;
   const booked = parts.some((part) => part.type === 'dynamic-tool' && part.toolName === 'bookSlot' && okOutput(part) !== undefined);
@@ -104,8 +104,12 @@ export function deskTexts(message: FlueConversationMessage, replying = false): D
     const reply = handoffReply(part);
     return reply ? [{ index, reply }] : [];
   });
-  const pending = replying ? parts.findLastIndex((part) => part.type === 'dynamic-tool' && part.toolName === 'handoffToDave' && part.state === 'input-available') : -1;
-  const holdBefore = booked ? -1 : Math.max(handoffs.at(-1)?.index ?? -1, pending);
+  // #22: the agent sent the desk back to quoteJob and findSlots after it asked again for details
+  // it had; the last text it wrote before the marker is replaced by what follows.
+  // Only the last text before the marker goes: the one the retry replaces (holistic review of #23).
+  const retry = parts.findLastIndex((part) => part.type === 'data-details-retry');
+  const replaced = retry >= 0 && parts.some((part, index) => index > retry && part.type === 'text') ? parts.findLastIndex((part, index) => index < retry && part.type === 'text') : -1;
+  const holdBefore = booked ? -1 : (handoffs.at(-1)?.index ?? -1);
   const texts: DeskText[] = [];
   parts.forEach((part, index) => {
     const reply = handoffReply(part);
@@ -113,7 +117,7 @@ export function deskTexts(message: FlueConversationMessage, replying = false): D
       texts.push({ index, text: reply });
       return;
     }
-    if (part.type !== 'text' || part.state !== 'done' || index < holdBefore) return;
+    if (part.type !== 'text' || part.state !== 'done' || index < holdBefore || index === replaced) return;
     const text = handoffs
       .filter((h) => h.index < index)
       .reduce((rest, h) => withoutCopy(rest, h.reply), withoutGreeting(visibleText(part.text)));
@@ -124,8 +128,10 @@ export function deskTexts(message: FlueConversationMessage, replying = false): D
 
 /**
  * One bubble per text the customer got: their own finished `text` parts, and the desk's
- * texts (`deskTexts`). `replying`: the desk is still answering the last message.
- * `greeting`: put in front of the conversation's first desk text (the app's opening).
+ * texts (`deskTexts`). `replying`: the desk is still answering, so its reply (the last
+ * message) shows nothing yet, only "typing…": a text the customer got never changes
+ * afterwards (owner E2E 2026-11-15). `greeting`: put in front of the conversation's first
+ * desk text (the app's opening).
  */
 export function toBubbles(
   messages: readonly FlueConversationMessage[],
@@ -134,11 +140,17 @@ export function toBubbles(
   greeting?: string,
 ): Bubble[] {
   const bubbles: Bubble[] = [];
+  // The reply in progress: the last assistant message after the customer's last text, even
+  // when a signal (a details retry, #22) was appended after it.
+  const lastText = messages.findLastIndex((message) => message.role === 'user');
+  const lastReply = messages.findLastIndex((message) => message.role === 'assistant');
+  const writing = replying && lastReply > lastText ? lastReply : -1;
   messages.forEach((message, position) => {
     if (message.display !== 'visible' || (message.role !== 'user' && message.role !== 'assistant')) return;
+    if (position === writing) return;
     const texts =
       message.role === 'assistant'
-        ? deskTexts(message, replying && position === messages.length - 1)
+        ? deskTexts(message)
         : message.parts.flatMap((part, index) => (part.type === 'text' && part.state === 'done' && part.text.trim() ? [{ index, text: part.text }] : []));
     for (const { index, text } of texts) {
       const from = message.role === 'user' ? 'customer' : 'desk';
@@ -197,4 +209,17 @@ export function toJudgmentLog(messages: readonly FlueConversationMessage[]): Jud
  */
 export function phoneText(bubbles: readonly Bubble[], names: { customer: string; desk: string }): string {
   return bubbles.map((bubble) => `${bubble.from === 'customer' ? names.customer : names.desk}: ${bubble.text}`).join('\n');
+}
+
+/**
+ * What the customer's phone shows: `sent` (what it showed so far) unchanged, then the new
+ * texts of `next`. Like a real phone, a text once shown is never edited or taken back, and a
+ * new one only comes after it (owner E2E 2026-11-15). A customer text may still be marked as
+ * failed to send.
+ */
+export function deliver(sent: readonly Bubble[], next: readonly Bubble[]): Bubble[] {
+  const latest = new Map(next.map((bubble) => [bubble.id, bubble]));
+  const shown = sent.map((bubble) => (bubble.from === 'customer' && latest.get(bubble.id)?.failed && !bubble.failed ? { ...bubble, failed: true as const } : bubble));
+  const known = new Set(sent.map((bubble) => bubble.id));
+  return [...shown, ...next.filter((bubble) => !known.has(bubble.id))];
 }

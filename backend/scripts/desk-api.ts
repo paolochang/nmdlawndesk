@@ -149,6 +149,9 @@ export const said = (m: Message | undefined) => {
 		const reply = handoffReplyOf(p);
 		return reply ? [{ index, reply }] : [];
 	});
+	// #22: the last text before a details-retry marker is replaced by the reply that follows it.
+	const retry = parts.findLastIndex((p) => p.type === 'data-details-retry');
+	const replaced = retry >= 0 && parts.some((p, i) => i > retry && p.type === 'text') ? parts.findLastIndex((p, i) => i < retry && p.type === 'text') : -1;
 	const holdBefore = booked ? -1 : (handoffs.at(-1)?.index ?? -1);
 	const texts: string[] = [];
 	parts.forEach((p, index) => {
@@ -157,7 +160,7 @@ export const said = (m: Message | undefined) => {
 			texts.push(reply);
 			return;
 		}
-		if (p.type !== 'text' || (p.state ?? 'done') !== 'done' || index < holdBefore) return;
+		if (p.type !== 'text' || (p.state ?? 'done') !== 'done' || index < holdBefore || index === replaced) return;
 		const copied = new Set(handoffs.filter((h) => h.index < index).flatMap((h) => sentencesOf(h.reply)));
 		const text = sentencesOf(withoutGreeting(withoutThink(p.text ?? '')))
 			.filter((sentence) => !copied.has(sentence))

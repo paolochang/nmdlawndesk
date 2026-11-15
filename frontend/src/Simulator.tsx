@@ -41,7 +41,7 @@ import { failedSendView, isOwner, sendFailure, type Session } from './lib/sessio
 import { bookingStatus, settledStatus, textedStatus, type BookingStatus } from './lib/status.ts';
 import { conversationStage, repliesNow } from './lib/suggestions.ts';
 import { markTourSeen, tourOpensItself } from './lib/tour.ts';
-import { GREETING, isTyping, phoneText, replyFailed, toBubbles, toJudgmentLog } from './lib/transcript.ts';
+import { type Bubble, deliver, GREETING, isTyping, phoneText, replyFailed, toBubbles, toJudgmentLog } from './lib/transcript.ts';
 import { SiteFooter } from './SiteFooter.tsx';
 
 const LOAD_FAILED = "Could not load Dave's calendar. Reload the page to try again.";
@@ -81,6 +81,8 @@ function SwitchIcon({ focus }: { focus: Focus }) {
     </svg>
   );
 }
+
+const EMPTY_BUBBLES: Bubble[] = [];
 
 export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Props) {
   // Every request reports a 401, so an expired token anywhere returns to sign-in.
@@ -236,10 +238,18 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
   // How many of Dave's texts the tester has seen, for this generation only.
   const [daveSeen, setDaveSeen] = useState<{ url: string; count: number }>();
 
-  const bubbles = useMemo(
+  const latest = useMemo(
     () => toBubbles(agent.messages, failedSends.map((failed) => failed.id), isTyping(agent.status), GREETING),
     [agent.messages, agent.status, failedSends],
   );
+  // The phone keeps what it showed: a sent text is never edited or taken back, new ones come
+  // after it (owner E2E 2026-11-15). Per conversation; another customer starts fresh.
+  const [sent, setSent] = useState<{ url: string | undefined; bubbles: Bubble[] }>({ url, bubbles: [] });
+  const shownBefore = sent.url === url ? sent.bubbles : EMPTY_BUBBLES;
+  const bubbles = useMemo(() => deliver(shownBefore, latest), [shownBefore, latest]);
+  if (sent.url !== url || bubbles.length !== sent.bubbles.length || bubbles.some((bubble, i) => bubble !== sent.bubbles[i])) {
+    setSent({ url, bubbles });
+  }
   const log = useMemo(() => toJudgmentLog(agent.messages), [agent.messages]);
   const status = useMemo(() => bookingStatus(agent.messages), [agent.messages]);
   const stage = useMemo(() => conversationStage(agent.messages), [agent.messages]);

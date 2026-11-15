@@ -1,6 +1,6 @@
 import type { FlueConversationMessage, FlueConversationPart } from '@flue/react';
 import { describe, expect, it } from 'vitest';
-import { GREETING, isTyping, phoneText, replyFailed, toBubbles, toJudgmentLog } from './transcript.ts';
+import { deliver, GREETING, isTyping, phoneText, replyFailed, toBubbles, toJudgmentLog } from './transcript.ts';
 
 function message(
   id: string,
@@ -49,14 +49,15 @@ describe('toBubbles around a handoff (a customer text gets one desk text)', () =
     expect(bubbles.map((b) => b.text)).toEqual([confirmation, REPLY]);
   });
 
-  // Holistic review of #20 (P2): while the desk is still replying, the sentence before the call must not flash.
-  it('hides the text before a handoff call while the desk is still replying', () => {
-    const pending: FlueConversationPart = { ...(handoff({}) as object), state: 'input-available', output: undefined } as FlueConversationPart;
-    const earlyText = 'Your text triggers the out-of-area rule.';
-    const early = done(earlyText);
-    expect(toBubbles([message('m1', 'assistant', [early, pending])], [], true)).toEqual([]);
-    expect(toBubbles([message('m1', 'assistant', [early, handoff({ ok: true, reply: REPLY })])], [], true).map((b) => b.text)).toEqual([REPLY]);
-    expect(toBubbles([message('m1', 'assistant', [early, handoff({ ok: false, reason: 'not-over-1-acre' })])], [], true).map((b) => b.text)).toEqual([earlyText]);
+  // Owner E2E (2026-11-15): a desk text that appeared while the desk was replying later changed.
+  // While it replies the customer sees only "typing…"; its texts come once, when the reply is done.
+  it('shows none of the reply being written, then its final texts once it is done', () => {
+    const early = done('Your text triggers the out-of-area rule.');
+    const writing = [message('m0', 'user', [done('Half acre at 4 Bay St, Kestrel Bay')]), message('m1', 'assistant', [early, handoff({ ok: true, reply: REPLY })])];
+    expect(toBubbles(writing, [], true).map((b) => b.text)).toEqual(['Half acre at 4 Bay St, Kestrel Bay']);
+    expect(toBubbles(writing, [], false).map((b) => b.text)).toEqual(['Half acre at 4 Bay St, Kestrel Bay', REPLY]);
+    const pending = { ...(handoff({}) as object), state: 'input-available', output: undefined } as FlueConversationPart;
+    expect(toBubbles([message('m1', 'assistant', [done('Let me check.'), pending])], [], true)).toEqual([]);
   });
 
   // Codex review of #20 (P3): the replying guard is for the message being written, not for history.
@@ -254,5 +255,59 @@ describe('the greeting', () => {
     const messages = [hi, message('m2', 'assistant', [done("It's $45.")]), details, message('m4', 'assistant', [done("Thanks! What's your name?")])];
     const desk = toBubbles(messages, [], false, GREETING).filter((b) => b.from === 'desk');
     expect(desk.map((b) => b.text)).toEqual([`${GREETING} It's $45.`, "Thanks! What's your name?"]);
+  });
+});
+
+// #22: when the desk asked again for details it had, the agent sent it back to the tools with a
+// `data-details-retry` marker; the question written before the marker is not sent.
+describe('a details retry', () => {
+  const marker = { type: 'data-details-retry', data: { at: 2 } } as unknown as FlueConversationPart;
+  const asked = done("That would be $45. What's the rough yard size at 52 Reed St?");
+  const quoted = done("That's $45 for about an hour, and the final price may change on site. Dave can come Mon Nov 16, 8-9 AM or Thu Nov 19, 9-10 AM; which works?");
+
+  it('sends the reply that followed the retry, not the question before it', () => {
+    expect(toBubbles([message('m1', 'assistant', [asked, marker, quoted])]).map((b) => b.text)).toEqual([quoted.type === 'text' ? quoted.text : '']);
+  });
+
+  // Holistic review of #23 (P3-6): only the text the retry replaces goes, not an answer written before it.
+  it('drops only the last text before the retry', () => {
+    const answer = done('We take cash or card on the day.');
+    const bubbles = toBubbles([message('m1', 'assistant', [answer, asked, marker, quoted])]).map((b) => b.text);
+    expect(bubbles).toEqual(['We take cash or card on the day.', quoted.type === 'text' ? quoted.text : '']);
+  });
+
+  it('keeps the question when nothing followed the retry, and shows nothing while the desk replies', () => {
+    expect(toBubbles([message('m1', 'assistant', [asked, marker])]).map((b) => b.text)).toHaveLength(1);
+    expect(toBubbles([message('m1', 'assistant', [asked, marker, quoted])], [], true)).toEqual([]);
+  });
+});
+
+// Owner E2E (2026-11-15): the simulator is a phone. A text the desk sent cannot be edited or
+// taken back, and a reply in progress shows only "typing…".
+describe('sending like a phone', () => {
+  const user = (id: string, value: string) => message(id, 'user', [done(value)]);
+  const signal = { ...message('s1', 'system', [done('<details-given>…</details-given>')]), purpose: 'dispatch', display: 'hidden' } as FlueConversationMessage;
+
+  it('shows nothing of the reply being written, even with a signal appended after it', () => {
+    const messages = [user('m0', 'Not sure how big it is. 52 Reed St, Clearwater'), message('m1', 'assistant', [done("What's the yard size?")]), signal];
+    expect(toBubbles(messages, [], true).map((b) => b.text)).toEqual(['Not sure how big it is. 52 Reed St, Clearwater']);
+  });
+
+  it('never takes back or edits a sent text, and adds new texts after it', () => {
+    const sent = [
+      { id: 'm0:0', from: 'customer' as const, text: 'Hi' },
+      { id: 'm1:0', from: 'desk' as const, text: "What's the yard size?" },
+    ];
+    const next = [
+      { id: 'm0:0', from: 'customer' as const, text: 'Hi' },
+      { id: 'm1:3', from: 'desk' as const, text: "It's $45. Mon 8 AM or Thu 9 AM?" },
+    ];
+    expect(deliver(sent, next)).toEqual([...sent, next[1]]);
+    expect(deliver(sent, [{ ...sent[0] }, { ...sent[1], text: 'changed' }])).toEqual(sent);
+  });
+
+  it('marks a customer text that failed to send, without moving it', () => {
+    const sent = [{ id: 'm0:0', from: 'customer' as const, text: 'Hi' }];
+    expect(deliver(sent, [{ ...sent[0], failed: true }])).toEqual([{ ...sent[0], failed: true }]);
   });
 });
