@@ -44,6 +44,8 @@ export interface DeskDeps {
 	store: DeskStore;
 	/** The clock, read in Dave's time zone on every call (build-plan §12). Default `Date.now`. */
 	clock?: Clock;
+	/** Called when findSlots offers times, so the agent knows the details step is over (#22). */
+	onSlotsOffered?: () => void;
 }
 
 /** `Ashford, Clearwater, Birchwood, and Dunmore`. */
@@ -156,6 +158,7 @@ export function deskTools(deps: DeskDeps): ToolDefinition[] {
 				const count = last && nowMs - last.at < REPEAT_WINDOW_MS ? last.count + 1 : 1;
 				recentFindSlots.set(key, { at: nowMs, count });
 				const next = slots.length ? (count >= 3 ? SLOTS_REPEAT_NEXT : SLOTS_NEXT) : `No open time in the next ${RULES.searchDays} days. ${HANDOFF_NEXT}`;
+				if (slots.length) deps.onSlotsOffered?.();
 				return {
 					output: {
 						town: resolved,

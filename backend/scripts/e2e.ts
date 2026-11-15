@@ -3,9 +3,9 @@
 // price question, a question after a handoff, off-topic texts) and style checks on
 // every desk reply (think tags, lists, symbols, internal ids, invented amounts, a
 // booking claimed without bookSlot). A price without the on-site note, a line break,
-// a greeting the desk wrote (the app adds the greeting), or a text written before a
-// handoff reply (#19) is a warning only. Exits non-zero below 9/10 or
-// on any must-pass failure.
+// a greeting the desk wrote (the app adds the greeting), a text written before a handoff
+// reply (#19), or the desk being sent back to quote (#22) is a warning only. Exits
+// non-zero below 9/10 or on any must-pass failure.
 //
 //   npx vite dev --port 8787 --strictPort        # in another terminal
 //   ONLY=1 ACCESS_CODE=... NICKNAME=... node scripts/e2e.ts   # only the scope the owner asked for
@@ -386,6 +386,8 @@ function styleProblems(c: Convo): string[] {
 		const booked = toolOutputs(reply, 'bookSlot').some((p) => (p.output as { ok?: boolean }).ok === true);
 		if (CLAIMS_BOOKING.test(t) && !booked) problems.push(`says it is booked, but bookSlot did not book in this reply: ${t}`);
 		if (/<\/?think>/i.test(t)) problems.push(`think tag: ${t}`);
+		// #22: the agent sent the desk back to quoteJob and findSlots after it asked again for details.
+		if (reply.parts.some((p) => p.type === 'data-details-retry')) warnings.push(`(${c.id}) the desk was sent back to quote (it asked again for details it had): ${wrote(reply)}`);
 		const beforeHandoff = textBeforeHandoff(reply);
 		if (beforeHandoff) warnings.push(`(${c.id}) text before the handoff reply: ${beforeHandoff}`);
 		if (/(^|\n)\s*([-*•]|\d+[.)])\s+\S/.test(t)) problems.push(`list: ${t}`);

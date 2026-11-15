@@ -149,7 +149,10 @@ export const said = (m: Message | undefined) => {
 		const reply = handoffReplyOf(p);
 		return reply ? [{ index, reply }] : [];
 	});
-	const holdBefore = booked ? -1 : (handoffs.at(-1)?.index ?? -1);
+	// #22: a text before a details-retry marker is replaced by the reply that follows it.
+	const retry = parts.findLastIndex((p) => p.type === 'data-details-retry');
+	const retryHold = retry >= 0 && parts.some((p, i) => i > retry && p.type === 'text') ? retry : -1;
+	const holdBefore = Math.max(booked ? -1 : (handoffs.at(-1)?.index ?? -1), retryHold);
 	const texts: string[] = [];
 	parts.forEach((p, index) => {
 		const reply = handoffReplyOf(p);
