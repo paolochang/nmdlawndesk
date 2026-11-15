@@ -125,14 +125,14 @@ say it is the booking assistant is a warning only. It exits non-zero below 9/10 
 any must-pass failure.
 
 ```sh
-ACCESS_CODE=… NICKNAME=my-test-nickname node scripts/e2e.ts
-ONLY=4,7,offtopic ACCESS_CODE=… NICKNAME=my-test-nickname node scripts/e2e.ts   # a subset
+ONLY=1 ACCESS_CODE=… NICKNAME=my-test-nickname node scripts/e2e.ts   # one scope the owner asked for
 ```
 
-A full run is about 20 customer texts, roughly 800 of the account's 10,000 free
-Workers AI neurons a day (local dev and production spend the same allowance). While
-fixing, run only the failing cases with `ONLY=`; keep full runs for the final check.
-Pass `BASE_URL` to point it at another server.
+Live agent tests run only when the owner asks, for the scope they name, one example
+each, never repeated: the script refuses to start without `ONLY`. Each customer text
+costs about 40 of the account's 10,000 free Workers AI neurons a day, shared by local
+dev and production, and a tool loop can burn the rest of the day's allowance (it did
+on 2026-11-15).
 
 ## Routes
 

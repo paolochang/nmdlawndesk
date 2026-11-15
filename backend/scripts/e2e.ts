@@ -7,8 +7,7 @@
 // on any must-pass failure.
 //
 //   npx vite dev --port 8787 --strictPort        # in another terminal
-//   ACCESS_CODE=... NICKNAME=... node scripts/e2e.ts
-//   ONLY=4,7,offtopic ACCESS_CODE=... NICKNAME=... node scripts/e2e.ts   # a subset
+//   ONLY=1 ACCESS_CODE=... NICKNAME=... node scripts/e2e.ts   # only the scope the owner asked for
 //   (subset ids: 1-10, greeting, flow, policy, sqft, fence, offtopic; 4 also runs the after-handoff turn)
 //
 // NICKNAME must be an allowlisted made-up test nickname, never a member's. The run
@@ -37,7 +36,13 @@ if (!ACCESS_CODE || !NICKNAME) {
 	console.error('Set ACCESS_CODE and NICKNAME (an allowlisted test nickname).');
 	exit(1);
 }
-const only = env.ONLY?.split(',').map((s) => s.trim());
+// Live agent tests run only when the owner asks, for the scope they name, one example each
+// (owner, 2026-11-15: a findSlots loop burned the daily Workers AI allowance). No ONLY, no run.
+if (!env.ONLY) {
+	console.error('Set ONLY to the scope the owner asked for (e.g. ONLY=1 for one findSlots booking). A full run is never started by default.');
+	exit(1);
+}
+const only = env.ONLY.split(',').map((s) => s.trim());
 const selected = (id: string) => !only || only.includes(id);
 
 const { visitorId, token } = await signIn(ACCESS_CODE, NICKNAME);
