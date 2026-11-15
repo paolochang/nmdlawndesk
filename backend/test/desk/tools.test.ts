@@ -232,6 +232,13 @@ describe('desk tools', () => {
 			expect(daveTexts().at(-1)).toMatch(/^Please call \+15550101 \(a complaint\)\. Address: Ashford\. They texted: /);
 		});
 
+		// Review: a town the model added after a texted street must not reach Dave's text.
+		it('leaves out a town the customer never texted, even when the model writes it after the street', async () => {
+			const { call, daveTexts } = setup(1, SUNDAY, ['Ann Lee, 45 Oak Rd. You damaged my fence.']);
+			await call('handoffToDave', { reason: 'complaint', name: 'Ann Lee', address: '45 Oak Rd, Ashford', town: 'Ashford' });
+			expect(daveTexts().at(-1)).toMatch(/^Please call \+15550101 \(a complaint\)\. Name: Ann Lee\. Address: 45 Oak Rd\. They texted: /);
+		});
+
 		it("texts Dave the reason and the customer's own texts, and gives the customer reply", async () => {
 			const { call, daveTexts } = setup(1, SUNDAY, ['How much for my 2 acre lot at 9 Hill Rd, Ashford?']);
 			const output = await call('handoffToDave', { reason: 'yard-over-1-acre', acres: 2 });

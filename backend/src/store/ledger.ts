@@ -120,6 +120,14 @@ interface RateWindow {
  * bookings for the same slot cannot both pass the overlap check. "Today" is the
  * clock read in Dave's time zone (§12).
  */
+/** `45 Oak Rd, Ashford` with town `Ashford` → `45 Oak Rd`: the street without a town written after it. */
+function withoutTown(address: string | undefined, town: string | undefined): string | undefined {
+	const street = address?.trim();
+	if (!street || !town?.trim()) return street || undefined;
+	const tail = new RegExp(`[,\\s]+${town.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
+	return street.replace(tail, '').trim() || undefined;
+}
+
 export class VisitorLedger {
 	readonly #kv: KvStorage;
 	readonly #random: () => number;
@@ -220,10 +228,12 @@ export class VisitorLedger {
 		if (generation !== state.generation) return { ok: false, reason: 'stale-generation' };
 		const id = `h${state.generation}-${state.daveTexts.length + 1}`;
 		const texts = state.texts?.[phone] ?? [];
-		const street = details.address && addressTexted(texts, details.address, details.town) ? details.address : undefined;
+		// The street alone is checked and kept; a town after it counts only when the customer texted it (review).
+		const streetOnly = withoutTown(details.address, details.town);
+		const street = streetOnly && addressTexted(texts, streetOnly) ? streetOnly : undefined;
 		const town = details.town && addressTexted(texts, details.town) ? details.town : undefined;
 		const name = details.name && nameTexted(texts, details.name, details.address) ? details.name : undefined;
-		const address = [street, town && !street?.toLowerCase().includes(town.toLowerCase()) ? town : undefined].filter(Boolean).join(', ') || undefined;
+		const address = [street, town].filter(Boolean).join(', ') || undefined;
 		const text = handoffText(reason, phone, texts, { name, address });
 		this.#save({ ...state, daveTexts: [...state.daveTexts, { id, text }] });
 		return { ok: true };

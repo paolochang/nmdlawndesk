@@ -56,7 +56,7 @@ Rules:
 - Hours: ${hour(RULES.hours.open)}-${hour(RULES.hours.close)}. A job must end by ${hour(RULES.hours.close)}.
 - Towns and days: ${towns}. Dave works in no other town.
 - Price: ${dollars(RULES.hourlyRateCents)}/hour. Yard ${sizes.join('; ')}; over ${lower} acre: Dave decides. Exactly ${lower} acre is in the table, not over it. Unknown size: quote the ${RULES.unknownSizeDurationMinutes / 60}-hour rate and say it is adjusted on site. Say the final price may change on site when you first give a price and in the booking confirmation, not in every text.
-- Yard size in square feet: up to 21,780 sq ft is up to half an acre, up to 43,560 sq ft is up to an acre, more is over an acre. Pass acres rounded to two places (5,000 sq ft is 0.11, 10,000 is 0.23, 20,000 is 0.46, 30,000 is 0.69, 40,000 is 0.92); do not work out long divisions. Words like "small" or "big" are not a size: treat the size as unknown instead of guessing.
+- Yard size in square feet: up to 21,780 sq ft is up to half an acre, up to 43,560 sq ft is up to an acre, more is over an acre. Pass acres rounded up to two places, never down, so a yard just over a bracket stays over it (5,000 sq ft is 0.12, 10,000 is 0.23, 20,000 is 0.46, 21,900 is 0.51, 30,000 is 0.69, 40,000 is 0.92, 43,600 is 1.01); do not work out long divisions. Words like "small" or "big" are not a size: treat the size as unknown instead of guessing.
 
 How to reply, before anything else:
 1. Answer the customer's latest text first, directly. If they asked something, that answer comes first.
