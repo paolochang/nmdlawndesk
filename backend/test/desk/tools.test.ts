@@ -37,8 +37,14 @@ function setup(generation = 1, clock = SUNDAY, texts = TEXTS) {
 		const result = await tool.run({ data, toolCallId: 'call-1', log: console } as never);
 		return typeof result === 'object' && result && 'output' in result ? result.output : result;
 	};
+	/** The whole result envelope, `{ output, terminate }`. */
+	const run = async (name: string, data: unknown) => {
+		const tool = tools.find((t) => t.name === name);
+		if (!tool) throw new Error(`no tool ${name}`);
+		return (await tool.run({ data: v.parse(tool.input!, data), toolCallId: 'call-1', log: console } as never)) as { output: Record<string, unknown>; terminate?: boolean };
+	};
 	const daveTexts = () => ledger.list().daveTexts.map((t) => t.text);
-	return { ledger, daveTexts, call };
+	return { ledger, daveTexts, call, run };
 }
 
 describe('desk tools', () => {
@@ -125,6 +131,7 @@ describe('desk tools', () => {
 		it('says to hand off a town outside the service area', async () => {
 			expect(await setup().call('findSlots', { town: 'Riverside', acres: 0.5 })).toMatchObject({
 				handoff: 'out-of-area',
+				next: expect.stringContaining('call handoffToDave now, before you write anything; its reply is sent to the customer for you'),
 			});
 		});
 
@@ -282,11 +289,23 @@ describe('desk tools', () => {
 			}
 		});
 
-		it('says to send the reply once and keep answering, without handing off again', async () => {
-			const output = (await setup().call('handoffToDave', { reason: 'out-of-area' })) as {
-				next?: string;
-			};
-			expect(output.next).toMatch(/now, once, as it is/);
+		// #19, #21: the reply is the customer's text, not a copy the model writes, so the
+		// handoff ends the turn. The greeting is the app's (frontend `GREETING`), never in the reply.
+		it('ends the turn with the reply as the text, with no greeting in it', async () => {
+			const first = await setup(1, SUNDAY, ['Can you mow 4 Bay St, Kestrel Bay?']).run('handoffToDave', { reason: 'out-of-area' });
+			expect(first.terminate).toBe(true);
+			expect(first.output.reply).toBe(handoffReply('out-of-area'));
+			const later = await setup(1, SUNDAY, ['Hi! How much do you charge?', 'About half an acre, 4 Bay St, Kestrel Bay']).run('handoffToDave', { reason: 'out-of-area' });
+			expect(later.terminate).toBe(true);
+			expect(later.output.reply).toBe(handoffReply('out-of-area'));
+			const refused = await setup().run('handoffToDave', { reason: 'yard-over-1-acre' });
+			expect(refused.output.ok).toBe(false);
+			expect(refused.terminate).toBeUndefined();
+		});
+
+		it('tells the model on later turns that the reply was sent, and not to hand off again', async () => {
+			const output = (await setup().call('handoffToDave', { reason: 'out-of-area' })) as { next?: string };
+			expect(output.next).toMatch(/this reply was sent to the customer as your text/i);
 			expect(output.next).toMatch(/keep answering/);
 			expect(output.next).toMatch(/do not call handoffToDave again/i);
 		});

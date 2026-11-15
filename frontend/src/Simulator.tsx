@@ -41,7 +41,7 @@ import { failedSendView, isOwner, sendFailure, type Session } from './lib/sessio
 import { bookingStatus, settledStatus, textedStatus, type BookingStatus } from './lib/status.ts';
 import { conversationStage, repliesNow } from './lib/suggestions.ts';
 import { markTourSeen, tourOpensItself } from './lib/tour.ts';
-import { isTyping, phoneText, replyFailed, toBubbles, toJudgmentLog } from './lib/transcript.ts';
+import { GREETING, isTyping, phoneText, replyFailed, toBubbles, toJudgmentLog } from './lib/transcript.ts';
 import { SiteFooter } from './SiteFooter.tsx';
 
 const LOAD_FAILED = "Could not load Dave's calendar. Reload the page to try again.";
@@ -237,8 +237,8 @@ export function Simulator({ nickname, session, onUnauthorized, onSignOut }: Prop
   const [daveSeen, setDaveSeen] = useState<{ url: string; count: number }>();
 
   const bubbles = useMemo(
-    () => toBubbles(agent.messages, failedSends.map((failed) => failed.id)),
-    [agent.messages, failedSends],
+    () => toBubbles(agent.messages, failedSends.map((failed) => failed.id), isTyping(agent.status), GREETING),
+    [agent.messages, agent.status, failedSends],
   );
   const log = useMemo(() => toJudgmentLog(agent.messages), [agent.messages]);
   const status = useMemo(() => bookingStatus(agent.messages), [agent.messages]);

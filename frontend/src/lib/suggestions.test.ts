@@ -187,3 +187,12 @@ describe('shortSlot', () => {
     expect(shortSlot('2026-11-20T09:30')).toBe('Friday Nov 20 at 9:30 AM');
   });
 });
+
+// Holistic review (P3-5): suggestions read the desk texts the customer got, so a held-back question does not drive the chips.
+describe('conversationStage around a handoff', () => {
+  it('is handed off once the handoff reply is sent, whatever the model wrote before the call', () => {
+    const handoff = done('c4', 'handoffToDave', { reason: 'complaint' }, { ok: true, reply: 'He will contact you directly.' });
+    const reply = message('m2', 'assistant', [text("What's your name and street address?"), handoff]);
+    expect(conversationStage([hi, reply])).toEqual({ kind: 'handed-off' });
+  });
+});

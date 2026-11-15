@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bookingStatus, settledStatus, textedStatus } from './status.ts';
+import { bookingStatus, bookingUnconfirmed, settledStatus, textedStatus } from './status.ts';
 import { done, message, running, text } from './test-messages.ts';
 
 const booked = done(
@@ -117,22 +117,29 @@ describe('textedStatus', () => {
     expect(textedStatus([reply('Booked Nov 16 at 8 PM.')])).toEqual({ kind: 'open' });
   });
 
-  it('says the customer is with Dave once the desk texts the handoff reply', () => {
+  // #21: the handoff's reply is the desk's text (the turn ends at the call), so it alone moves the status.
+  it('says the customer is with Dave once the handoff reply is sent', () => {
     const handoff = done('c4', 'handoffToDave', { reason: 'complaint' }, { ok: true, reply: 'He will contact you directly.' });
-    expect(textedStatus([message('m4', 'assistant', [handoff])])).toEqual({ kind: 'open' });
-    expect(textedStatus([message('m4', 'assistant', [handoff, text('He will contact you directly.')])])).toEqual({
-      kind: 'with-dave',
-      reason: 'complaint',
-    });
-    // Holistic P3-4: a paraphrased reply does not tell the customer why.
-    expect(textedStatus([message('m4', 'assistant', [handoff, text('Dave will contact you directly about it.')])])).toEqual({
-      kind: 'with-dave',
-      reason: 'other',
-    });
+    expect(textedStatus([message('m4', 'assistant', [handoff])])).toEqual({ kind: 'with-dave', reason: 'complaint' });
+    expect(textedStatus([message('m4', 'assistant', [handoff, text('He will contact you directly.')])])).toEqual({ kind: 'with-dave', reason: 'complaint' });
+    // Holistic P3-4: an older handoff whose output had no reply, paraphrased by the desk, does not tell the customer why.
+    const bare = done('c4', 'handoffToDave', { reason: 'complaint' }, { ok: true });
+    expect(textedStatus([message('m4', 'assistant', [bare, text('Dave will contact you directly about it.')])])).toEqual({ kind: 'with-dave', reason: 'other' });
   });
 
   it('keeps what was settled before the last text while the desk replies', () => {
     const first = reply('Booked for Nov 16 at 8 AM.');
     expect(textedStatus([first, message('m5', 'user', [text('Can I move it?')])], true)).toMatchObject({ kind: 'booked' });
+  });
+});
+
+// Holistic review (P3-4): a confirmation the customer never got does not settle the booking.
+describe('bookingUnconfirmed', () => {
+  it('reads the same desk texts as the bubbles', () => {
+    const handoff = done('c4', 'handoffToDave', { reason: 'complaint' }, { ok: true, reply: 'He will contact you directly.' });
+    const first = message('m2', 'assistant', [booked]);
+    const later = message('m4', 'assistant', [text("You're booked for Monday Nov 16 at 8 AM."), handoff]);
+    expect(bookingUnconfirmed([first, later])).toBe(true);
+    expect(bookingUnconfirmed([first, message('m4', 'assistant', [text("You're booked for Monday Nov 16 at 8 AM.")])])).toBe(false);
   });
 });

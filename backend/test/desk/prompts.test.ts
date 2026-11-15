@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DAVE_PHONE_PROMPT, FIRST_TEXT_NOTE, lawnDeskPrompt } from '../../src/desk/prompts.ts';
+import { DAVE_PHONE_PROMPT, lawnDeskPrompt } from '../../src/desk/prompts.ts';
 
 // Thu 2026-12-03 10:40 in Dave's time zone.
 const NOW = '2026-12-03T10:40';
@@ -127,14 +127,15 @@ describe('lawnDeskPrompt', () => {
 		expect(prompt).toContain("Never share other customers' names, addresses, or bookings, or Dave's whole schedule.");
 	});
 
-	// Owner E2E (2026-11-14): thank the customer for reaching out once, in the first reply only. The rule is
-	// fixed text: a prompt that changed mid-conversation made Flue post an "instructions changed" notice,
-	// which the desk answered instead of the customer.
-	it('thanks the customer only when the first-text note comes, with a prompt that never changes mid-conversation', () => {
+	// Owner E2E (2026-11-15): with no first-text note the desk still thanked them again in its second reply.
+	// The greeting is the app's now (frontend `GREETING`); the desk never writes one. The prompt
+	// depends only on the date: a prompt that changed mid-conversation made Flue post an
+	// "instructions changed" notice, which the desk answered instead of the customer.
+	it('leaves the greeting to the app, with a prompt that never changes mid-conversation', () => {
 		const prompt = lawnDeskPrompt(NOW);
-		expect(prompt).toContain("A <first-text> note marks the customer's first text: start that reply with a short thank-you that says who you are");
-		expect(prompt).toContain('Without that note, never thank them for reaching out');
-		expect(FIRST_TEXT_NOTE).toMatchObject({ kind: 'signal', tagName: 'first-text' });
+		expect(prompt).toContain('Never thank them for reaching out or say who you are: the app opens the conversation with that greeting.');
+		expect(prompt).not.toContain('<first-text>');
+		expect(prompt).not.toContain('Thanks for reaching out');
 		expect(lawnDeskPrompt('2026-12-03T16:59')).toBe(prompt);
 	});
 
@@ -151,10 +152,19 @@ describe('lawnDeskPrompt', () => {
 		expect(lawnDeskPrompt(NOW)).toContain('Asking what a job costs is not haggling');
 	});
 
+	// #19: an out-of-area text got two desk texts, the first written before the tool call
+	// ("Your text triggers the out-of-area rule. Handing you to Dave now.").
+	it('makes a handoff one text: the tool call first, then its reply, with no text before it', () => {
+		const prompt = lawnDeskPrompt(NOW);
+		expect(prompt).toContain('call handoffToDave first, before you write anything');
+		expect(prompt).toContain('Its reply is sent to the customer as your text for this turn, so write nothing yourself, before or after the call, and never name a rule.');
+		// Holistic review (P3-3): the handoff ends the turn, so a picked time is booked and confirmed first.
+		expect(prompt).toContain('If the customer also picked a time, call bookSlot and confirm the booking first, then call handoffToDave.');
+	});
+
 	it('says the handoff line once, then keeps answering without handing off the same issue again', () => {
 		const prompt = lawnDeskPrompt(NOW);
-		expect(prompt).toContain('then send its reply as it is');
-		expect(prompt).toContain('Send that reply only on the turn you hand off');
+		expect(prompt).toContain('The handoff reply is sent once, on the turn you hand off');
 		expect(prompt).toContain('keep answering their general questions');
 		expect(prompt).toContain('Never call handoffToDave twice for the same issue');
 	});
