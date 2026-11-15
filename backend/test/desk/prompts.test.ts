@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DAVE_PHONE_PROMPT, lawnDeskPrompt } from '../../src/desk/prompts.ts';
+import { DAVE_PHONE_PROMPT, FIRST_TEXT_NOTE, lawnDeskPrompt } from '../../src/desk/prompts.ts';
 
 // Thu 2026-12-03 10:40 in Dave's time zone.
 const NOW = '2026-12-03T10:40';
@@ -126,10 +126,11 @@ describe('lawnDeskPrompt', () => {
 	// Owner E2E (2026-11-14): thank the customer for reaching out once, in the first reply only. The rule is
 	// fixed text: a prompt that changed mid-conversation made Flue post an "instructions changed" notice,
 	// which the desk answered instead of the customer.
-	it('thanks the customer only in the first reply, with a prompt that never changes mid-conversation', () => {
+	it('thanks the customer only when the first-text note comes, with a prompt that never changes mid-conversation', () => {
 		const prompt = lawnDeskPrompt(NOW);
-		expect(prompt).toContain('Only your very first reply in a conversation starts with a short thank-you that says who you are');
-		expect(prompt).toContain('If you have replied before, never thank them for reaching out again');
+		expect(prompt).toContain("A <first-text> note marks the customer's first text: start that reply with a short thank-you that says who you are");
+		expect(prompt).toContain('Without that note, never thank them for reaching out');
+		expect(FIRST_TEXT_NOTE).toMatchObject({ kind: 'signal', tagName: 'first-text' });
 		expect(lawnDeskPrompt('2026-12-03T16:59')).toBe(prompt);
 	});
 

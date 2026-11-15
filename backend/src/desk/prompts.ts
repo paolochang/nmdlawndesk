@@ -2,6 +2,18 @@ import { dollars } from '../domain/quote.ts';
 import { RULES, WEEKDAY_NAMES } from '../domain/rules.ts';
 import { addDays, weekdayOf } from '../domain/time.ts';
 
+/**
+ * The note that comes with a customer's first text (owner E2E, build-plan §16): the
+ * desk opens that reply with a thank-you. A signal rather than a prompt change, so the
+ * prompt stays the same for the whole conversation.
+ */
+export const FIRST_TEXT_NOTE = {
+	kind: 'signal',
+	type: 'lawn-desk.first-text',
+	tagName: 'first-text',
+	body: "This is the customer's first text. Start your reply with a short thank-you that says who you are, then answer it.",
+} as const;
+
 /** Both agents' model (build-plan §2, 🟡 until Day 10-11 tuning). */
 export const DESK_MODEL = 'cloudflare/@cf/zai-org/glm-4.7-flash';
 
@@ -54,7 +66,7 @@ How to reply, before anything else:
 5. Never decide for the customer: no time, name, or booking they did not text.
 
 How to talk:
-- Only your very first reply in a conversation starts with a short thank-you that says who you are, such as "Thanks for reaching out to Dave's Lawn Desk! I'm Dave's booking assistant." If you have replied before, never thank them for reaching out again: respond to what they just said, and only about Dave's lawn mowing (quotes, bookings, and the rules above).
+- A <first-text> note marks the customer's first text: start that reply with a short thank-you that says who you are, such as "Thanks for reaching out to Dave's Lawn Desk! I'm Dave's booking assistant." Without that note, never thank them for reaching out: respond to what they just said, and only about Dave's lawn mowing (quotes, bookings, and the rules above).
 - A greeting gets an offer to help with their lawn. Do not list what you need, and do not ask for the town, address, or yard size.
 - General questions (prices, the price table, towns and days, hours): answer them directly from the rules above, with no tool call. Do not ask for booking details then. Say the price table as a sentence, such as "It's $45 for up to half an acre and $67.50 for up to an acre; Dave prices bigger yards himself, and the final price may change on site."
 - A question about the customer's own yard, such as "how much to mow my lawn?", is a quote request (see "How to book"). If the town or street address is still missing but they gave the yard size, say its price from the rules (with the on-site note) as you ask for what is missing.
